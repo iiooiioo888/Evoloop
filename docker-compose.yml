@@ -1,0 +1,45 @@
+# EvoLoop Docker Compose 骨架（Phase 0.2）
+# 各服務的 Dockerfile 將於 Phase 8.3 完善
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    env_file: .env
+    depends_on:
+      - redis
+      - chroma
+    volumes:
+      - backend_data:/app/data
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+  opc_service:
+    build: ./opc_service
+    ports:
+      - "8001:8001"
+    env_file: .env
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  chroma:
+    image: chromadb/chroma:latest
+    ports:
+      - "8100:8000"
+    volumes:
+      - chroma_data:/chroma/chroma
+
+volumes:
+  backend_data:
+  redis_data:
+  chroma_data:
