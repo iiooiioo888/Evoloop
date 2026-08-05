@@ -44,8 +44,9 @@ def test_high_score_finalizes_without_reflection():
     fake = FakeLLM(["這是初始回答。", _evaluation(9)])
     with (
         patch("backend.core.nodes.call_llm", side_effect=fake),
-        patch("backend.core.nodes._memory_store", MagicMock()),
+        patch("backend.core.nodes._memory_store") as mock_store,
     ):
+        mock_store.search_similar.return_value = []
         result = build_graph().invoke({"query": "測試問題"})
 
     assert result["final_answer"] == "這是初始回答。"
@@ -54,6 +55,8 @@ def test_high_score_finalizes_without_reflection():
     assert result["memory_saved"] is False
     # 只應有「生成 + 評估」兩次 LLM 呼叫
     assert len(fake.prompts) == 2
+    # 應呼叫了記憶檢索
+    mock_store.search_similar.assert_called_once()
 
 
 def test_low_score_triggers_reflection_loop():
@@ -67,6 +70,7 @@ def test_low_score_triggers_reflection_loop():
         ]
     )
     store = MagicMock()
+    store.search_similar.return_value = []
     with (
         patch("backend.core.nodes.call_llm", side_effect=fake),
         patch("backend.core.nodes._memory_store", store),
@@ -88,9 +92,11 @@ def test_loop_stops_at_max_iterations():
         responses += [_evaluation(3, "很差"), _reflection(), f"改進回答{i + 1}"]
     responses.append(_evaluation(3, "很差"))
     fake = FakeLLM(responses)
+    store = MagicMock()
+    store.search_similar.return_value = []
     with (
         patch("backend.core.nodes.call_llm", side_effect=fake),
-        patch("backend.core.nodes._memory_store", MagicMock()),
+        patch("backend.core.nodes._memory_store", store),
     ):
         result = build_graph().invoke({"query": "測試問題"})
 
@@ -99,3 +105,25 @@ def test_loop_stops_at_max_iterations():
     assert result["iteration"] == 3
     assert len(result["reflections"]) == 3
     assert len(fake.prompts) == 11
+
+
+def test_memory_retrieval_injects_similar_experiences():
+    """驗證檢索到的相似經驗會被注入到生成節點的 prompt 中。"""
+    fake = FakeLLM(["基於經驗的回答。", _evaluation(9)])
+    with (
+        patch("backend.core.nodes.call_llm", side_effect=fake),
+        patch("backend.core.nodes._memory_store") as mock_store,
+    ):
+        mock_store.search_similar.return_value = [
+            {"text": "過往成功經驗：問題X → 答案Y", "metadata": {}, "distance": 0.1},
+            {"text": "過往成功經驗：問題Z → 答案W", "metadata": {}, "distance": 0.2},
+        ]
+        result = build_graph().invoke({"query": "測試問題"})
+
+    assert result["final_answer"] == "基於經驗的回答。"
+    assert result["retrieved_memories"] == [
+        "過往成功經驗：問題X → 答案Y",
+        "過往成功經驗：問題Z → 答案W",
+    ]
+    # 檢視生成 prompt 中是否包含記憶上下文
+    assert "過往成功經驗" in fake.prompts[0]

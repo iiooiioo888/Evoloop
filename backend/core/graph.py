@@ -31,6 +31,7 @@ def build_graph():
     """組裝並編譯 EvoLoop 反思迴圈圖。"""
     graph = StateGraph(EvoLoopState)
 
+    graph.add_node("retrieve_memories", nodes.retrieve_memories)
     graph.add_node("generate_initial_answer", nodes.generate_initial_answer)
     graph.add_node("evaluate_answer", nodes.evaluate_answer)
     graph.add_node("reflect", nodes.reflect)
@@ -39,7 +40,8 @@ def build_graph():
     graph.add_node("save_memory", nodes.save_memory)
     graph.add_node("archive_state", nodes.archive_state)
 
-    graph.add_edge(START, "generate_initial_answer")
+    graph.add_edge(START, "retrieve_memories")
+    graph.add_edge("retrieve_memories", "generate_initial_answer")
     graph.add_edge("generate_initial_answer", "evaluate_answer")
     graph.add_conditional_edges(
         "evaluate_answer",

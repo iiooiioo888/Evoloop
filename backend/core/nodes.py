@@ -9,14 +9,14 @@ import logging
 
 from backend.core.llm import call_llm, parse_json_response
 from backend.core.state import EvoLoopState
-from backend.memory.json_store import JsonMemoryStore
+from backend.memory.vector_store import VectorMemoryStore
 from backend.prompts import templates
 from backend.services.archiver import save_session_archive, save_session_archive_sync
 
 logger = logging.getLogger(__name__)
 
-# Phase 1 暫用 JSON 檔案；Phase 2 替換為 ChromaDB
-_memory_store = JsonMemoryStore()
+# Phase 2：使用 ChromaDB 向量記憶庫
+_memory_store = VectorMemoryStore()
 
 
 def _format_history(history: list[dict[str, str]]) -> str:
@@ -38,6 +38,24 @@ def _format_memories(memories: list[str]) -> str:
     for i, memory in enumerate(memories, 1):
         lines.append(f"{i}. {memory}")
     return "\n".join(lines) + "\n"
+
+
+def retrieve_memories(state: EvoLoopState) -> dict:
+    """節點 0：從向量記憶庫檢索與查詢相似的成功經驗。
+
+    在生成回答前執行，將檢索結果注入 state 供
+    generate_initial_answer 作為 few-shot 參考。
+    """
+    query = state.get("query", "")
+    if not query:
+        return {"retrieved_memories": []}
+    try:
+        results = _memory_store.search_similar(query, k=3)
+        memories = [item["text"] for item in results]
+        return {"retrieved_memories": memories}
+    except Exception as exc:  # noqa: BLE001 - 檢索失敗不阻斷主流程
+        logger.warning("記憶檢索失敗（跳過）：%s", exc)
+        return {"retrieved_memories": []}
 
 
 def generate_initial_answer(state: EvoLoopState) -> dict:
@@ -115,11 +133,10 @@ def decide_final_answer(state: EvoLoopState) -> dict:
 
 
 def save_memory(state: EvoLoopState) -> dict:
-    """節點 6：將反思成功的經驗存入記憶庫。
+    """節點 6：將反思成功的經驗嵌入並存入向量記憶庫。
 
     只保存經歷過反思改進並最終通過的案例；一次通過的
-    回答學習價值較低，暫不儲存。Phase 2 改為嵌入後存入
-    ChromaDB。
+    回答學習價值較低，暫不儲存。
     """
     if not state.get("reflections"):
         return {"memory_saved": False}
@@ -129,11 +146,15 @@ def save_memory(state: EvoLoopState) -> dict:
         f"反思：{last['critique']}\n"
         f"最終答案：{state.get('final_answer', '')}"
     )
-    _memory_store.add_memory(
-        text,
-        metadata={"score": state.get("score"), "iterations": state.get("iteration", 0)},
-    )
-    return {"memory_saved": True}
+    try:
+        _memory_store.add_memory(
+            text,
+            metadata={"score": state.get("score"), "iterations": state.get("iteration", 0)},
+        )
+        return {"memory_saved": True}
+    except Exception as exc:  # noqa: BLE001 - 儲存失敗不中斷主流程
+        logger.warning("記憶儲存失敗：%s", exc)
+        return {"memory_saved": False}
 
 
 def archive_state(state: EvoLoopState) -> dict:
