@@ -1,0 +1,47 @@
+[project]
+name = "evoloop"
+version = "0.1.0"
+description = "EvoLoop — 具备自我反思闭环的 AI 助手系统"
+requires-python = ">=3.12"
+
+# ============================================================
+# Ruff — Linter & Formatter
+# ============================================================
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+# 与当前代码基线一致的规则忽略列表
+# 后续可按需逐步收紧
+ignore = [
+    "B008",    # flake8-bugbear：函数参数默认值中调用函数
+    "C401",    # flake8-comprehensions：不必要的生成器（可改写为集合推导式）
+    "DTZ003",  # flake8-datetimez：datetime.utcnow() 已弃用
+    "DTZ005",  # flake8-datetimez：datetime.now() 缺少 tz 参数
+    "F841",    # pyflakes：未使用变量
+    "RUF059",  # ruff：解包变量未使用
+    "SIM102",  # flake8-simplify：嵌套 if 可合并（测试文件中常见）
+    "UP017",   # pyupgrade：datetime.UTC 别名（Python 3.12+ 风格）
+    "UP041",   # pyupgrade：TimeoutError 别名
+]
+
+# ============================================================
+# Mypy — Static Type Checker
+# ============================================================
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+warn_return_any = false
+warn_unused_configs = true
+# 默认不检查无类型注解的函数体（避免大量噪音）
+check_untyped_defs = false
+
+# 已知类型问题的模块 —— 后续按需修复后移除（已全部清零）
+
+# ============================================================
+# Pytest
+# ============================================================
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+addopts = "-v"
