@@ -1,0 +1,76 @@
+name: Test
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Detect changed paths
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+            opc_service:
+              - 'opc_service/**'
+            dependencies:
+              - 'requirements.txt'
+            workflows:
+              - '.github/**'
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Lint check (Ruff)
+        run: |
+          pip install ruff
+          ruff check backend/ opc_service/
+
+      - name: Type check (Mypy)
+        run: |
+          pip install mypy
+          mypy backend/ opc_service/
+
+      - name: Determine test scope
+        id: scope
+        run: |
+          if [ "${{ steps.filter.outputs.dependencies }}" = "true" ] || [ "${{ steps.filter.outputs.workflows }}" = "true" ]; then
+            echo "target=all" >> $GITHUB_OUTPUT
+          elif [ "${{ steps.filter.outputs.backend }}" = "true" ] && [ "${{ steps.filter.outputs.opc_service }}" = "true" ]; then
+            echo "target=all" >> $GITHUB_OUTPUT
+          elif [ "${{ steps.filter.outputs.backend }}" = "true" ]; then
+            echo "target=backend" >> $GITHUB_OUTPUT
+          elif [ "${{ steps.filter.outputs.opc_service }}" = "true" ]; then
+            echo "target=opc" >> $GITHUB_OUTPUT
+          else
+            echo "target=all" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run backend tests
+        if: steps.scope.outputs.target == 'backend' || steps.scope.outputs.target == 'all'
+        run: pytest backend/tests/ -v
+
+      - name: Run OPC service tests
+        if: steps.scope.outputs.target == 'opc'
+        run: pytest backend/tests/test_opc_service.py -v

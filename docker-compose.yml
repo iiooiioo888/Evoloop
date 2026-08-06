@@ -1,45 +1,118 @@
-# EvoLoop Docker Compose 骨架（Phase 0.2）
-# 各服務的 Dockerfile 將於 Phase 8.3 完善
+# EvoLoop Docker Compose（Phase 8.3）
+# 服务：backend / opc_service / redis / chroma
+# frontend 服务待前端实作完成后启用
+#
+# 启动：docker compose up -d
+# 构建：docker compose build --no-cache
+# 查看日志：docker compose logs -f
+
 services:
   backend:
-    build: ./backend
+    build:
+      context: .
+      dockerfile: ./backend/Dockerfile
+    container_name: evoloop-backend
     ports:
       - "8000:8000"
     env_file: .env
+    environment:
+      # 容器内使用服务名访问 Redis/Chroma
+      - REDIS_URL=redis://redis:6379/0
+      - CHROMA_HOST=chroma
+      - CHROMA_PORT=8000
     depends_on:
-      - redis
-      - chroma
+      redis:
+        condition: service_healthy
+      chroma:
+        condition: service_healthy
     volumes:
       - backend_data:/app/data
+    networks:
+      - evoloop_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
-  frontend:
-    build: ./frontend
-    ports:
-      - "5173:5173"
-    depends_on:
-      - backend
+  # frontend 待实作，暂不启用
+  # frontend:
+  #   build:
+  #     context: .
+  #     dockerfile: ./frontend/Dockerfile
+  #   container_name: evoloop-frontend
+  #   ports:
+  #     - "5173:5173"
+  #   depends_on:
+  #     - backend
+  #   networks:
+  #     - evoloop_net
 
   opc_service:
-    build: ./opc_service
+    build:
+      context: .
+      dockerfile: ./opc_service/Dockerfile
+    container_name: evoloop-opc
     ports:
       - "8001:8001"
     env_file: .env
+    environment:
+      # 默认启用模拟 OPC 服务器（开发测试用）
+      - OPC_SIM_ENABLED=true
+      - OPC_SIM_PORT=4840
+    volumes:
+      - opc_audit_data:/app/opc_service/audit_logs
+    networks:
+      - evoloop_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/opc/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
 
   redis:
     image: redis:7-alpine
+    container_name: evoloop-redis
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    networks:
+      - evoloop_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   chroma:
     image: chromadb/chroma:latest
+    container_name: evoloop-chroma
     ports:
       - "8100:8000"
     volumes:
       - chroma_data:/chroma/chroma
+    networks:
+      - evoloop_net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
 volumes:
   backend_data:
   redis_data:
   chroma_data:
+  opc_audit_data:
+
+networks:
+  evoloop_net:
+    driver: bridge

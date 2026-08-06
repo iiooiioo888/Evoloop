@@ -1,0 +1,59 @@
+# AGENTS.md — EvoLoop
+
+## 项目概述
+
+EvoLoop 是一个具备自我反思闭环的 AI 助手系统，核心架构基于 **LangGraph 反思闭环**（生成 → 评估 → 反思 → 优化）与 **多代理人公司运行时**（Manager 分解 → 多角色并行执行 → Reviewer 审查 → Synthesizer 整合）。在面对复杂目标时自动切换至公司模式，由多代理人分工协作完成，产出一律进入评估/反思/改进迭代回路，确保最终交付品质达标。同时通过 OPC UA 整合实现工业感知-诊断-行动闭环。
+
+## 模块边界与职责
+
+| 模块 | 路径 | 职责 |
+| --- | --- | --- |
+| 图定义 | `backend/core/` | LangGraph 反思闭环图定义、标准/公司/OPC 节点实现、LiteLLM 统一调用层、EvoLoopState 状态模型 |
+| 公司运行时 | `backend/company/` | 多代理人协调器、角色定义、工作项状态机与依赖 DAG、预算控制与模型路由、Prompt 模板 |
+| OPC 微服务 | `opc_service/` | OPC UA 工业数据读写与订阅、安全护栏（白名单/边界检查/审计日志）、模拟 OPC 服务器 |
+
+## 关键约束
+
+1. **LLM 调用层**：统一使用 LiteLLM 作为 LLM 调用抽象层，所有节点必须通过 `backend.core.llm.call_llm` 调用 LLM，**禁止**直接调用任何模型供应商的 SDK。
+2. **测试隔离**：单元测试使用 `monkeypatch` 隔离 LLM 调用与外部服务依赖（ChromaDB、Redis、OPC UA），无需真实 API 密钥即可运行。
+3. **图状态不可直接修改**：编译后的 LangGraph 图状态（`evoloop_graph`）为运行时产物，**禁止**直接修改，所有变更应通过修改 `build_graph()` 函数和节点实现完成。
+4. **OPC 安全护栏**：所有 OPC 写操作必须经过 `opc_service/guard.py` 安全护栏检查（白名单验证、数值边界检查），**禁止**绕过护栏直接写入 OPC 标签。
+
+## 常用命令
+
+```powershell
+# 运行全部测试
+pytest backend/tests/
+
+# 运行特定模块测试
+pytest backend/tests/test_reflection_loop.py
+pytest backend/tests/test_company.py
+pytest backend/tests/test_opc_service.py
+pytest backend/tests/test_archiver.py
+
+# Docker Compose 启动全部服务
+docker compose up -d
+
+# 仅启动基础设施（Redis + ChromaDB）
+docker compose up -d redis chroma
+
+# 启动后端 API（FastAPI + LangGraph）
+python -m backend.main
+
+# 启动 OPC 微服务（含模拟服务器）
+$env:OPC_SIM_ENABLED="true"; python -m opc_service.main
+
+# 冒烟测试（向量记忆库）
+python -m backend.scripts.smoke_test
+
+# LLM 连线测试
+python backend/scripts/test_llm_connection.py
+```
+
+## 禁止操作
+
+以下为关键约束中禁止事项的快速索引：
+
+- **禁止直接调用模型供应商 SDK** → 参见 [关键约束 #1](#关键约束)（LLM 调用层）
+- **禁止直接修改编译后的 LangGraph 图状态** → 参见 [关键约束 #3](#关键约束)（图状态不可直接修改）
+- **禁止绕过 OPC 安全护栏直接写入 OPC 标签** → 参见 [关键约束 #4](#关键约束)（OPC 安全护栏）
