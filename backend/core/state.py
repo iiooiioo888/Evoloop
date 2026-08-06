@@ -8,6 +8,8 @@ from typing import Any
 
 from typing_extensions import TypedDict
 
+from opc_service.state import OPCStateFields
+
 
 class ReflectionRecord(TypedDict):
     """單次反思迴圈的紀錄。"""
@@ -18,9 +20,10 @@ class ReflectionRecord(TypedDict):
     suggestion: str
 
 
-class EvoLoopState(TypedDict, total=False):
+class EvoLoopState(OPCStateFields, total=False):
     """EvoLoop 反思迴圈的完整狀態。
 
+    繼承 OPCStateFields 以包含 OPC 相關狀態欄位。
     total=False 使所有欄位皆為選填，LangGraph 節點只需
     回傳自己更新的欄位，框架會自動合併進狀態。
     """
@@ -55,3 +58,10 @@ class EvoLoopState(TypedDict, total=False):
     # ---- 文本化存檔（Task 8.6） ----
     archived: bool
     archive_metadata: dict[str, Any]
+
+    # ---- 公司運行時（Phase 6+ 多代理人） ----
+    company_mode: bool
+    company_template: str
+    company_result: dict[str, Any]
+    company_kanban: dict[str, Any]
+    company_budget: dict[str, Any]

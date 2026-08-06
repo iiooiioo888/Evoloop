@@ -15,8 +15,10 @@
 import json
 import logging
 import os
+from collections.abc import Mapping
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 import aiofiles
 
@@ -43,7 +45,7 @@ def _archive_file_path() -> Path:
     return archive_dir / f"evo_{date_str}.jsonl"
 
 
-def build_archive_record(state: dict, session_id: str) -> dict:
+def build_archive_record(state: Mapping[str, Any], session_id: str) -> dict:
     """將 EvoLoopState 映射為存檔記錄結構。"""
     reflections = state.get("reflections") or []
     needs_improvement = len(reflections) > 0
@@ -75,13 +77,13 @@ def build_archive_record(state: dict, session_id: str) -> dict:
     }
 
 
-def _serialize_record(state: dict, session_id: str) -> str:
+def _serialize_record(state: Mapping[str, Any], session_id: str) -> str:
     """建構記錄並序列化為單行 JSON 文字。"""
     record = build_archive_record(state, session_id)
     return json.dumps(record, ensure_ascii=False) + "\n"
 
 
-async def save_session_archive(state: dict, session_id: str) -> Path:
+async def save_session_archive(state: Mapping[str, Any], session_id: str) -> Path:
     """將對話狀態以非同步方式寫入當日 JSONL 檔案。"""
     line = _serialize_record(state, session_id)
     file_path = _archive_file_path()
@@ -90,7 +92,7 @@ async def save_session_archive(state: dict, session_id: str) -> Path:
     return file_path
 
 
-def save_session_archive_sync(state: dict, session_id: str) -> Path:
+def save_session_archive_sync(state: Mapping[str, Any], session_id: str) -> Path:
     """同步版本存檔，供無事件迴圈或降級情境使用。"""
     line = _serialize_record(state, session_id)
     file_path = _archive_file_path()

@@ -17,9 +17,10 @@ cleanup 供記憶維護使用。
 import logging
 import os
 import uuid
+from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 from dotenv import load_dotenv
 from litellm import embedding
@@ -79,12 +80,12 @@ class VectorMemoryStore:
             "EVOL_CHROMA_COLLECTION", DEFAULT_COLLECTION
         )
         self._embedding_function = embedding_function
-        self._client = None
-        self._collection = None
+        self._client: Any = None
+        self._collection: Any = None
 
     # ---- 連線（惰性） ----
 
-    def _create_client(self):
+    def _create_client(self) -> Any:
         import chromadb
 
         host = os.getenv("CHROMA_HOST")
@@ -97,7 +98,7 @@ class VectorMemoryStore:
         logger.debug("使用本地 ChromaDB 持久目錄 %s", persist_dir)
         return chromadb.PersistentClient(path=str(persist_dir))
 
-    def _get_collection(self):
+    def _get_collection(self) -> Any:
         if self._collection is None:
             if self._client is None:
                 self._client = self._create_client()
