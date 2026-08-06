@@ -12,7 +12,7 @@ from pathlib import Path
 # 讓腳本可從專案根目錄之外直接執行
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from backend.core.llm import DEFAULT_MODEL, call_llm  # noqa: E402
+from backend.core.llm import DEFAULT_MODEL, call_llm
 
 
 def main() -> None:
