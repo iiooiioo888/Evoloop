@@ -19,3 +19,10 @@ def _isolate_archive_dir(tmp_path, monkeypatch):
     """所有測試共用：將 JSONL 存檔寫入暫存目錄。"""
     monkeypatch.setenv("EVOL_ARCHIVE_DIR", str(tmp_path / "archives"))
     yield
+
+
+@pytest.fixture(autouse=True)
+def _isolate_company_run_log_dir(tmp_path, monkeypatch):
+    """所有測試共用：將公司執行軌跡 sink 寫入暫存目錄。"""
+    monkeypatch.setenv("EVOL_COMPANY_RUN_LOG_DIR", str(tmp_path / "company_runs"))
+    yield
