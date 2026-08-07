@@ -8,7 +8,7 @@
  * 生產環境可設定 VITE_API_URL 環境變數指向後端位址。
  */
 
-import type { DashboardData, TaskProgress } from '../types';
+import type { CloudAlertsData, CloudBilling, CloudEventsData, CloudMonitoring, DashboardData, DockerActionResult, DockerBudget, DockerStatus, TaskProgress } from '../types';
 
 const API_BASE: string = import.meta.env.VITE_API_URL ?? '/api';
 
@@ -156,5 +156,120 @@ export async function fetchTask(taskId: string): Promise<TaskProgress> {
 export async function fetchDashboard(): Promise<DashboardData> {
   const resp = await fetch(apiUrl('/dashboard'));
   if (!resp.ok) throw new Error(`讀取控制面版失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
+// ==================== Docker 容器管理 ====================
+
+/** 獲取 Docker 狀態摘要（容器列表 + 健康檢查）。 */
+export async function fetchDockerStatus(): Promise<DockerStatus> {
+  const resp = await fetch(apiUrl('/docker/status'));
+  if (!resp.ok) throw new Error(`讀取 Docker 狀態失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
+/** 獲取 Docker 容器預算狀態（公司全權控制）。 */
+export async function fetchDockerBudget(): Promise<DockerBudget> {
+  const resp = await fetch(apiUrl('/docker/budget'));
+  if (!resp.ok) throw new Error(`讀取 Docker 預算失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
+/** 獲取容器資源使用統計。 */
+export async function fetchDockerStats(): Promise<{ stats: Record<string, import('../types').DockerContainerStats> }> {
+  const resp = await fetch(apiUrl('/docker/stats'));
+  if (!resp.ok) throw new Error(`讀取 Docker 統計失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
+/** 獲取指定服務日誌。 */
+export async function fetchDockerLogs(service: string, tail: number = 100): Promise<{ service: string; tail: number; logs: string }> {
+  const resp = await fetch(apiUrl(`/docker/logs/${encodeURIComponent(service)}?tail=${tail}`));
+  if (!resp.ok) throw new Error(`讀取日誌失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
+/** 重啟指定服務。 */
+export async function restartDockerService(service: string): Promise<DockerActionResult> {
+  const resp = await fetch(apiUrl(`/docker/restart/${encodeURIComponent(service)}`), { method: 'POST' });
+  if (!resp.ok) throw new Error(`重啟失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
+/** 停止指定服務。 */
+export async function stopDockerService(service: string): Promise<DockerActionResult> {
+  const resp = await fetch(apiUrl(`/docker/stop/${encodeURIComponent(service)}`), { method: 'POST' });
+  if (!resp.ok) throw new Error(`停止失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
+/** 啟動指定服務。 */
+export async function startDockerService(service: string): Promise<DockerActionResult> {
+  const resp = await fetch(apiUrl(`/docker/start/${encodeURIComponent(service)}`), { method: 'POST' });
+  if (!resp.ok) throw new Error(`啟動失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
+// ═══════════════════════════════════════════════════════════
+// 雲控制台 API
+// ═══════════════════════════════════════════════════════════
+
+/** 獲取雲端費用摘要。 */
+export async function fetchCloudBilling(): Promise<CloudBilling> {
+  const resp = await fetch(apiUrl('/cloud/billing'));
+  if (!resp.ok) throw new Error(`讀取費用失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
+/** 獲取資源監控歷史數據。 */
+export async function fetchCloudMonitoring(range: string = '1h'): Promise<CloudMonitoring> {
+  const resp = await fetch(apiUrl(`/cloud/monitoring?range=${range}`));
+  if (!resp.ok) throw new Error(`讀取監控數據失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
+/** 獲取最新資源快照。 */
+export async function fetchCloudMonitoringLatest(): Promise<{ services: Record<string, { cpu: number; mem_mb: number }>; ts: string | null }> {
+  const resp = await fetch(apiUrl('/cloud/monitoring/latest'));
+  if (!resp.ok) throw new Error(`讀取最新快照失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
+/** 獲取容器事件時間線。 */
+export async function fetchCloudEvents(limit: number = 50): Promise<CloudEventsData> {
+  const resp = await fetch(apiUrl(`/cloud/events?limit=${limit}`));
+  if (!resp.ok) throw new Error(`讀取事件失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
+/** 獲取告警規則與歷史。 */
+export async function fetchCloudAlerts(): Promise<CloudAlertsData> {
+  const resp = await fetch(apiUrl('/cloud/alerts'));
+  if (!resp.ok) throw new Error(`讀取告警失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
+/** 創建告警規則。 */
+export async function createAlertRule(rule: { name: string; metric: string; threshold: number; service: string }): Promise<Record<string, unknown>> {
+  const resp = await fetch(apiUrl('/cloud/alerts'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(rule),
+  });
+  if (!resp.ok) throw new Error(`創建告警失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
+/** 切換告警規則啟用狀態。 */
+export async function toggleAlertRule(ruleId: string): Promise<Record<string, unknown>> {
+  const resp = await fetch(apiUrl(`/cloud/alerts/${encodeURIComponent(ruleId)}/toggle`), { method: 'POST' });
+  if (!resp.ok) throw new Error(`切換告警失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
+/** 刪除告警規則。 */
+export async function deleteAlertRule(ruleId: string): Promise<{ deleted: boolean }> {
+  const resp = await fetch(apiUrl(`/cloud/alerts/${encodeURIComponent(ruleId)}`), { method: 'DELETE' });
+  if (!resp.ok) throw new Error(`刪除告警失敗（HTTP ${resp.status}）`);
   return resp.json();
 }

@@ -15,6 +15,10 @@
 #   COMPOSE_PROFILES=prod docker compose -f docker-compose.yml up -d --build
 
 services:
+  # 禁用生产版前端（开发模式使用 vite HMR）
+  frontend:
+    profiles: ["disabled"]
+
   backend:
     volumes:
       # 原始碼掛載：改動即時生效（依賴不變時無需重建鏡像）
@@ -26,9 +30,8 @@ services:
       - ./opc_service:/app/opc_service
     command: ["uvicorn", "opc_service.main:app", "--host", "0.0.0.0", "--port", "8001", "--reload"]
 
-  # 開發版前端：vite dev server + HMR（取代生產版 nginx）
+  # 开发版前端：vite dev server + HMR（默认启动）
   frontend-dev:
-    profiles: ["dev"]
     image: node:20-alpine
     container_name: evoloop-frontend-dev
     working_dir: /app

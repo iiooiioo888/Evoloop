@@ -137,26 +137,24 @@ function DashboardNav() {
   );
 }
 
-/** OPC 标签列表 */
-function OPCTagList() {
+/** 监控面板子导航 */
+function MonitorNav() {
   return (
     <div className="p-3">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">OPC 监控</p>
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">监控中心</p>
       <div className="space-y-2">
+        <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2">
+          <p className="text-xs font-medium text-blue-300">📊 控制面版</p>
+          <p className="mt-0.5 text-[11px] text-gray-500">任务统计 · 成功率 · 成本分析</p>
+        </div>
         <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 px-3 py-2">
-          <p className="text-xs font-medium text-cyan-300">📡 6 级闭环</p>
-          <p className="mt-0.5 text-[11px] text-gray-500">感知 → 预處理 → 分析 → 诊断 → 决策 → 执行</p>
+          <p className="text-xs font-medium text-cyan-300">🏭 OPC 监控</p>
+          <p className="mt-0.5 text-[11px] text-gray-500">6 级闭环 · 审计日志 · 安全护栏</p>
         </div>
         <div className="rounded-lg border border-white/5 bg-gray-800/40 px-3 py-2">
-          <p className="text-xs font-medium text-gray-300">📊 模拟标签</p>
+          <p className="text-xs font-medium text-gray-300">☁️ 云控制台</p>
           <p className="mt-0.5 text-[11px] text-gray-500">
-            Temperature, Pressure, FlowRate, Level, Vibration, Humidity
-          </p>
-        </div>
-        <div className="rounded-lg border border-white/5 bg-gray-800/40 px-3 py-2">
-          <p className="text-xs font-medium text-gray-300">🛡 安全护栏</p>
-          <p className="mt-0.5 text-[11px] text-gray-500">
-            白名单验证 · 数值边界检查 · 审计日志
+            费用帐单 · 资源监控 · 实例管理 · 告警
           </p>
         </div>
       </div>
@@ -209,8 +207,7 @@ export default function SidePanel({
             onDeleteSession={onDeleteSession}
           />
         )}
-        {activeView === 'dashboard' && <DashboardNav />}
-        {activeView === 'opc' && <OPCTagList />}
+        {activeView === 'monitor' && <MonitorNav />}
       </aside>
     </>
   );

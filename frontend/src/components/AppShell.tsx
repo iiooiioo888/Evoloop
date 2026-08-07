@@ -13,7 +13,7 @@ import SidePanel from './SidePanel';
 import StatusBar from './StatusBar';
 import TopBar from './TopBar';
 
-export type ViewKey = 'chat' | 'dashboard' | 'opc';
+export type ViewKey = 'chat' | 'monitor';
 
 export interface AppShellProps {
   /** 当前活跃视图 */

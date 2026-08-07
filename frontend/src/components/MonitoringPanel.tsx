@@ -1,0 +1,286 @@
+/**
+ * MonitoringPanel — 資源監控圖表面板。
+ *
+ * 顯示 CPU / 記憶體 / 網路使用量折線圖，
+ * 支援 1h / 6h / 24h 時間範圍切換。
+ * 使用純 CSS 繪製簡單折線圖，無外部依賴。
+ */
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { fetchCloudMonitoring } from '../api/client';
+import type { CloudMonitoring, CloudServiceMetrics } from '../types';
+
+const RANGE_OPTIONS = [
+  { value: '1h', label: '1 小時' },
+  { value: '6h', label: '6 小時' },
+  { value: '24h', label: '24 小時' },
+] as const;
+
+const SERVICE_COLORS: Record<string, string> = {
+  backend: '#60a5fa',
+  frontend: '#34d399',
+  opc: '#f472b6',
+  redis: '#fbbf24',
+  chroma: '#a78bfa',
+};
+
+function getColor(svc: string): string {
+  return SERVICE_COLORS[svc] ?? '#9ca3af';
+}
+
+/** 簡易 SVG 折線圖 */
+function MiniLineChart({
+  points,
+  maxY,
+  height,
+  color,
+  label,
+  unit,
+}: {
+  points: number[];
+  maxY: number;
+  height: number;
+  color: string;
+  label: string;
+  unit: string;
+}) {
+  if (points.length < 2) {
+    return (
+      <div className="rounded-lg border border-gray-800 bg-gray-900/80 p-3">
+        <p className="mb-1 text-[10px] uppercase text-gray-500">{label}</p>
+        <p className="text-xs text-gray-600">數據不足</p>
+      </div>
+    );
+  }
+
+  const width = 400;
+  const padding = 4;
+  const chartW = width - padding * 2;
+  const chartH = height - padding * 2;
+  const safeMax = maxY || 1;
+
+  const polyline = points
+    .map((v, i) => {
+      const x = padding + (i / (points.length - 1)) * chartW;
+      const y = padding + chartH - (v / safeMax) * chartH;
+      return `${x},${y}`;
+    })
+    .join(' ');
+
+  const latest = points[points.length - 1];
+  const fillArea = `${polyline} ${padding + chartW},${padding + chartH} ${padding},${padding + chartH}`;
+
+  return (
+    <div className="rounded-lg border border-gray-800 bg-gray-900/80 p-3">
+      <div className="mb-1 flex items-center justify-between">
+        <p className="text-[10px] uppercase text-gray-500">{label}</p>
+        <p className="text-xs font-semibold" style={{ color }}>
+          {latest.toFixed(1)}{unit}
+        </p>
+      </div>
+      <svg viewBox={`0 0 ${width} ${height}`} className="h-16 w-full">
+        <polygon points={fillArea} fill={`${color}15`} />
+        <polyline
+          points={polyline}
+          fill="none"
+          stroke={color}
+          strokeWidth="1.5"
+          vectorEffect="non-scaling-stroke"
+        />
+      </svg>
+    </div>
+  );
+}
+
+export default function MonitoringPanel() {
+  const [monitoring, setMonitoring] = useState<CloudMonitoring | null>(null);
+  const [range, setRange] = useState<string>('1h');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await fetchCloudMonitoring(range);
+      setMonitoring(data);
+      setError(null);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }, [range]);
+
+  useEffect(() => {
+    void refresh();
+    const timer = setInterval(() => void refresh(), 30000);
+    return () => clearInterval(timer);
+  }, [refresh]);
+
+  // 提取服務列表與各類數據
+  const { services, cpuSeries, memSeries, netRxSeries } = useMemo(() => {
+    if (!monitoring?.points?.length) {
+      return { services: [] as string[], cpuSeries: {} as Record<string, number[]>, memSeries: {} as Record<string, number[]>, netRxSeries: {} as Record<string, number[]> };
+    }
+
+    const svcSet = new Set<string>();
+    for (const p of monitoring.points) {
+      for (const svc of Object.keys(p.services)) {
+        svcSet.add(svc);
+      }
+    }
+    const svcList = [...svcSet].sort();
+
+    const cpu: Record<string, number[]> = {};
+    const mem: Record<string, number[]> = {};
+    const net: Record<string, number[]> = {};
+
+    for (const svc of svcList) {
+      cpu[svc] = [];
+      mem[svc] = [];
+      net[svc] = [];
+    }
+
+    for (const p of monitoring.points) {
+      for (const svc of svcList) {
+        const s = p.services[svc];
+        cpu[svc].push(s?.cpu ?? 0);
+        mem[svc].push(s?.mem_mb ?? 0);
+        net[svc].push(s?.net_rx_mb ?? 0);
+      }
+    }
+
+    return { services: svcList, cpuSeries: cpu, memSeries: mem, netRxSeries: net };
+  }, [monitoring]);
+
+  // 計算各圖表的最大值
+  const maxCpu = useMemo(() => {
+    let m = 0;
+    for (const arr of Object.values(cpuSeries)) {
+      for (const v of arr) if (v > m) m = v;
+    }
+    return Math.max(m, 10);
+  }, [cpuSeries]);
+
+  const maxMem = useMemo(() => {
+    let m = 0;
+    for (const arr of Object.values(memSeries)) {
+      for (const v of arr) if (v > m) m = v;
+    }
+    return Math.max(m, 10);
+  }, [memSeries]);
+
+  const maxNet = useMemo(() => {
+    let m = 0;
+    for (const arr of Object.values(netRxSeries)) {
+      for (const v of arr) if (v > m) m = v;
+    }
+    return Math.max(m, 1);
+  }, [netRxSeries]);
+
+  return (
+    <div className="flex-1 space-y-4 overflow-auto p-4">
+      {/* 時間範圍選擇器 */}
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-medium text-gray-200">資源監控</h3>
+        <div className="flex items-center gap-1 rounded-lg bg-gray-900 p-0.5">
+          {RANGE_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => setRange(opt.value)}
+              className={`rounded-md px-3 py-1 text-[11px] transition-colors ${
+                range === opt.value
+                  ? 'bg-blue-500/20 text-blue-300'
+                  : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+          <button
+            onClick={() => void refresh()}
+            disabled={loading}
+            className="ml-2 rounded-md px-2 py-1 text-[11px] text-gray-500 hover:text-gray-300 disabled:opacity-40"
+          >
+            {loading ? '⏳' : '🔄'}
+          </button>
+        </div>
+      </div>
+
+      {/* 錯誤提示 */}
+      {error && (
+        <div className="rounded-lg bg-red-500/15 px-4 py-2 text-sm text-red-300">
+          ⚠ {error}
+        </div>
+      )}
+
+      {/* 無數據 */}
+      {!loading && services.length === 0 && (
+        <div className="flex flex-col items-center py-12 text-center">
+          <span className="mb-2 text-4xl">📈</span>
+          <p className="text-sm text-gray-500">暫無監控數據</p>
+          <p className="text-xs text-gray-600">後台每 60 秒採集一次，請稍候</p>
+        </div>
+      )}
+
+      {/* CPU 圖表 */}
+      {services.length > 0 && (
+        <div>
+          <p className="mb-2 text-[11px] font-semibold uppercase text-gray-500">CPU 使用率 (%)</p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {services.map((svc) => (
+              <MiniLineChart
+                key={`cpu-${svc}`}
+                points={cpuSeries[svc]}
+                maxY={maxCpu}
+                height={64}
+                color={getColor(svc)}
+                label={svc}
+                unit="%"
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 記憶體圖表 */}
+      {services.length > 0 && (
+        <div>
+          <p className="mb-2 text-[11px] font-semibold uppercase text-gray-500">記憶體 (MB)</p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {services.map((svc) => (
+              <MiniLineChart
+                key={`mem-${svc}`}
+                points={memSeries[svc]}
+                maxY={maxMem}
+                height={64}
+                color={getColor(svc)}
+                label={svc}
+                unit=" MB"
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 網路圖表 */}
+      {services.length > 0 && (
+        <div>
+          <p className="mb-2 text-[11px] font-semibold uppercase text-gray-500">網路接收 (MB)</p>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {services.map((svc) => (
+              <MiniLineChart
+                key={`net-${svc}`}
+                points={netRxSeries[svc]}
+                maxY={maxNet}
+                height={64}
+                color={getColor(svc)}
+                label={svc}
+                unit=" MB"
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

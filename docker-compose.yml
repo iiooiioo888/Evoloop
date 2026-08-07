@@ -23,6 +23,8 @@ services:
       - EVOL_ARCHIVE_DIR=/app/data/archives
       # 運行時 LLM 配置持久化目錄
       - EVOL_CONFIG_DIR=/app/data
+      # Docker Compose 项目名（供公司编排器识别）
+      - DOCKER_COMPOSE_PROJECT=evoloop
     depends_on:
       redis:
         condition: service_healthy
@@ -30,6 +32,8 @@ services:
         condition: service_healthy
     volumes:
       - backend_data:/app/data
+      # 挂载 Docker socket 供公司编排器管理容器
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - evoloop_net
     restart: unless-stopped
@@ -41,9 +45,8 @@ services:
       start_period: 40s
 
   frontend:
-    # 生產版前端（nginx）：僅在 prod profile 啟用
-    #   COMPOSE_PROFILES=prod docker compose -f docker-compose.yml up -d --build
-    profiles: ["prod"]
+    # 生产版前端（nginx）：默认启动
+    # 开发模式通过 docker-compose.dev.yml 覆盖禁用
     build:
       context: .
       dockerfile: ./frontend/Dockerfile

@@ -18,7 +18,7 @@ import AppShell from './components/AppShell';
 import type { ViewKey } from './components/AppShell';
 import ChatView from './components/ChatView';
 import type { SendOptions } from './components/InputBar';
-import DashboardView from './components/DashboardView';
+import MonitorView from './components/MonitorView';
 import SettingsModal from './components/SettingsModal';
 
 function createSession(): ChatSession {
@@ -315,27 +315,8 @@ export default function App() {
             onSuggest={handleSuggest}
           />
         )}
-        {activeView === 'dashboard' && (
-          <DashboardView
-            onBack={() => setActiveView('chat')}
-            onOpenTask={handleDashboardOpenTask}
-          />
-        )}
-        {activeView === 'opc' && (
-          <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
-            <span className="mb-4 text-5xl">🏭</span>
-            <h2 className="mb-2 text-lg font-semibold text-gray-200">OPC 监控</h2>
-            <p className="max-w-md text-sm text-gray-500">
-              在对话视图中开启 OPC 模式，发送工业制程检查请求，
-              即可在右侧面板查看 6 级闭环诊断数据。
-            </p>
-            <button
-              onClick={() => setActiveView('chat')}
-              className="mt-4 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-sm text-cyan-300 transition-colors hover:bg-cyan-500/20"
-            >
-              前往对话
-            </button>
-          </div>
+        {activeView === 'monitor' && (
+          <MonitorView onOpenTask={handleDashboardOpenTask} />
         )}
       </AppShell>
 

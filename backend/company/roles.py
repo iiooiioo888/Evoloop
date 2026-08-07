@@ -29,6 +29,7 @@ ROLE_MANAGER = RoleDefinition(
         "追蹤工作進度，處理阻塞與依賴",
         "審查最終交付物，決定是否通過或退回修改",
         "控制預算，在成本與品質間取得平衡",
+        "管理 Docker 容器化部署：查詢狀態、讀取日誌、重啟服務",
     ],
     can_delegate_to=[
         RoleType.TECH_LEAD,
@@ -45,6 +46,7 @@ ROLE_MANAGER = RoleDefinition(
         "分配給合適的團隊成員，並追蹤進度。你注重效率與品質的平衡，"
         "在預算範圍內做出最佳決策。你了解每個角色的專業領域，"
         "能根據任務類型自動指派最合適的執行者。"
+        "你可以使用 Docker 工具來管理容器化部署：查詢狀態、讀取日誌、重啟服務。"
     ),
 )
 
@@ -308,6 +310,7 @@ ROLE_DEVOPS = RoleDefinition(
         "管理部署環境（Docker、K8s）",
         "設定監控與警報",
         "處理效能優化與擴展",
+        "管理 Docker 容器：查詢狀態、讀取日誌、重啟/停止/啟動服務",
     ],
     can_delegate_to=[],
     default_tier=BudgetTier.ROUTINE,
@@ -315,6 +318,8 @@ ROLE_DEVOPS = RoleDefinition(
     system_prompt=(
         "你是一位 DevOps 專家，擅長自動化部署與基礎設施管理。"
         "你確保服務穩定運行，並建立完善的監控體系。"
+        "你可以使用 Docker 工具來查詢容器狀態、讀取日誌、"
+        "以及重啟/停止/啟動服務。"
     ),
 )
 

@@ -13,8 +13,7 @@ interface ActivityBarProps {
 
 const ITEMS: { key: ViewKey; icon: string; label: string }[] = [
   { key: 'chat', icon: '💬', label: '对话' },
-  { key: 'dashboard', icon: '📊', label: '控制面版' },
-  { key: 'opc', icon: '🏭', label: 'OPC 监控' },
+  { key: 'monitor', icon: '📊', label: '监控' },
 ];
 
 export default function ActivityBar({ activeView, onViewChange }: ActivityBarProps) {

@@ -113,6 +113,7 @@ class BudgetManager:
         self._task_spent: float = 0.0
         self._session_spent: float = 0.0
         self._monthly_spent: float = 0.0
+        self._docker_cost: float = 0.0
         self._month: int = datetime.now(timezone.utc).month
         self._year: int = datetime.now(timezone.utc).year
         self._router = TierRouter(config)
@@ -128,21 +129,34 @@ class BudgetManager:
         return self._session_spent
 
     @property
+    def docker_cost(self) -> float:
+        return self._docker_cost
+
+    @property
     def monthly_spent(self) -> float:
         return self._monthly_spent
 
     @property
     def budget_pressure(self) -> float:
-        """計算當前預算壓力（0.0 ~ 1.0）。"""
+        """計算當前預算壓力（0.0 ~ 1.0）。
+
+        Docker 容器成本納入月度預算壓力計算，
+        公司可根據壓力自動優化容器開銷。
+        """
         pressures: list[float] = []
         for spent, limit in [
             (self._task_spent, self.config.task_limit_usd),
             (self._session_spent, self.config.session_limit_usd),
-            (self._monthly_spent, self.config.monthly_limit_usd),
+            (self._monthly_spent + self._docker_cost, self.config.monthly_limit_usd),
         ]:
             if limit > 0:
                 pressures.append(spent / limit)
         return max(pressures) if pressures else 0.0
+
+    @property
+    def total_spent(self) -> float:
+        """總花費（LLM + Docker）。"""
+        return self._monthly_spent + self._docker_cost
 
     # ── 月度重置 ──
 
@@ -173,6 +187,172 @@ class BudgetManager:
                 self._session_spent, self.config.session_limit_usd,
                 self._monthly_spent, self.config.monthly_limit_usd,
             )
+
+    def record_docker_cost(self, service: str, hours: float) -> float:
+        """記錄容器服務按時費用（USD），同步計入公司總預算。
+
+        類似阿里雲 ECS 按量付費：費用 = 小時費率 × 運行時長。
+        費用同時計入 _docker_cost（獨立追蹤）和 _monthly_spent（總預算）。
+
+        Args:
+            service: 服務名稱
+            hours: 運行時長（小時）
+
+        Returns:
+            該時段的費用（USD）
+        """
+        from backend.company.docker_tools import get_service_hourly_rate
+        rate = get_service_hourly_rate(service)
+        cost = rate * hours
+        if cost > 0:
+            self._docker_cost += cost
+            self._monthly_spent += cost
+            self._session_spent += cost
+            self._task_spent += cost
+            logger.debug(
+                "Docker %s 運行 %.2fh，費率 $%.3f/h，費用 $%.4f（累計 Docker $%.4f）",
+                service, hours, rate, cost, self._docker_cost,
+            )
+            pressure = self.budget_pressure
+            if pressure >= self.config.warn_threshold:
+                logger.warning(
+                    "Docker 成本警告：預算壓力 %.0f%%（Docker $%.4f + LLM $%.4f = $%.4f）",
+                    pressure * 100, self._docker_cost, self._monthly_spent - self._docker_cost, self.total_spent,
+                )
+        return cost
+
+    def record_docker_runtime(self) -> dict[str, Any]:
+        """記錄當前所有容器的運行成本（用於任務開始/結束快照）。
+
+        從 DockerManager 獲取所有容器 uptime，計算各服務費用並記錄。
+
+        Returns:
+            {services: {svc: {rate, hours, cost}}, total_cost: float}
+        """
+        from backend.services.docker_manager import get_docker_manager
+        from backend.company.docker_tools import get_service_hourly_rate
+
+        dm = get_docker_manager()
+        if not dm.available:
+            return {"services": {}, "total_cost": 0.0}
+
+        containers = dm.list_containers()
+        services: dict[str, dict[str, Any]] = {}
+        total = 0.0
+
+        for c in containers:
+            svc = c.get("service", c["name"])
+            if svc == "_docker_unavailable":
+                continue
+            rate = get_service_hourly_rate(svc)
+            uptime_s = float(c.get("uptime_seconds", 0))
+            hours = uptime_s / 3600.0
+            cost = rate * hours
+            services[svc] = {"rate": rate, "hours": round(hours, 2), "cost": round(cost, 4)}
+            total += cost
+
+        # 記錄總 Docker 成本到預算
+        if total > 0:
+            delta = total - self._docker_cost
+            if delta > 0.001:  # 只記錄顯著變化
+                self._docker_cost = total
+                logger.info(
+                    "Docker 運行成本快照：總計 $%.4f（%d 個服務）",
+                    total, len(services),
+                )
+
+        return {"services": services, "total_cost": round(total, 4)}
+
+    # ── Docker 預算控制 ──
+
+    def get_docker_optimization_suggestions(self) -> list[dict[str, Any]]:
+        """根據預算壓力提供容器優化建議。
+
+        當預算壓力超過閾值時，建議停止非核心容器以節省成本。
+
+        Returns:
+            建議列表，每項包含 service, action, reason, estimated_saving
+        """
+        from backend.services.docker_manager import get_docker_manager
+        from backend.company.docker_tools import get_service_hourly_rate
+
+        pressure = self.budget_pressure
+        suggestions: list[dict[str, Any]] = []
+
+        # 只有壓力超過警告閾值才建議優化
+        if pressure < self.config.warn_threshold:
+            return suggestions
+
+        dm = get_docker_manager()
+        if not dm.available:
+            return suggestions
+
+        containers = dm.list_containers()
+
+        # 核心服務不可停
+        CORE_SERVICES = {"backend"}
+        # 可停止的服務（按優先級排序）
+        STOPPABLE_PRIORITY = ["chroma", "frontend", "opc", "redis"]
+
+        for svc in STOPPABLE_PRIORITY:
+            container = next((c for c in containers if c.get("service") == svc), None)
+            if not container:
+                continue
+
+            status = container.get("status", "")
+            if not status.startswith("Up"):
+                continue
+
+            rate = get_service_hourly_rate(svc)
+            # 估算停止後每小時節省
+            hourly_saving = rate
+
+            if pressure >= 0.9:  # 90%+ 壓力 → 停止所有非核心
+                suggestions.append({
+                    "service": svc,
+                    "action": "stop",
+                    "reason": f"預算壓力 {pressure:.0%}，建議停止 {svc} 節省 ${rate:.3f}/h",
+                    "estimated_saving_per_hour": round(hourly_saving, 4),
+                    "priority": "high",
+                })
+            elif pressure >= 0.7 and svc in ("chroma", "frontend"):  # 70%+ → 停止低優先級
+                suggestions.append({
+                    "service": svc,
+                    "action": "stop",
+                    "reason": f"預算壓力 {pressure:.0%}，建議停止 {svc} 節省 ${rate:.3f}/h",
+                    "estimated_saving_per_hour": round(hourly_saving, 4),
+                    "priority": "medium",
+                })
+
+        return suggestions
+
+    def can_afford_docker_runtime(self, estimated_hours: float = 1.0) -> tuple[bool, str]:
+        """檢查是否可負擔 Docker 容器繼續運行。
+
+        Args:
+            estimated_hours: 預估繼續運行時長
+
+        Returns:
+            (can_continue, reason)
+        """
+        from backend.company.docker_tools import get_service_hourly_rate
+        from backend.services.docker_manager import get_docker_manager
+
+        dm = get_docker_manager()
+        if not dm.available:
+            return True, "Docker 不可用，無需檢查"
+
+        containers = dm.list_containers()
+        total_hourly = 0.0
+        for c in containers:
+            svc = c.get("service", c["name"])
+            if svc == "_docker_unavailable":
+                continue
+            if c.get("status", "").startswith("Up"):
+                total_hourly += get_service_hourly_rate(svc)
+
+        estimated_cost = total_hourly * estimated_hours
+        return self.can_afford(estimated_cost, BudgetTier.ROUTINE)
 
     # ── 預算檢查 ──
 
@@ -225,6 +405,7 @@ class BudgetManager:
     def reset_task(self) -> None:
         """重置任務級別花費（新任務開始時）。"""
         self._task_spent = 0.0
+        self._docker_cost = 0.0
 
     def reset_session(self) -> None:
         """重置會話級別花費。"""
@@ -242,6 +423,8 @@ class BudgetManager:
             "session_limit": self.config.session_limit_usd,
             "monthly_spent": round(self._monthly_spent, 4),
             "monthly_limit": self.config.monthly_limit_usd,
+            "docker_cost": round(self._docker_cost, 4),
+            "total_spent": round(self.total_spent, 4),
             "budget_pressure": round(self.budget_pressure, 2),
             "active_tier": self._router.resolve_model(
                 BudgetTier.ROUTINE, self.budget_pressure

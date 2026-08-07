@@ -16,8 +16,7 @@ interface TopBarProps {
 
 const VIEW_LABELS: Record<ViewKey, { icon: string; label: string }> = {
   chat: { icon: '💬', label: '对话' },
-  dashboard: { icon: '📊', label: '控制面版' },
-  opc: { icon: '🏭', label: 'OPC 监控' },
+  monitor: { icon: '📊', label: '监控' },
 };
 
 export default function TopBar({
