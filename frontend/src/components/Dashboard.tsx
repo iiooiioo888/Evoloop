@@ -461,6 +461,8 @@ export default function Dashboard({ onBack, onOpenTask }: DashboardProps) {
 
   const consoleRef = useRef<HTMLDivElement>(null);
   const docPageRef = useRef<HTMLDivElement>(null);
+  // 點擊 TOC 後短暫抑制 scrollspy，避免平滑滾動期間高亮被覆寫
+  const tocLockUntil = useRef(0);
 
   const load = useCallback(async () => {
     try {
@@ -544,10 +546,12 @@ export default function Dashboard({ onBack, onOpenTask }: DashboardProps) {
   const scrollToHeading = (id: number) => {
     const els = docPageRef.current?.querySelectorAll('.doc-content h2, .doc-content h3');
     els?.[id]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    tocLockUntil.current = Date.now() + 900;
     setActiveHeading(id);
   };
 
   const onDocScroll = () => {
+    if (Date.now() < tocLockUntil.current) return;
     const page = docPageRef.current;
     if (!page) return;
     const els = page.querySelectorAll('.doc-content h2, .doc-content h3');

@@ -75,14 +75,14 @@ EvoLoop 是一個具備「自我反思閉環」的 AI 助手系統，並擴展�
 ```
 evoloop/
 ├── backend/                # FastAPI 後端 + LangGraph 核心閉環
-│   ├── main.py             #   FastAPI 應用入口（/chat, /health）
+│   ├── main.py             #   FastAPI 應用入口（/chat, /tasks, /dashboard, /config）
 │   ├── Dockerfile          #   容器化構建檔
 │   ├── core/               #   狀態模型、節點、圖定義
 │   │   ├── graph.py        #     反思迴圈圖（含公司模式路由）
 │   │   ├── nodes.py        #     標準模式節點（生成/評估/反思/改進/存檔）
 │   │   ├── company_nodes.py#     公司模式節點（路由/執行/結果收集）
-│   │   ├── opc_nodes.py    #     OPC 整合節點（感知/診斷/行動）
 │   │   ├── llm.py          #     LiteLLM 統一呼叫層
+│   │   ├── llm_config.py   #     運行時 LLM 配置管理（動態更新/持久化）
 │   │   └── state.py        #     EvoLoopState 定義
 │   ├── company/            #   多代理人公司運行時（Phase 6+）
 │   │   ├── orchestrator.py #     公司協調器（分解→執行→審查→整合→最終審查）
@@ -98,7 +98,10 @@ evoloop/
 │   │   ├── vector_store.py #     ChromaDB 向量記憶庫（Phase 2）
 │   │   └── json_store.py   #     JSON 暫存（Phase 1 遺留）
 │   ├── services/           #   營運服務
-│   │   └── archiver.py     #     文本化存檔（Task 8.6，JSONL）
+│   │   ├── archiver.py     #     文本化存檔（Task 8.6，JSONL）
+│   │   ├── task_manager.py #     後台任務管理器（建立/執行/進度輪詢/Redis 持久化）
+│   │   └── dashboard.py    #     控制面版聚合服務（統計/任務/存檔/OPC 審計/能力註冊）
+│   ├── data/               #   運行時持久化資料（存檔/公司運行日誌/LLM 配置）
 │   ├── scripts/            #   工具腳本
 │   │   ├── test_llm_connection.py  # LLM 連線測試
 │   │   └── smoke_test.py           # 向量記憶庫冒煙測試
@@ -106,16 +109,39 @@ evoloop/
 ├── opc_service/            # OPC UA 工業數據微服務（Phase 7）
 │   ├── Dockerfile          #   容器化構建檔
 │   ├── main.py             #   FastAPI 應用入口
-│   ├── routes.py           #   REST + WebSocket API 路由
-│   ├── opc_client.py       #   asyncua OPC UA 客戶端封裝
+│   ├── app.py              #   FastAPI 應用實例與中介軟體
+│   ├── act.py / sense.py   #   感知-診斷-行動閉環節點
 │   ├── guard.py            #   安全護欄（白名單/邊界檢查/審計日誌）
-│   ├── simulator.py        #   模擬 OPC UA 伺服器（開發測試用）
-│   ├── models.py           #   Pydantic 請求/回應模型
-│   └── config.py           #   環境設定
-├── frontend/               # React + Vite + TypeScript 對話介面（待實作）
+│   ├── audit.py            #   審計日誌記錄
+│   ├── config.py           #   環境設定
+│   ├── client/             #   OPC UA 客戶端（連線/讀取/寫入/訂閱/瀏覽）
+│   ├── models/             #   Pydantic 請求/回應模型
+│   ├── routes/             #   REST + WebSocket API 路由
+│   └── simulator/          #   模擬 OPC UA 伺服器（開發測試用）
+├── frontend/               # React + Vite + TypeScript 前端介面
+│   ├── src/
+│   │   ├── api/client.ts        #   API 客戶端（後端通訊）
+│   │   ├── components/
+│   │   │   ├── Dashboard.tsx    #     控制面版（統計/任務/存檔/審計/能力）
+│   │   │   ├── TaskPage.tsx     #     任務詳情頁（進度/事件流/看板/預算）
+│   │   │   ├── TaskPanel.tsx    #     任務列表面板（建立/輪詢/狀態顯示）
+│   │   │   ├── MessageBubble.tsx#     消息氣泡（Markdown 渲染/代碼高亮）
+│   │   │   ├── MessageList.tsx  #     消息列表
+│   │   │   ├── InputBar.tsx     #     輸入欄（支援標準/公司模式切換）
+│   │   │   ├── Sidebar.tsx      #     側邊欄導航
+│   │   │   └── SettingsModal.tsx#     設定彈窗（LLM 配置動態更新）
+│   │   ├── lib/storage.ts       #   本地儲存輔助
+│   │   ├── App.tsx              #   主應用（路由/佈局）
+│   │   ├── types.ts             #   TypeScript 型別定義
+│   │   └── main.tsx             #   應用入口
+│   ├── Dockerfile          #   生產版構建檔（nginx + 靜態資源）
+│   ├── nginx.conf           #   nginx 反向代理配置
+│   ├── package.json         #   前端依賴
+│   └── vite.config.ts       #   Vite 構建配置
 ├── dspy_pipeline/          # DSPy 自動提示優化（待實作）
 ├── docker/                 # 容器化設定（待完善）
-├── docker-compose.yml      # 四服務編排（backend/opc/redis/chroma；frontend 待實作後啟用）
+├── docker-compose.yml      # 五服務編排（frontend/backend/opc/redis/chroma）
+├── docker-compose.dev.yml  # 開發模式編排（熱重載：uvicorn --reload + vite HMR）
 ├── requirements.txt        # Python 依賴
 └── .env.example            # 環境變數範本
 ```
@@ -154,6 +180,15 @@ evoloop/
 - **三級預算控制**：任務級 / 會話級 / 月度級，超支自動降級至更便宜的模型
 - **成本追蹤**：基於 token 計價估算每次 LLM 呼叫成本，全程透明
 
+### 後台任務與即時進度
+- **非同步任務執行**：所有對話任務（標準/公司模式）改為後台執行，透過 `POST /tasks` 建立、`GET /tasks/{id}` 輪詢進度
+- **即時事件流**：階段切換、評分、公司生命週期事件即時推送，前端任務頁動態展示
+- **Redis 持久化**：任務記錄寫入 Redis（TTL 7 天），服務重啟後可恢復；Redis 不可用時降級為記憶體
+
+### 控制面版
+- **聚合儀表板**（`GET /dashboard`）：任務統計、存檔瀏覽、OPC 審計摘要、能力註冊表一站式檢視
+- **能力註冊表**：展示 LLM 層、反思閉環、公司運行時、記憶庫、OPC UA、存檔服務六大能力模組的即時狀態
+
 ### OPC UA 工業整合
 - **REST + WebSocket API**：讀取/寫入/瀏覽 OPC 標籤，支援即時訂閱
 - **安全護欄**：寫入白名單、數值邊界檢查、完整審計日誌
@@ -170,6 +205,7 @@ evoloop/
 ### 環境需求
 
 - Python 3.10–3.12
+- Node.js 20+（前端開發）
 - （選用）Redis 7+、ChromaDB — 亦可透過 Docker Compose 啟動
 
 ### 安裝與設定
@@ -195,6 +231,24 @@ python -m backend.scripts.smoke_test
 pytest backend/tests/
 ```
 
+### 啟動後端
+
+```powershell
+# 使用 uvicorn（含熱重載）
+python -m backend.main
+
+# 或指定主機/埠
+uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### 啟動前端
+
+```powershell
+cd frontend
+npm install
+npm run dev     # 開發模式（Vite HMR，預設 http://localhost:5173）
+```
+
 ### 啟動 OPC 微服務
 
 ```powershell
@@ -214,8 +268,11 @@ uvicorn opc_service.main:app --host 0.0.0.0 --port 8001 --reload
 > `REDIS_URL=redis://redis:6379/0`、`CHROMA_HOST=chroma`、`OPC_SERVICE_URL=http://opc_service:8001`。
 
 ```powershell
-# 啟動全部可用服務（backend / opc_service / redis / chroma）
+# 開發模式（預設，含熱重載：後端 uvicorn --reload + 前端 vite HMR）
 docker compose up -d
+
+# 生產模式（含 nginx 靜態前端）
+COMPOSE_PROFILES=prod docker compose -f docker-compose.yml up -d --build
 
 # 僅啟動基礎設施（redis + chroma）
 docker compose up -d redis chroma
@@ -227,11 +284,12 @@ docker compose up -d --build backend
 | 服務 | 連接埠 | Dockerfile | 說明 |
 | --- | --- | --- | --- |
 | backend | 8000 | `backend/Dockerfile` | FastAPI 後端 + LangGraph 核心閉環 |
+| frontend | 5173（dev）/ 80（prod） | `frontend/Dockerfile` | React + Vite + TypeScript 前端介面 |
 | opc_service | 8001 | `opc_service/Dockerfile` | OPC UA 工業數據微服務 |
-| redis | 6379 | 官方映像 | 會話快取 |
+| redis | 6379 | 官方映像 | 會話快取與任務持久化 |
 | chroma | 8100 | 官方映像 | 向量資料庫 |
 
-> `frontend` 服務（連接埠 5173）目前為待實作狀態，已在 `docker-compose.yml` 中註解，前端完成後取消註解即可啟用。
+> 開發模式（`docker-compose.dev.yml`）將原始碼卷掛載至容器，後端使用 `uvicorn --reload`、前端使用 `vite dev`（HMR），修改代碼即時生效，無需重建鏡像。
 
 ## 環境變數
 
@@ -244,12 +302,13 @@ docker compose up -d --build backend
 | `BACKEND_HOST` / `BACKEND_PORT` | `0.0.0.0` / `8000` | 後端服務綁定 |
 | `REDIS_URL` | `redis://localhost:6379/0` | Redis 連線位址 |
 | `CHROMA_HOST` / `CHROMA_PORT` | `localhost` / `8100` | ChromaDB 連線 |
+| `EVOL_ARCHIVE_DIR` | `backend/data/archives` | JSONL 存檔目錄 |
+| `EVOL_CONFIG_DIR` | `backend/data` | LLM 運行時配置持久化目錄 |
 | `OPC_SERVER_URL` | `opc.tcp://localhost:4840/...` | OPC UA 伺服器位址 |
 | `OPC_SERVICE_HOST` / `OPC_SERVICE_PORT` | `0.0.0.0` / `8001` | OPC 微服務綁定 |
 | `OPC_WRITE_WHITELIST` | （空，不限制） | 允許寫入的標籤名稱前綴（逗號分隔） |
 | `OPC_SIM_ENABLED` | `false` | 啟用模擬 OPC 伺服器 |
 | `OPC_SIM_PORT` | `4840` | 模擬伺服器連接埠 |
-| `EVOL_ARCHIVE_DIR` | `backend/data/archives` | JSONL 存檔目錄 |
 
 ## 技術棧
 
@@ -261,7 +320,7 @@ docker compose up -d --build backend
 | 向量資料庫 | ChromaDB | ≥0.5 |
 | 會話快取 | Redis | ≥5.2 |
 | 工業協議 | OPC UA（asyncua） | ≥1.1 |
-| 前端 | React + Vite + TypeScript | 待實作 |
+| 前端 | React 18 + Vite + TypeScript | — |
 | 提示優化 | DSPy | 待實作 |
 | 部署 | Docker Compose | — |
 | 測試 | pytest + pytest-asyncio | ≥8.3 / ≥0.24 |
@@ -286,14 +345,17 @@ pytest backend/tests/test_reflection_loop.py   # 反思迴圈
 pytest backend/tests/test_company.py           # 多代理人公司
 pytest backend/tests/test_opc_service.py       # OPC 服務
 pytest backend/tests/test_archiver.py          # 文本化存檔
+pytest backend/tests/test_dashboard.py         # 控制面版
+pytest backend/tests/test_architecture.py      # 專案架構
 ```
 
 測試使用 mock / patch 隔離 LLM 呼叫與外部服務，無需真實 API 金鑰即可執行。
 
-目前共 126 個測試案例，覆蓋：
+目前共 140 個測試案例，覆蓋：
 
 | 測試類別 | 測試檔 | 涵蓋範圍 |
 | --- | --- | --- |
+| 專案架構 | `test_architecture.py` | 模組完整性、關鍵約束（LLM 調用層/安全護欄/禁止操作） |
 | 反思迭代迴圈 | `test_reflection_loop.py` | 高分通過、低分迭代、最大迭代上限、記憶檢索 |
 | 公司狀態與預算 | `test_company.py` | 工作項狀態機、預算管理、模型路由、成本追蹤 |
 | 任務拆分器 | `test_company.py` | LLM/模板/規則三策略、自動策略選擇、並行規劃、依賴解析 |
@@ -304,6 +366,7 @@ pytest backend/tests/test_archiver.py          # 文本化存檔
 | 檢查點 | `test_company.py` | 序列化、工作項欄位完整性、狀態恢復 |
 | 優先級與工作池 | `test_company.py` | Priority 排序、Semaphore 並行限制 |
 | EvoLoop 圖整合 | `test_company.py` | 公司模式路由、迭代迴圈、失敗跳過迭代 |
+| 控制面版 | `test_dashboard.py` | 儀表板聚合、任務摘要、能力註冊表、降級安全 |
 | OPC 服務 | `test_opc_service.py` | 白名單、邊界檢查、審計日誌、REST/WebSocket API |
 | 文本化存檔 | `test_archiver.py` | JSONL 寫入、反思映射、完整圖存檔 |
 
@@ -315,7 +378,7 @@ pytest backend/tests/test_archiver.py          # 文本化存檔
 | Phase 1 | 核心反思閉環 | ✅ 完成 |
 | Phase 2 | 記憶與向量庫（ChromaDB） | ✅ 完成 |
 | Phase 3 | FastAPI 服務 | ✅ 完成 |
-| Phase 4 | 前端介面 | 待實作 |
+| Phase 4 | 前端介面 | ✅ 完成 |
 | Phase 5 | DSPy 提示優化 | 待實作 |
 | Phase 6 | 多代理人公司運行時 | ✅ 完成 |
 | Phase 7 | OPC UA 工業整合 | ✅ 完成 |

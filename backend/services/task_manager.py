@@ -30,9 +30,10 @@ import logging
 import os
 import time
 import uuid
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-import redis
+if TYPE_CHECKING:
+    import redis
 
 from backend.company.events import CompanyEvent
 from backend.company.orchestrator import CompanyOrchestrator
@@ -136,13 +137,14 @@ class TaskManager:
 
     # ── Redis 持久化 ──
 
-    def _get_redis(self) -> redis.Redis | None:
+    def _get_redis(self) -> "redis.Redis | None":
         """惰性取得 Redis 連線；失敗後不再重試（降級為記憶體）。"""
         if self._redis is not None:
             return self._redis
         if self._redis_failed:
             return None
         try:
+            import redis
             client = redis.Redis.from_url(
                 REDIS_URL, decode_responses=True, socket_connect_timeout=2
             )
