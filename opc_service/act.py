@@ -1,6 +1,7 @@
-"""OPC 执行节点 — 根据诊断结果执行控制动作。
+"""OPC 执行节点 — 根据决策结果执行控制动作。
 
-将 LLM 建议的控制动作写入 OPC 服务，并记录执行结果。
+6 级闭环中的第 6 级：接收决策节点产出的优先级排序动作列表，
+经安全护栏检查后写入 OPC 标签，并记录执行结果。
 """
 
 import logging
@@ -51,20 +52,43 @@ async def _write_opc_tags(
 
 
 async def act_opc(state: dict) -> dict[str, Any]:
-    """节点 S3：根据诊断结果执行控制动作。
+    """节点 A2：根据决策结果执行控制动作。
 
-    将 LLM 建议的控制动作写入 OPC 服务，并记录执行结果。
-    安全护栏在 OPC 服务端执行（白名单 + 边界检查）。
+    优先使用 state.opc_decisions（决策节点产出），
+    若无决策则回退到 state.opc_actions（兼容旧流程）。
+    每个动作按优先级顺序执行，经 OPC 服务端安全护栏检查。
     """
-    actions = state.get("opc_actions") or []
-    if not actions:
-        return {}
+    # 优先使用决策节点的产出
+    decisions = state.get("opc_decisions") or []
+    if decisions:
+        # 按优先级排序：critical > high > medium > low
+        priority_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
+        decisions = sorted(
+            decisions,
+            key=lambda d: priority_order.get(d.get("priority", "medium"), 2),
+        )
+        entries = [
+            {"tag_name": d["tag_name"], "value": d["value"]}
+            for d in decisions
+        ]
+    else:
+        # 兼容旧流程：直接使用 opc_actions
+        actions = state.get("opc_actions") or []
+        if not actions:
+            return {"opc_actions": []}
+        entries = [
+            {"tag_name": a["tag_name"], "value": a["value"]}
+            for a in actions
+        ]
+
+    if not entries:
+        return {"opc_actions": []}
 
     reason = (
-        f"EvoLoop 自动诊断建议"
+        f"EvoLoop 6 级闭环自动决策"
         f"（session: {state.get('session_id', 'unknown')}）"
     )
-    results = await _write_opc_tags(actions, reason=reason)
+    results = await _write_opc_tags(entries, reason=reason)
 
     success_count = sum(1 for r in results if r.get("success"))
     logger.info(

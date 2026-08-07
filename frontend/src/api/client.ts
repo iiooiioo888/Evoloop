@@ -117,11 +117,12 @@ export async function testConfig(): Promise<{ ok: boolean; reply?: string; error
 
 // ==================== 任務介面 ====================
 
-/** 建立後台任務（標準/公司模式），回傳 task_id。 */
+/** 建立後台任務（標準/公司/OPC 模式），回傳 task_id。 */
 export async function createTask(
   query: string,
   companyMode: boolean,
   companyTemplate: string,
+  opcMode: boolean = false,
 ): Promise<{ task_id: string; mode: string }> {
   let resp: Response;
   try {
@@ -132,6 +133,7 @@ export async function createTask(
         query,
         company_mode: companyMode,
         company_template: companyTemplate,
+        opc_mode: opcMode,
       }),
     });
   } catch {

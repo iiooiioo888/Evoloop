@@ -28,6 +28,8 @@ import '../dashboard.css';
 interface DashboardProps {
   onBack: () => void;
   onOpenTask: (task: TaskProgress) => void;
+  /** 嵌入模式：去除独立页面外壳，适配 IDE 主内容区 */
+  embedded?: boolean;
 }
 
 type ViewKey = 'console' | 'overview' | 'tasks' | 'content' | 'skills' | 'audit';
@@ -449,7 +451,7 @@ function CapStats({ cap }: { cap: Capability }) {
   );
 }
 
-export default function Dashboard({ onBack, onOpenTask }: DashboardProps) {
+export default function Dashboard({ onBack, onOpenTask, embedded }: DashboardProps) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<ViewKey>('console');
@@ -565,7 +567,7 @@ export default function Dashboard({ onBack, onOpenTask }: DashboardProps) {
   const audit = data?.opc_audit;
 
   return (
-    <div className="nx">
+    <div className={embedded ? 'flex flex-1 flex-col min-h-0' : 'nx'}>
       {/* ══ TOPBAR ══ */}
       <header className="topbar">
         <div className="logo">

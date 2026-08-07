@@ -1,6 +1,6 @@
 # EvoLoop
 
-EvoLoop 是一個具備「自我反思閉環」的 AI 助手系統，並擴展為多代理人公司運行時。它不只是單次回答使用者問題，而是透過 **生成 → 評估 → 反思 → 優化** 的迴圈持續改進回答品質，並將成功經驗存入向量記憶庫（ChromaDB），作為後續回答的 few-shot 提示。在面對複雜目標時，系統可切換至**公司模式**，由 Manager 分解任務、多角色分工平行執行、Reviewer 審查把關、Synthesizer 整合交付——公司產出同樣進入評估/反思/改進的迭代迴圈，確保最終交付品質達標。全程內建預算感知與模型層級路由。此外，透過 OPC UA 整合可接入工業感測與控制數據，實現「感知 → 診斷 → 行動」的工業閉環。
+EvoLoop 是一個具備「自我反思閉環」的 AI 助手系統，並擴展為多代理人公司運行時。它不只是單次回答使用者問題，而是透過 **生成 → 評估 → 反思 → 優化** 的迴圈持續改進回答品質，並將成功經驗存入向量記憶庫（ChromaDB），作為後續回答的 few-shot 提示。在面對複雜目標時，系統可切換至**公司模式**，由 Manager 分解任務、多角色分工平行執行、Reviewer 審查把關、Synthesizer 整合交付——公司產出同樣進入評估/反思/改進的迭代迴圈，確保最終交付品質達標。全程內建預算感知與模型層級路由。此外，透過 OPC UA 整合可接入工業感測與控制數據，實現「感知 → 預處理 → 分析 → 診斷 → 決策 → 執行」的 6 級工業閉環。
 
 ## 核心架構
 
@@ -58,16 +58,25 @@ EvoLoop 是一個具備「自我反思閉環」的 AI 助手系統，並擴展�
 （公司產出進入上方反思迭代迴圈，由外部 evaluate_answer 評估與改進）
 ```
 
-### OPC 工業閉環
+### OPC 工業閉環（6 級思考邏輯）
 
 ```
-[sense_opc]  讀取 OPC UA 感測器數據
+[sense_opc]        讀取 OPC UA 感測器數據
    |
    v
-[diagnose_opc]  LLM 分析數據，診斷異常
+[preprocess_opc]   數據清洗、品質過濾、標準化
    |
    v
-[act_opc]  根據診斷結果執行控制動作（寫入 OPC 標籤，經安全護欄檢查）
+[analyze_opc]      統計計算、閾值違規檢測、趨勢識別
+   |
+   v
+[diagnose_opc]     LLM 深度分析、異常檢測與根因分析
+   |
+   v
+[decide_opc]       控制策略制定、優先級排序、風險評估
+   |
+   v
+[act_opc]          執行控制動作（經安全護欄檢查）、結果驗證
 ```
 
 ## 專案結構
@@ -110,7 +119,12 @@ evoloop/
 │   ├── Dockerfile          #   容器化構建檔
 │   ├── main.py             #   FastAPI 應用入口
 │   ├── app.py              #   FastAPI 應用實例與中介軟體
-│   ├── act.py / sense.py   #   感知-診斷-行動閉環節點
+│   ├── sense.py            #   感知節點（讀取原始感測器數據）
+│   ├── preprocess.py       #   預處理節點（數據清洗/品質過濾）
+│   ├── analyze.py          #   分析節點（統計/閾值/趨勢）
+│   ├── diagnose.py         #   診斷節點（LLM 深度分析）
+│   ├── decide.py           #   決策節點（策略制定/風險評估）
+│   ├── act.py              #   執行節點（控制動作寫入）
 │   ├── guard.py            #   安全護欄（白名單/邊界檢查/審計日誌）
 │   ├── audit.py            #   審計日誌記錄
 │   ├── config.py           #   環境設定
@@ -193,7 +207,7 @@ evoloop/
 - **REST + WebSocket API**：讀取/寫入/瀏覽 OPC 標籤，支援即時訂閱
 - **安全護欄**：寫入白名單、數值邊界檢查、完整審計日誌
 - **模擬伺服器**：內建模擬 OPC UA 環境（溫度/壓力/流量/閥門/馬達），無需真實設備即可開發測試
-- **EvoLoop 整合節點**：`sense_opc`（讀取感測器）→ `diagnose_opc`（LLM 診斷）→ `act_opc`（執行控制）
+- **6 級思考閉環節點**：`sense_opc`（感知）→ `preprocess_opc`（預處理）→ `analyze_opc`（分析）→ `diagnose_opc`（LLM 診斷）→ `decide_opc`（LLM 決策）→ `act_opc`（執行控制）
 
 ### 文本化存檔
 - 每次對話完整生命週期結構化保存為 JSONL（以 UTC 日期分割檔案）
@@ -351,7 +365,7 @@ pytest backend/tests/test_architecture.py      # 專案架構
 
 測試使用 mock / patch 隔離 LLM 呼叫與外部服務，無需真實 API 金鑰即可執行。
 
-目前共 140 個測試案例，覆蓋：
+目前共 146 個測試案例，覆蓋：
 
 | 測試類別 | 測試檔 | 涵蓋範圍 |
 | --- | --- | --- |
@@ -367,7 +381,7 @@ pytest backend/tests/test_architecture.py      # 專案架構
 | 優先級與工作池 | `test_company.py` | Priority 排序、Semaphore 並行限制 |
 | EvoLoop 圖整合 | `test_company.py` | 公司模式路由、迭代迴圈、失敗跳過迭代 |
 | 控制面版 | `test_dashboard.py` | 儀表板聚合、任務摘要、能力註冊表、降級安全 |
-| OPC 服務 | `test_opc_service.py` | 白名單、邊界檢查、審計日誌、REST/WebSocket API |
+| OPC 服務 | `test_opc_service.py` | 6 級閉環（感知→預處理→分析→診斷→決策→執行）、白名單、邊界檢查、審計日誌 |
 | 文本化存檔 | `test_archiver.py` | JSONL 寫入、反思映射、完整圖存檔 |
 
 ## 開發路線

@@ -218,3 +218,21 @@ body {
     animation: none;
   }
 }
+
+/* ---- IDE 布局動效 ---- */
+
+/* ActivityBar 活跃指示器淡入 */
+@keyframes activity-indicator-in {
+  from { opacity: 0; transform: translateY(-50%) scaleY(0.3); }
+  to { opacity: 1; transform: translateY(-50%) scaleY(1); }
+}
+.activity-indicator {
+  animation: activity-indicator-in 0.2s ease-out both;
+}
+
+/* SidePanel 桌面端常显 */
+@media (min-width: 768px) {
+  .side-panel-desktop {
+    transform: translateX(0) !important;
+  }
+}

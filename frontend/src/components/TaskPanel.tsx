@@ -6,6 +6,7 @@
  */
 import { useMemo, useState } from 'react';
 import type { TaskProgress, KanbanItem } from '../types';
+import { OPC_PHASES } from '../types';
 
 interface TaskPanelProps {
   task: TaskProgress;
@@ -32,6 +33,8 @@ export const COMPANY_PHASES: { key: string; label: string }[] = [
   { key: 'evaluate', label: '品質評估' },
   { key: 'done', label: '完成' },
 ];
+
+export { OPC_PHASES };
 
 // ── 角色顯示名稱 ──
 
@@ -115,7 +118,8 @@ export function elapsed(ts: number): string {
 export default function TaskPanel({ task, onOpenFull }: TaskPanelProps) {
   const [showTimeline, setShowTimeline] = useState(false);
   const isCompany = task.mode === 'company';
-  const phases = isCompany ? COMPANY_PHASES : STANDARD_PHASES;
+  const isOPC = task.mode === 'opc';
+  const phases = isOPC ? OPC_PHASES : isCompany ? COMPANY_PHASES : STANDARD_PHASES;
   const running = task.status === 'running' || task.status === 'pending';
   const failed = task.status === 'failed';
   const currentIdx = phaseIndex(phases, task.phase);
@@ -186,7 +190,7 @@ export default function TaskPanel({ task, onOpenFull }: TaskPanelProps) {
         {failed && <span>❌</span>}
         {task.status === 'completed' && <span>✅</span>}
         <span className="font-medium text-gray-100">
-          {isCompany ? '🏢 公司任務' : '⚙️ 反思任務'}
+          {isOPC ? '🏭 OPC 診斷' : isCompany ? '🏢 公司任務' : '⚙️ 反思任務'}
         </span>
         <span className="truncate text-gray-500">
           {running

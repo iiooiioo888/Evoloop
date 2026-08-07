@@ -179,36 +179,53 @@ def test_write_endpoint_with_guard(test_app, monkeypatch):
     assert data["results"][0]["success"] is False
 
 
-# ---- 閉環情境測試（Task 7.4） ----
+# ---- 6 級閉環情境測試 ----
 
-def test_opc_graph_sense_diagnose_act():
-    """驗證 OPC 診斷圖的完整流程（使用 mock LLM）。"""
+
+def test_opc_graph_6_level_anomaly():
+    """6 級閉環完整流程：異常檢測 → 決策 → 執行。"""
     from opc_service.graph import build_opc_graph
 
-    responses = [
-        json.dumps(
-            {
-                "anomaly_detected": True,
-                "analysis": "溫度異常升高",
-                "root_cause": "冷卻水流量不足",
-                "actions": [
-                    {
-                        "tag_name": "ValvePosition",
-                        "value": 80.0,
-                        "reason": "增加冷卻水流量",
-                    }
-                ],
-            },
-            ensure_ascii=False,
-        )
-    ]
+    # 诊断 LLM 响应（使用 suggested_actions）
+    diagnose_response = json.dumps(
+        {
+            "anomaly_detected": True,
+            "severity": "critical",
+            "analysis": "溫度異常升高至 120°C，超出安全閾值 90°C",
+            "root_cause": "冷卻水流量不足導致散熱失效",
+            "suggested_actions": [
+                {
+                    "tag_name": "ValvePosition",
+                    "value": 80.0,
+                    "reason": "增加冷卻水流量",
+                }
+            ],
+        },
+        ensure_ascii=False,
+    )
+
+    # 决策 LLM 响应（优先级排序 + 风险评估）
+    decide_response = json.dumps(
+        {
+            "summary": "立即增加冷卻水流量以降低溫度",
+            "decisions": [
+                {
+                    "tag_name": "ValvePosition",
+                    "value": 80.0,
+                    "reason": "增加冷卻水流量以降低溫度",
+                    "priority": "critical",
+                    "risk": "low",
+                    "risk_note": "閥門開度在安全範圍內",
+                    "order": 1,
+                }
+            ],
+        },
+        ensure_ascii=False,
+    )
 
     async def fake_read_tags(tag_names):
         return {
-            "Temperature": {
-                "value": 120.0,
-                "quality": "Good",
-            },
+            "Temperature": {"value": 120.0, "quality": "Good"},
             "Pressure": {"value": 150.0, "quality": "Good"},
             "FlowRate": {"value": 5.0, "quality": "Good"},
             "ValvePosition": {"value": 20.0, "quality": "Good"},
@@ -225,8 +242,10 @@ def test_opc_graph_sense_diagnose_act():
             for e in entries
         ]
 
-    fake = MagicMock()
-    fake.side_effect = responses
+    fake_diagnose = MagicMock()
+    fake_diagnose.side_effect = [diagnose_response]
+    fake_decide = MagicMock()
+    fake_decide.side_effect = [decide_response]
 
     with (
         patch(
@@ -239,7 +258,11 @@ def test_opc_graph_sense_diagnose_act():
         ),
         patch(
             "opc_service.diagnose.call_llm",
-            side_effect=fake,
+            side_effect=fake_diagnose,
+        ),
+        patch(
+            "opc_service.decide.call_llm",
+            side_effect=fake_decide,
         ),
     ):
         result = asyncio.run(
@@ -248,26 +271,29 @@ def test_opc_graph_sense_diagnose_act():
             )
         )
 
+    # 验证各阶段状态
     assert result["opc_anomaly_detected"] is True
+    assert result["opc_diagnosis"]["severity"] == "critical"
+    assert len(result["opc_decisions"]) == 1
+    assert result["opc_decisions"][0]["priority"] == "critical"
     assert len(result["opc_actions"]) == 1
     assert result["opc_actions"][0]["success"] is True
 
 
-def test_opc_graph_no_anomaly():
-    """正常製程：無異常檢測，無控制動作。"""
+def test_opc_graph_6_level_no_anomaly():
+    """6 級閉環正常流程：無異常，無控制動作。"""
     from opc_service.graph import build_opc_graph
 
-    responses = [
-        json.dumps(
-            {
-                "anomaly_detected": False,
-                "analysis": "所有參數正常",
-                "root_cause": "",
-                "actions": [],
-            },
-            ensure_ascii=False,
-        )
-    ]
+    diagnose_response = json.dumps(
+        {
+            "anomaly_detected": False,
+            "severity": "normal",
+            "analysis": "所有參數在安全範圍內",
+            "root_cause": "",
+            "suggested_actions": [],
+        },
+        ensure_ascii=False,
+    )
 
     async def fake_read_tags(tag_names):
         return {
@@ -276,7 +302,7 @@ def test_opc_graph_no_anomaly():
         }
 
     fake = MagicMock()
-    fake.side_effect = responses
+    fake.side_effect = [diagnose_response]
 
     with (
         patch(
@@ -295,4 +321,151 @@ def test_opc_graph_no_anomaly():
         )
 
     assert result["opc_anomaly_detected"] is False
+    assert result["opc_diagnosis"]["severity"] == "normal"
+    assert result["opc_decisions"] == []
     assert result["opc_actions"] == []
+
+
+# ---- 預處理節點測試 ----
+
+def test_preprocess_filters_bad_quality():
+    """預處理：過濾品質不良的讀數。"""
+    from opc_service.preprocess import preprocess_opc
+
+    state = {
+        "opc_readings": {
+            "Temperature": {"value": 25.0, "quality": "Good"},
+            "Pressure": {"value": 101.3, "quality": "Bad"},
+            "FlowRate": {"value": 50.0, "quality": "Uncertain"},
+            "ValvePosition": {"value": 30.0, "quality": "Good"},
+        }
+    }
+
+    result = asyncio.run(preprocess_opc(state))
+
+    assert "Temperature" in result["opc_readings_clean"]
+    assert "ValvePosition" in result["opc_readings_clean"]
+    assert "Pressure" not in result["opc_readings_clean"]
+    assert "FlowRate" not in result["opc_readings_clean"]
+    assert result["opc_quality_report"]["good"] == 2
+    assert result["opc_quality_report"]["bad"] == 2
+
+
+def test_preprocess_empty_readings():
+    """預處理：無讀數時返回空結果。"""
+    from opc_service.preprocess import preprocess_opc
+
+    result = asyncio.run(preprocess_opc({}))
+
+    assert result["opc_readings_clean"] == {}
+    assert result["opc_quality_report"]["total"] == 0
+
+
+# ---- 分析節點測試 ----
+
+def test_analyze_detects_threshold_violations():
+    """分析：檢測超出閾值的讀數。"""
+    from opc_service.analyze import analyze_opc
+
+    state = {
+        "opc_readings_clean": {
+            "Temperature": {"value": 120.0, "quality": "Good"},
+            "Pressure": {"value": 150.0, "quality": "Good"},
+            "FlowRate": {"value": 50.0, "quality": "Good"},
+        }
+    }
+
+    result = asyncio.run(analyze_opc(state))
+
+    analysis = result["opc_analysis"]
+    assert len(analysis["violations"]) == 1
+    assert analysis["violations"][0]["tag"] == "Temperature"
+    assert analysis["violations"][0]["direction"] == "high"
+    assert analysis["violations"][0]["severity"] == "critical"
+    assert "Temperature" in analysis["anomaly_tags"]
+
+
+def test_analyze_normal_readings():
+    """分析：正常讀數無違規。"""
+    from opc_service.analyze import analyze_opc
+
+    state = {
+        "opc_readings_clean": {
+            "Temperature": {"value": 25.0, "quality": "Good"},
+            "Pressure": {"value": 101.3, "quality": "Good"},
+        }
+    }
+
+    result = asyncio.run(analyze_opc(state))
+
+    analysis = result["opc_analysis"]
+    assert len(analysis["violations"]) == 0
+    assert analysis["summary"] == "所有读数在安全范围内"
+
+
+# ---- 決策節點測試 ----
+
+def test_decide_skips_when_no_anomaly():
+    """決策：無異常時跳過，返回空決策。"""
+    from opc_service.decide import decide_opc
+
+    state = {
+        "opc_diagnosis": {"anomaly_detected": False},
+    }
+
+    result = asyncio.run(decide_opc(state))
+
+    assert result["opc_decisions"] == []
+    assert "无异常" in result["opc_decision_summary"]
+
+
+def test_decide_with_anomaly():
+    """決策：有異常時調用 LLM 制定策略。"""
+    from opc_service.decide import decide_opc
+
+    decide_response = json.dumps(
+        {
+            "summary": "優先處理溫度異常",
+            "decisions": [
+                {
+                    "tag_name": "ValvePosition",
+                    "value": 80.0,
+                    "reason": "增加冷卻水流量",
+                    "priority": "critical",
+                    "risk": "low",
+                    "risk_note": "在安全範圍內",
+                    "order": 1,
+                }
+            ],
+        },
+        ensure_ascii=False,
+    )
+
+    state = {
+        "opc_diagnosis": {
+            "anomaly_detected": True,
+            "severity": "critical",
+            "root_cause": "冷卻不足",
+            "analysis": "溫度過高",
+            "suggested_actions": [
+                {"tag_name": "ValvePosition", "value": 80.0, "reason": "降溫"}
+            ],
+        },
+        "opc_analysis": {
+            "violations": [
+                {"tag": "Temperature", "value": 120.0, "threshold": 90.0,
+                 "direction": "high", "severity": "critical"}
+            ]
+        },
+        "opc_quality_report": {"total": 4, "good": 4, "bad": 0},
+    }
+
+    fake = MagicMock()
+    fake.side_effect = [decide_response]
+
+    with patch("opc_service.decide.call_llm", side_effect=fake):
+        result = asyncio.run(decide_opc(state))
+
+    assert len(result["opc_decisions"]) == 1
+    assert result["opc_decisions"][0]["priority"] == "critical"
+    assert result["opc_decisions"][0]["risk"] == "low"

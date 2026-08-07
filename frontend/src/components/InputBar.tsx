@@ -7,6 +7,7 @@ import type { CompanyTemplate } from '../types';
 export interface SendOptions {
   companyMode: boolean;
   companyTemplate: CompanyTemplate;
+  opcMode: boolean;
 }
 
 interface InputBarProps {
@@ -17,6 +18,7 @@ interface InputBarProps {
 export default function InputBar({ disabled, onSend }: InputBarProps) {
   const [text, setText] = useState('');
   const [companyMode, setCompanyMode] = useState(false);
+  const [opcMode, setOpcMode] = useState(false);
   const [companyTemplate, setCompanyTemplate] = useState<CompanyTemplate>('quick_task');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -31,7 +33,7 @@ export default function InputBar({ disabled, onSend }: InputBarProps) {
     e.preventDefault();
     const trimmed = text.trim();
     if (!trimmed || disabled) return;
-    onSend(trimmed, { companyMode, companyTemplate });
+    onSend(trimmed, { companyMode, companyTemplate, opcMode });
     setText('');
     requestAnimationFrame(() => {
       if (textareaRef.current) textareaRef.current.style.height = 'auto';
@@ -52,7 +54,26 @@ export default function InputBar({ disabled, onSend }: InputBarProps) {
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => setCompanyMode((v) => !v)}
+            onClick={() => {
+              setOpcMode((v) => !v);
+              if (!opcMode) setCompanyMode(false);
+            }}
+            disabled={disabled}
+            className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors disabled:opacity-50 ${
+              opcMode
+                ? 'bg-cyan-600 text-white'
+                : 'border border-gray-700 bg-gray-800 text-gray-300 hover:border-cyan-500'
+            }`}
+            title="OPC 模式：6 級工業閉環（感知→預處理→分析→診斷→決策→執行）"
+          >
+            🏭 OPC 模式 {opcMode ? 'ON' : 'OFF'}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setCompanyMode((v) => !v);
+              if (!companyMode) setOpcMode(false);
+            }}
             disabled={disabled}
             className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors disabled:opacity-50 ${
               companyMode
@@ -92,9 +113,11 @@ export default function InputBar({ disabled, onSend }: InputBarProps) {
             }}
             onKeyDown={handleKeyDown}
             placeholder={
-              companyMode
-                ? '描述一個複雜目標，交給公司團隊處理…'
-                : '輸入你的問題…（Enter 發送，Shift+Enter 換行）'
+              opcMode
+                ? '描述工業製程檢查需求…（如：檢查製程狀態）'
+                : companyMode
+                  ? '描述一個複雜目標，交給公司團隊處理…'
+                  : '輸入你的問題…（Enter 發送，Shift+Enter 換行）'
             }
             rows={1}
             disabled={disabled}
@@ -104,7 +127,7 @@ export default function InputBar({ disabled, onSend }: InputBarProps) {
             type="submit"
             disabled={disabled || !text.trim()}
             className={`h-[44px] shrink-0 rounded-xl px-4 text-sm font-medium text-white transition-colors disabled:cursor-not-allowed disabled:bg-gray-700 disabled:text-gray-500 ${
-              companyMode ? 'bg-purple-600 hover:bg-purple-500' : 'bg-blue-600 hover:bg-blue-500'
+              opcMode ? 'bg-cyan-600 hover:bg-cyan-500' : companyMode ? 'bg-purple-600 hover:bg-purple-500' : 'bg-blue-600 hover:bg-blue-500'
             }`}
           >
             {disabled ? (

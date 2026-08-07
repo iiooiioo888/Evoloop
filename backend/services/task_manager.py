@@ -41,6 +41,12 @@ from backend.company.roles import BUILTIN_TEMPLATES
 from backend.core import nodes
 from backend.core.graph import MAX_ITERATIONS, PASS_THRESHOLD
 from backend.services.archiver import save_session_archive_sync
+from opc_service.act import act_opc
+from opc_service.analyze import analyze_opc
+from opc_service.decide import decide_opc
+from opc_service.diagnose import diagnose_opc
+from opc_service.preprocess import preprocess_opc
+from opc_service.sense import sense_opc
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +81,8 @@ class TaskRecord:
         self.plan: dict[str, Any] | None = None
         self.review: dict[str, Any] | None = None
         self.stats: dict[str, Any] | None = None
+        # OPC 模式：6 级闭环状态数据
+        self.opc_state: dict[str, Any] = {}
         self.created_at = time.time()
 
     def to_dict(self) -> dict[str, Any]:
@@ -95,6 +103,7 @@ class TaskRecord:
             "plan": self.plan,
             "review": self.review,
             "stats": self.stats,
+            "opc_state": self.opc_state,
             "created_at": self.created_at,
         }
 
@@ -123,6 +132,7 @@ class TaskRecord:
         record.plan = data.get("plan")
         record.review = data.get("review")
         record.stats = data.get("stats")
+        record.opc_state = data.get("opc_state", {})
         record.created_at = data.get("created_at", time.time())
         return record
 
@@ -221,6 +231,8 @@ class TaskManager:
         """以背景任務方式啟動（依模式分派）。"""
         if record.mode == "company":
             asyncio.create_task(self._run_company_task(record))
+        elif record.mode == "opc":
+            asyncio.create_task(self._run_opc_task(record))
         else:
             asyncio.create_task(self._run_standard_task(record))
 
@@ -426,6 +438,132 @@ class TaskManager:
         record.score = state.get("score")
         record.iteration = state.get("iteration", 0)
         record.status = "completed"
+        self._set_phase(record, "done")
+        self._finish(record)
+
+    # ── OPC 6 級閉環執行 ──
+
+    async def _run_opc_task(self, record: TaskRecord) -> None:
+        """OPC 6 級思考閉環：感知→預處理→分析→診斷→決策→執行。
+
+        逐級執行 OPC 節點，每級回報階段與數據，
+        最終彙整 6 級結果供前端展示。
+        """
+        record.status = "running"
+        self._persist(record)
+
+        state: dict[str, Any] = {
+            "query": record.query,
+            "session_id": record.task_id,
+        }
+
+        try:
+            # ── 第 1 級：感知 (Sense) ──
+            self._set_phase(record, "sense_opc")
+            state.update(await sense_opc(state))
+            record.opc_state["sense"] = {
+                "readings": state.get("opc_readings", {}),
+                "tag_count": len(state.get("opc_readings", {})),
+            }
+            self._persist(record)
+
+            # ── 第 2 級：預處理 (Preprocess) ──
+            self._set_phase(record, "preprocess_opc")
+            state.update(await preprocess_opc(state))
+            record.opc_state["preprocess"] = {
+                "quality_report": state.get("opc_quality_report", {}),
+                "clean_count": len(state.get("opc_readings_clean", {})),
+            }
+            self._persist(record)
+
+            # ── 第 3 級：分析 (Analyze) ──
+            self._set_phase(record, "analyze_opc")
+            state.update(await analyze_opc(state))
+            record.opc_state["analyze"] = state.get("opc_analysis", {})
+            self._persist(record)
+
+            # ── 第 4 級：診斷 (Diagnose) ──
+            self._set_phase(record, "diagnose_opc")
+            state.update(await asyncio.to_thread(diagnose_opc, state))
+            record.opc_state["diagnose"] = state.get("opc_diagnosis", {})
+            self._persist(record)
+
+            # ── 第 5 級：決策 (Decide) ──
+            self._set_phase(record, "decide_opc")
+            state.update(await asyncio.to_thread(decide_opc, state))
+            record.opc_state["decide"] = {
+                "decisions": state.get("opc_decisions", []),
+                "summary": state.get("opc_decision_summary", ""),
+            }
+            self._persist(record)
+
+            # ── 第 6 級：執行 (Act) ──
+            self._set_phase(record, "act_opc")
+            state.update(await act_opc(state))
+            record.opc_state["act"] = {
+                "actions": state.get("opc_actions", []),
+                "action_count": len(state.get("opc_actions", [])),
+                "success_count": sum(
+                    1 for a in state.get("opc_actions", []) if a.get("success")
+                ),
+            }
+
+            # ── 彙整 6 級診斷結果為回答 ──
+            diagnosis = state.get("opc_diagnosis", {})
+            analysis = state.get("opc_analysis", {})
+            quality = state.get("opc_quality_report", {})
+            decisions = state.get("opc_decisions", [])
+            actions = state.get("opc_actions", [])
+
+            answer_parts = ["## OPC 6 級思考閉環診斷報告\n"]
+
+            # 數據品質
+            answer_parts.append(
+                f"**數據品質**：總標籤 {quality.get('total', 0)}，"
+                f"良好 {quality.get('good', 0)}，不良 {quality.get('bad', 0)}"
+            )
+
+            # 分析摘要
+            answer_parts.append(f"**統計分析**：{analysis.get('summary', '無')}")
+
+            # 診斷結果
+            answer_parts.append(
+                f"**診斷結果**：{'⚠️ 檢測到異常' if diagnosis.get('anomaly_detected') else '✅ 無異常'}\n"
+                f"- 嚴重程度：{diagnosis.get('severity', 'normal')}\n"
+                f"- 根因分析：{diagnosis.get('root_cause', '無')}\n"
+                f"- 詳細分析：{diagnosis.get('analysis', '無')}"
+            )
+
+            # 決策摘要
+            if decisions:
+                answer_parts.append(
+                    f"**控制決策**：{state.get('opc_decision_summary', '')}"
+                )
+                for i, d in enumerate(decisions):
+                    answer_parts.append(
+                        f"{i + 1}. {d.get('tag_name', '?')} → "
+                        f"{d.get('value', '?')} "
+                        f"（優先級：{d.get('priority', '?')}，"
+                        f"風險：{d.get('risk', '?')}）"
+                    )
+            else:
+                answer_parts.append("**控制決策**：無需執行控制動作")
+
+            # 執行結果
+            if actions:
+                success = sum(1 for a in actions if a.get("success"))
+                answer_parts.append(
+                    f"**執行結果**：{success}/{len(actions)} 成功"
+                )
+
+            record.answer = "\n\n".join(answer_parts)
+            record.status = "completed"
+
+        except Exception as exc:  # noqa: BLE001
+            logger.error("OPC 任務 %s 執行失敗：%s", record.task_id, exc)
+            record.status = "failed"
+            record.error = str(exc)
+
         self._set_phase(record, "done")
         self._finish(record)
 

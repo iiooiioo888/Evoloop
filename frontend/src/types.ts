@@ -25,7 +25,7 @@ export interface KanbanItem {
 export interface TaskProgress {
   task_id: string;
   status: 'pending' | 'running' | 'completed' | 'failed';
-  mode: 'standard' | 'company';
+  mode: 'standard' | 'company' | 'opc';
   query: string;
   template: string;
   phase: string;
@@ -46,6 +46,8 @@ export interface TaskProgress {
   review?: Record<string, unknown> | null;
   /** 公司模式：工作項統計 */
   stats?: Record<string, unknown> | null;
+  /** OPC 模式：6 級閉環狀態數據 */
+  opc_state?: OPCState | null;
   /** 任務建立時間（Unix 秒） */
   created_at?: number;
 }
@@ -93,6 +95,53 @@ export const COMPANY_TEMPLATES = [
 ] as const;
 
 export type CompanyTemplate = (typeof COMPANY_TEMPLATES)[number]['value'];
+
+// ==================== OPC 6 級閉環 ====================
+
+/** OPC 6 級階段定義 */
+export const OPC_PHASES: { key: string; label: string; icon: string }[] = [
+  { key: 'sense_opc', label: '感知', icon: '📡' },
+  { key: 'preprocess_opc', label: '預處理', icon: '🧹' },
+  { key: 'analyze_opc', label: '分析', icon: '📊' },
+  { key: 'diagnose_opc', label: '診斷', icon: '🔍' },
+  { key: 'decide_opc', label: '決策', icon: '🧠' },
+  { key: 'act_opc', label: '執行', icon: '⚡' },
+];
+
+/** OPC 6 級閉環完整狀態 */
+export interface OPCState {
+  sense?: {
+    readings: Record<string, { value: unknown; data_type?: string; quality?: string }>;
+    tag_count: number;
+  };
+  preprocess?: {
+    quality_report: { total: number; good: number; bad: number; bad_tags?: string[] };
+    clean_count: number;
+  };
+  analyze?: {
+    stats: { min: number; max: number; avg: number; std: number; count: number };
+    violations: Array<{ tag: string; value: number; threshold: number; direction: string; severity: string }>;
+    trends: Record<string, string>;
+    anomaly_tags: string[];
+    summary: string;
+  };
+  diagnose?: {
+    anomaly_detected: boolean;
+    severity: string;
+    analysis: string;
+    root_cause: string;
+    suggested_actions: Array<{ tag_name: string; value: number; reason: string }>;
+  };
+  decide?: {
+    decisions: Array<{ tag_name: string; value: number; reason: string; priority: string; risk: string; risk_note?: string; order: number }>;
+    summary: string;
+  };
+  act?: {
+    actions: Array<{ tag_name: string; success: boolean; message?: string; written_value?: number }>;
+    action_count: number;
+    success_count: number;
+  };
+}
 
 // ==================== 控制面版（GET /dashboard） ====================
 

@@ -63,6 +63,7 @@ class TaskRequest(BaseModel):
     query: str
     company_mode: bool = False
     company_template: str = "quick_task"
+    opc_mode: bool = False
 
 
 @app.get("/health")
@@ -132,7 +133,12 @@ async def create_task(req: TaskRequest):
     """建立後台任務（標準/公司模式），回傳 task_id 供輪詢。"""
     if not req.query.strip():
         raise HTTPException(status_code=422, detail="query 不可為空")
-    mode = "company" if req.company_mode else "standard"
+    if req.opc_mode:
+        mode = "opc"
+    elif req.company_mode:
+        mode = "company"
+    else:
+        mode = "standard"
     record = task_manager.create_task(req.query, mode, req.company_template)
     task_manager.start_task(record)
     return {"task_id": record.task_id, "mode": mode}

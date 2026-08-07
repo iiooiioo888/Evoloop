@@ -1,20 +1,11 @@
 /**
- * EvoLoop 聊天主視窗。
+ * EvoLoop 主应用 — IDE 风格单页布局。
  *
- * 功能：
- * - 多會話管理（側邊欄 + localStorage 持久化）
- * - 公司模式（多代理人組織模板）
- * - Markdown 渲染、複製、回饋、錯誤重試
- * - 響應式：手機版側邊欄可收合
+ * 使用 AppShell 作为根布局，整合会话管理、聊天视图、
+ * 控制面版视图、OPC 右侧诊断面板。
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import Dashboard from './components/Dashboard';
-import InputBar from './components/InputBar';
-import type { SendOptions } from './components/InputBar';
-import MessageList from './components/MessageList';
-import SettingsModal from './components/SettingsModal';
-import Sidebar from './components/Sidebar';
-import TaskPage from './components/TaskPage';
+import type { ChatMessage, ChatSession, TaskProgress } from './types';
 import { createTask, fetchConfig, fetchTask } from './api/client';
 import {
   loadActiveSessionId,
@@ -23,7 +14,12 @@ import {
   saveActiveSessionId,
   saveSessions,
 } from './lib/storage';
-import type { ChatMessage, ChatSession, TaskProgress } from './types';
+import AppShell from './components/AppShell';
+import type { ViewKey } from './components/AppShell';
+import ChatView from './components/ChatView';
+import type { SendOptions } from './components/InputBar';
+import DashboardView from './components/DashboardView';
+import SettingsModal from './components/SettingsModal';
 
 function createSession(): ChatSession {
   const now = Date.now();
@@ -37,6 +33,7 @@ function createSession(): ChatSession {
 }
 
 export default function App() {
+  // ── 会话管理 ──
   const [sessions, setSessions] = useState<ChatSession[]>(() => {
     const loaded = loadSessions();
     return loaded.length > 0 ? loaded : [createSession()];
@@ -47,27 +44,20 @@ export default function App() {
     if (saved && loaded.some((s) => s.id === saved)) return saved;
     return loaded[0]?.id ?? '';
   });
+
+  // ── 发送状态 ──
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastQuery, setLastQuery] = useState<string | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  // 頂層視圖切換：聊天 / 控制面版
-  const [view, setView] = useState<'chat' | 'dashboard'>('chat');
-  // 控制面版開啟的任務整頁視圖
-  const [dashboardTask, setDashboardTask] = useState<TaskProgress | null>(null);
-  const [llmConfigured, setLlmConfigured] = useState<boolean | null>(null);
-  // 整頁任務視圖：目前打開的訊息 ID（存 sessionStorage，重新整理後可恢復）
-  const [openTaskMsgId, setOpenTaskMsgIdState] = useState<string | null>(
-    () => sessionStorage.getItem('evoloop_open_task'),
-  );
-  const setOpenTaskMsgId = useCallback((id: string | null) => {
-    setOpenTaskMsgIdState(id);
-    if (id) sessionStorage.setItem('evoloop_open_task', id);
-    else sessionStorage.removeItem('evoloop_open_task');
-  }, []);
 
-  // 檢查 LLM 配置狀態
+  // ── IDE 布局状态 ──
+  const [activeView, setActiveView] = useState<ViewKey>('chat');
+  const [rightPanelTask, setRightPanelTask] = useState<TaskProgress | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // ── LLM 配置 ──
+  const [llmConfigured, setLlmConfigured] = useState<boolean | null>(null);
+
   const refreshConfigStatus = useCallback(() => {
     fetchConfig()
       .then((cfg) => setLlmConfigured(cfg.configured))
@@ -78,7 +68,7 @@ export default function App() {
     refreshConfigStatus();
   }, [refreshConfigStatus]);
 
-  // 初次載入時若無有效 activeId，使用第一個會話
+  // 初次加载时若无有效 activeId，使用第一个会话
   useEffect(() => {
     if (!activeId && sessions.length > 0) {
       setActiveId(sessions[0].id);
@@ -110,15 +100,13 @@ export default function App() {
     setSessions((prev) => [session, ...prev]);
     setActiveId(session.id);
     setError(null);
-    setSidebarOpen(false);
-    setOpenTaskMsgId(null);
+    setRightPanelTask(null);
   }, []);
 
   const handleSelectSession = useCallback((id: string) => {
     setActiveId(id);
     setError(null);
-    setSidebarOpen(false);
-    setOpenTaskMsgId(null);
+    setRightPanelTask(null);
   }, []);
 
   const handleDeleteSession = useCallback(
@@ -136,6 +124,7 @@ export default function App() {
     [activeId],
   );
 
+  // ── 发送消息 ──
   const sendQuery = useCallback(
     async (query: string, options: SendOptions) => {
       if (!activeSession) return;
@@ -163,18 +152,17 @@ export default function App() {
 
       updateSession(sessionId, (s) => ({
         ...s,
-        // 首則使用者訊息作為會話標題
         title: s.title || query.slice(0, 40),
         updatedAt: Date.now(),
         messages: [...s.messages, userMsg, placeholder],
       }));
 
       try {
-        // 建立後台任務
         const { task_id } = await createTask(
           query,
           options.companyMode,
           options.companyTemplate,
+          options.opcMode,
         );
         updateSession(sessionId, (s) => ({
           ...s,
@@ -182,21 +170,17 @@ export default function App() {
             m.id === assistantId ? { ...m, taskId: task_id } : m,
           ),
         }));
-        // 公司任務自動開啟整頁任務視圖
-        if (options.companyMode) {
-          setOpenTaskMsgId(assistantId);
-        }
-        // 任務執行期間不鎖住輸入框（可繼續提問）
+
         setSending(false);
 
-        // 輪詢任務進度直到完成
+        // 轮询任务进度
         while (true) {
           await new Promise((r) => setTimeout(r, 1500));
-          let progress;
+          let progress: TaskProgress;
           try {
             progress = await fetchTask(task_id);
           } catch {
-            continue; // 單次輪詢失敗不中斷
+            continue;
           }
           updateSession(sessionId, (s) => ({
             ...s,
@@ -205,6 +189,11 @@ export default function App() {
               m.id === assistantId ? { ...m, taskState: progress } : m,
             ),
           }));
+
+          // OPC 任务自动打开右侧面板
+          if (options.opcMode && progress.opc_state) {
+            setRightPanelTask(progress);
+          }
 
           if (progress.status === 'completed') {
             updateSession(sessionId, (s) => ({
@@ -220,6 +209,10 @@ export default function App() {
                   : m,
               ),
             }));
+            // 更新右侧面板最终数据
+            if (options.opcMode) {
+              setRightPanelTask(progress);
+            }
             break;
           }
           if (progress.status === 'failed') {
@@ -229,7 +222,7 @@ export default function App() {
                 m.id === assistantId ? { ...m, streaming: false } : m,
               ),
             }));
-            setError(progress.error || '任務執行失敗');
+            setError(progress.error || '任务执行失败');
             break;
           }
         }
@@ -246,165 +239,112 @@ export default function App() {
   );
 
   const handleRetry = useCallback(() => {
-    if (lastQuery) void sendQuery(lastQuery, { companyMode: false, companyTemplate: 'quick_task' });
+    if (lastQuery)
+      void sendQuery(lastQuery, {
+        companyMode: false,
+        companyTemplate: 'quick_task',
+        opcMode: false,
+      });
   }, [lastQuery, sendQuery]);
 
-  // ── 整頁任務視圖 ──
-  const openTaskMessage = openTaskMsgId
-    ? activeSession?.messages.find((m) => m.id === openTaskMsgId)
-    : undefined;
+  // ── 从消息打开任务详情 ──
+  const handleOpenTask = useCallback(
+    (messageId: string) => {
+      const msg = activeSession?.messages.find((m) => m.id === messageId);
+      if (msg?.taskState) {
+        setRightPanelTask(msg.taskState);
+      }
+    },
+    [activeSession],
+  );
 
-  // 控制面版開啟的任務頁優先（返回時回到控制面版）
-  if (dashboardTask) {
-    return (
-      <TaskPage
-        task={dashboardTask}
-        onBack={() => setDashboardTask(null)}
-      />
-    );
-  }
+  // ── 快捷建议 ──
+  const handleSuggest = useCallback(
+    (text: string, company: boolean) => {
+      void sendQuery(text, {
+        companyMode: company,
+        companyTemplate: 'quick_task',
+        opcMode: false,
+      });
+    },
+    [sendQuery],
+  );
 
-  if (view === 'dashboard') {
-    return (
-      <Dashboard
-        onBack={() => setView('chat')}
-        onOpenTask={(t) => setDashboardTask(t)}
-      />
-    );
-  }
+  // ── Dashboard 任务打开 ──
+  const handleDashboardOpenTask = useCallback((task: TaskProgress) => {
+    setRightPanelTask(task);
+  }, []);
 
-  if (openTaskMessage?.taskState) {
-    return (
-      <TaskPage
-        task={openTaskMessage.taskState}
-        onBack={() => setOpenTaskMsgId(null)}
-      />
-    );
-  }
+  // ── 状态栏信息 ──
+  const statusInfo = useMemo(
+    () => ({
+      taskCount: sessions.reduce((sum, s) => sum + s.messages.filter((m) => m.taskId).length, 0),
+      memoryCount: 0, // 后续可从 dashboard API 获取
+    }),
+    [sessions],
+  );
 
   return (
-    <div className="flex h-dvh bg-gray-950 text-gray-100">
-      {/* 側邊欄 */}
-      <Sidebar
+    <>
+      <AppShell
+        activeView={activeView}
+        onViewChange={setActiveView}
+        rightPanelTask={rightPanelTask}
+        onRightPanelClose={() => setRightPanelTask(null)}
         sessions={sessions}
-        activeId={activeSession?.id ?? ''}
-        open={sidebarOpen}
-        onSelect={handleSelectSession}
-        onNew={handleNewSession}
-        onDelete={handleDeleteSession}
-        onClose={() => setSidebarOpen(false)}
-      />
-
-      {/* 主區域 */}
-      <div className="flex min-w-0 flex-1 flex-col">
-        {/* 標題列 */}
-        <header className="flex items-center border-b border-gray-800 px-4 py-3">
-          <div className="mx-auto flex w-full max-w-3xl items-center gap-2">
+        activeSessionId={activeSession?.id ?? ''}
+        onSelectSession={handleSelectSession}
+        onNewSession={handleNewSession}
+        onDeleteSession={handleDeleteSession}
+        llmConfigured={llmConfigured}
+        onOpenSettings={() => setSettingsOpen(true)}
+        statusInfo={statusInfo}
+      >
+        {activeView === 'chat' && (
+          <ChatView
+            messages={activeSession?.messages ?? []}
+            sessionId={activeSession?.id ?? ''}
+            loading={false}
+            sending={sending}
+            error={error}
+            lastQuery={lastQuery}
+            onSend={sendQuery}
+            onRetry={handleRetry}
+            onDismissError={() => setError(null)}
+            onOpenTask={handleOpenTask}
+            onSuggest={handleSuggest}
+          />
+        )}
+        {activeView === 'dashboard' && (
+          <DashboardView
+            onBack={() => setActiveView('chat')}
+            onOpenTask={handleDashboardOpenTask}
+          />
+        )}
+        {activeView === 'opc' && (
+          <div className="flex flex-1 flex-col items-center justify-center p-8 text-center">
+            <span className="mb-4 text-5xl">🏭</span>
+            <h2 className="mb-2 text-lg font-semibold text-gray-200">OPC 监控</h2>
+            <p className="max-w-md text-sm text-gray-500">
+              在对话视图中开启 OPC 模式，发送工业制程检查请求，
+              即可在右侧面板查看 6 级闭环诊断数据。
+            </p>
             <button
-              onClick={() => setSidebarOpen(true)}
-              className="rounded-lg px-2 py-1 text-gray-400 hover:bg-gray-800 md:hidden"
-              aria-label="開啟側邊欄"
+              onClick={() => setActiveView('chat')}
+              className="mt-4 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-sm text-cyan-300 transition-colors hover:bg-cyan-500/20"
             >
-              ☰
+              前往对话
             </button>
-            <span className="text-xl">🔄</span>
-            <h1 className="text-base font-semibold">EvoLoop 助手</h1>
-            <span className="hidden text-xs text-gray-500 sm:inline">
-              反思閉環 · 多代理人公司模式
-            </span>
-            <div className="ml-auto flex items-center gap-2">
-              {/* LLM 配置狀態指示 */}
-              <span
-                className={`hidden items-center gap-1 rounded-full px-2 py-0.5 text-[11px] sm:flex ${
-                  llmConfigured === null
-                    ? 'bg-gray-700/40 text-gray-400'
-                    : llmConfigured
-                      ? 'bg-green-500/15 text-green-300'
-                      : 'bg-yellow-500/15 text-yellow-300'
-                }`}
-              >
-                <span
-                  className={`inline-block h-1.5 w-1.5 rounded-full ${
-                    llmConfigured === null
-                      ? 'bg-gray-400'
-                      : llmConfigured
-                        ? 'bg-green-400'
-                        : 'bg-yellow-400'
-                  }`}
-                />
-                {llmConfigured === null
-                  ? '配置未知'
-                  : llmConfigured
-                    ? 'API 已配置'
-                    : '未配置 API'}
-              </span>
-              <button
-                onClick={() => setView('dashboard')}
-                className="rounded-lg border border-gray-700 px-2.5 py-1 text-xs text-gray-300 transition-colors hover:border-blue-500 hover:bg-gray-800"
-                title="AI Agent 運行數據與生成內容"
-              >
-                📊 控制面版
-              </button>
-              <button
-                onClick={() => setSettingsOpen(true)}
-                className="rounded-lg border border-gray-700 px-2.5 py-1 text-xs text-gray-300 transition-colors hover:border-blue-500 hover:bg-gray-800"
-                title="LLM API 設定"
-              >
-                🔑 API 設定
-              </button>
-            </div>
-          </div>
-        </header>
-
-        {/* 錯誤橫幅 */}
-        {error && (
-          <div className="border-b border-red-800 bg-red-900/40 px-4 py-2">
-            <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 text-sm">
-              <span className="text-red-200">⚠️ {error}</span>
-              <div className="flex shrink-0 gap-2">
-                {lastQuery && (
-                  <button
-                    onClick={handleRetry}
-                    className="rounded-md bg-red-700 px-3 py-1 text-xs font-medium text-white hover:bg-red-600"
-                  >
-                    重試
-                  </button>
-                )}
-                <button
-                  onClick={() => setError(null)}
-                  className="rounded-md px-2 py-1 text-xs text-red-300 hover:bg-red-800/50"
-                >
-                  關閉
-                </button>
-              </div>
-            </div>
           </div>
         )}
+      </AppShell>
 
-        {/* 訊息列表 */}
-        <MessageList
-          messages={activeSession?.messages ?? []}
-          sessionId={activeSession?.id ?? ''}
-          loading={false}
-          onOpenTask={(messageId) => setOpenTaskMsgId(messageId)}
-          onSuggest={(text, company) =>
-            void sendQuery(text, { companyMode: company, companyTemplate: 'quick_task' })
-          }
-        />
-
-        {/* 輸入列 */}
-        <InputBar
-          disabled={sending}
-          onSend={(text, options) => void sendQuery(text, options)}
-        />
-      </div>
-
-      {/* LLM 設定彈窗 */}
+      {/* LLM 设置弹窗 */}
       <SettingsModal
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         onSaved={refreshConfigStatus}
       />
-    </div>
+    </>
   );
 }
