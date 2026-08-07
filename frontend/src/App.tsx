@@ -8,6 +8,7 @@
  * - 響應式：手機版側邊欄可收合
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import Dashboard from './components/Dashboard';
 import InputBar from './components/InputBar';
 import type { SendOptions } from './components/InputBar';
 import MessageList from './components/MessageList';
@@ -22,7 +23,7 @@ import {
   saveActiveSessionId,
   saveSessions,
 } from './lib/storage';
-import type { ChatMessage, ChatSession } from './types';
+import type { ChatMessage, ChatSession, TaskProgress } from './types';
 
 function createSession(): ChatSession {
   const now = Date.now();
@@ -51,6 +52,10 @@ export default function App() {
   const [lastQuery, setLastQuery] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // 頂層視圖切換：聊天 / 控制面版
+  const [view, setView] = useState<'chat' | 'dashboard'>('chat');
+  // 控制面版開啟的任務整頁視圖
+  const [dashboardTask, setDashboardTask] = useState<TaskProgress | null>(null);
   const [llmConfigured, setLlmConfigured] = useState<boolean | null>(null);
   // 整頁任務視圖：目前打開的訊息 ID（存 sessionStorage，重新整理後可恢復）
   const [openTaskMsgId, setOpenTaskMsgIdState] = useState<string | null>(
@@ -249,6 +254,25 @@ export default function App() {
     ? activeSession?.messages.find((m) => m.id === openTaskMsgId)
     : undefined;
 
+  // 控制面版開啟的任務頁優先（返回時回到控制面版）
+  if (dashboardTask) {
+    return (
+      <TaskPage
+        task={dashboardTask}
+        onBack={() => setDashboardTask(null)}
+      />
+    );
+  }
+
+  if (view === 'dashboard') {
+    return (
+      <Dashboard
+        onBack={() => setView('chat')}
+        onOpenTask={(t) => setDashboardTask(t)}
+      />
+    );
+  }
+
   if (openTaskMessage?.taskState) {
     return (
       <TaskPage
@@ -314,6 +338,13 @@ export default function App() {
                     ? 'API 已配置'
                     : '未配置 API'}
               </span>
+              <button
+                onClick={() => setView('dashboard')}
+                className="rounded-lg border border-gray-700 px-2.5 py-1 text-xs text-gray-300 transition-colors hover:border-blue-500 hover:bg-gray-800"
+                title="AI Agent 運行數據與生成內容"
+              >
+                📊 控制面版
+              </button>
               <button
                 onClick={() => setSettingsOpen(true)}
                 className="rounded-lg border border-gray-700 px-2.5 py-1 text-xs text-gray-300 transition-colors hover:border-blue-500 hover:bg-gray-800"

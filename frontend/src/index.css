@@ -123,3 +123,98 @@ body {
   border-top: 1px solid rgba(255, 255, 255, 0.12);
   margin: 0.8em 0;
 }
+
+/* ---- 任務介面動效與細節 ---- */
+
+/* 進度條流光動畫 */
+@keyframes progress-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+.progress-shimmer {
+  background-image: linear-gradient(
+    90deg,
+    rgba(59, 130, 246, 1) 0%,
+    rgba(129, 140, 248, 1) 40%,
+    rgba(147, 197, 253, 1) 50%,
+    rgba(129, 140, 248, 1) 60%,
+    rgba(59, 130, 246, 1) 100%
+  );
+  background-size: 200% 100%;
+  animation: progress-shimmer 2.4s linear infinite;
+}
+
+/* 內容展開淡入 */
+@keyframes task-expand-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.task-expand-in {
+  animation: task-expand-in 0.22s ease-out both;
+}
+
+/* 區塊進場淡入 */
+@keyframes task-section-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.task-section {
+  animation: task-section-in 0.35s ease-out both;
+}
+
+/* 執行中狀態徽標的呼吸光暈 */
+@keyframes badge-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 12px 2px rgba(59, 130, 246, 0.25);
+  }
+}
+.badge-glow {
+  animation: badge-glow 2s ease-in-out infinite;
+}
+
+/* 活躍節點外圈漣漪 */
+@keyframes node-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(96, 165, 250, 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgba(96, 165, 250, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(96, 165, 250, 0);
+  }
+}
+.node-ring {
+  animation: node-ring 1.8s ease-out infinite;
+}
+
+/* 減少動效偏好 */
+@media (prefers-reduced-motion: reduce) {
+  .progress-shimmer,
+  .task-expand-in,
+  .task-section,
+  .badge-glow,
+  .node-ring {
+    animation: none;
+  }
+}

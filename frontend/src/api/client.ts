@@ -8,7 +8,7 @@
  * 生產環境可設定 VITE_API_URL 環境變數指向後端位址。
  */
 
-import type { TaskProgress } from '../types';
+import type { DashboardData, TaskProgress } from '../types';
 
 const API_BASE: string = import.meta.env.VITE_API_URL ?? '/api';
 
@@ -145,5 +145,14 @@ export async function createTask(
 export async function fetchTask(taskId: string): Promise<TaskProgress> {
   const resp = await fetch(apiUrl(`/tasks/${encodeURIComponent(taskId)}`));
   if (!resp.ok) throw new Error(`查詢任務失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
+// ==================== 控制面版 ====================
+
+/** 取得控制面版聚合資料（統計/任務/存檔/審計/能力）。 */
+export async function fetchDashboard(): Promise<DashboardData> {
+  const resp = await fetch(apiUrl('/dashboard'));
+  if (!resp.ok) throw new Error(`讀取控制面版失敗（HTTP ${resp.status}）`);
   return resp.json();
 }

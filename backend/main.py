@@ -16,6 +16,7 @@ from pydantic import BaseModel
 from backend.core.graph import evoloop_graph
 from backend.core.llm import call_llm
 from backend.core.llm_config import get_runtime_config, masked_key, save_runtime_config
+from backend.services.dashboard import collect_dashboard
 from backend.services.task_manager import task_manager
 
 logging.basicConfig(
@@ -146,8 +147,15 @@ async def get_task(task_id: str):
     return record.to_dict()
 
 
+@app.get("/dashboard")
+async def dashboard():
+    """控制面版聚合資料：統計/任務/存檔/OPC 審計/能力註冊表。"""
+    return collect_dashboard()
+
+
 if __name__ == "__main__":
     import uvicorn
 
     host = os.getenv("BACKEND_HOST", "0.0.0.0")
     port = int(os.getenv("BACKEND_PORT", "8000"))
+    uvicorn.run(app, host=host, port=port)

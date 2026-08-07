@@ -71,14 +71,14 @@ export function RoleIcon({ status }: { status: RoleStatus }) {
   return null;
 }
 
-export const ITEM_STATUS_META: Record<string, { label: string; cls: string }> = {
-  planning: { label: '規劃中', cls: 'bg-gray-700/60 text-gray-300' },
-  ready: { label: '就緒', cls: 'bg-blue-500/15 text-blue-300' },
-  executing: { label: '執行中', cls: 'bg-yellow-500/15 text-yellow-300' },
-  in_review: { label: '審查中', cls: 'bg-purple-500/15 text-purple-300' },
-  rework: { label: '修改中', cls: 'bg-orange-500/15 text-orange-300' },
-  done: { label: '完成', cls: 'bg-green-500/15 text-green-300' },
-  blocked: { label: '阻塞', cls: 'bg-red-500/15 text-red-300' },
+export const ITEM_STATUS_META: Record<string, { label: string; cls: string; bar: string }> = {
+  planning: { label: '規劃中', cls: 'bg-gray-700/60 text-gray-300', bar: 'bg-gray-500' },
+  ready: { label: '就緒', cls: 'bg-blue-500/15 text-blue-300', bar: 'bg-blue-400' },
+  executing: { label: '執行中', cls: 'bg-yellow-500/15 text-yellow-300', bar: 'bg-yellow-400' },
+  in_review: { label: '審查中', cls: 'bg-purple-500/15 text-purple-300', bar: 'bg-purple-400' },
+  rework: { label: '修改中', cls: 'bg-orange-500/15 text-orange-300', bar: 'bg-orange-400' },
+  done: { label: '完成', cls: 'bg-green-500/15 text-green-300', bar: 'bg-green-400' },
+  blocked: { label: '阻塞', cls: 'bg-red-500/15 text-red-300', bar: 'bg-red-400' },
 };
 
 export const EVENT_LABELS: Record<string, string> = {
@@ -177,7 +177,7 @@ export default function TaskPanel({ task, onOpenFull }: TaskPanelProps) {
   const totalCount = Object.values(task.kanban).reduce((s, items) => s + items.length, 0);
 
   return (
-    <div className="mb-2 w-full min-w-[240px] rounded-xl border border-gray-700/70 bg-gray-900/70 p-3 text-xs">
+    <div className="mb-2 w-full min-w-[240px] rounded-xl border border-white/8 bg-gradient-to-b from-gray-900/90 to-gray-900/60 p-3 text-xs shadow-lg shadow-black/20">
       {/* ── 標題列 ── */}
       <div className="flex items-center gap-2">
         {running && (
@@ -185,7 +185,7 @@ export default function TaskPanel({ task, onOpenFull }: TaskPanelProps) {
         )}
         {failed && <span>❌</span>}
         {task.status === 'completed' && <span>✅</span>}
-        <span className="font-medium text-gray-200">
+        <span className="font-medium text-gray-100">
           {isCompany ? '🏢 公司任務' : '⚙️ 反思任務'}
         </span>
         <span className="truncate text-gray-500">
@@ -197,15 +197,21 @@ export default function TaskPanel({ task, onOpenFull }: TaskPanelProps) {
         </span>
       </div>
 
-      {/* ── 階段進度條 ── */}
+      {/* ── 階段進度條（執行中帶流光） ── */}
       <div className="mt-2.5 flex items-center gap-1">
         {phases.map((p, i) => {
           const active = running && i === currentIdx;
           return (
             <div key={p.key} className="flex flex-1 flex-col items-center gap-1">
               <div
-                className={`h-1.5 w-full rounded-full ${
-                  phasePassed(i) ? 'bg-blue-500' : active ? 'animate-pulse bg-blue-400' : 'bg-gray-700'
+                className={`h-1.5 w-full rounded-full transition-colors duration-300 ${
+                  failed && i === currentIdx
+                    ? 'bg-red-500'
+                    : phasePassed(i)
+                      ? 'bg-blue-500'
+                      : active
+                        ? 'progress-shimmer'
+                        : 'bg-gray-700/70'
                 }`}
               />
               <span
@@ -222,7 +228,7 @@ export default function TaskPanel({ task, onOpenFull }: TaskPanelProps) {
 
       {/* ── 錯誤訊息 ── */}
       {failed && task.error && (
-        <p className="mt-2 rounded-lg bg-red-900/30 px-2 py-1.5 text-red-300">{task.error}</p>
+        <p className="mt-2 rounded-lg border border-red-500/25 bg-red-500/10 px-2.5 py-1.5 leading-relaxed text-red-300">⚠️ {task.error}</p>
       )}
 
       {/* ══ 公司模式：角色流水線（PysdnOPC 風格） ══ */}
@@ -231,16 +237,16 @@ export default function TaskPanel({ task, onOpenFull }: TaskPanelProps) {
           {pipeline.map((role, i) => (
             <span key={role.key} className="flex items-center gap-1">
               <span
-                className={`flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] ${
+                className={`flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] transition-colors duration-200 ${
                   role.status === 'active'
-                    ? 'border-blue-500/50 bg-blue-500/10 text-blue-200'
+                    ? 'border-blue-400/60 bg-blue-500/10 text-blue-200 shadow-[0_0_8px_rgba(59,130,246,0.25)]'
                     : role.status === 'done'
                       ? 'border-green-500/40 bg-green-500/10 text-green-200'
                       : role.status === 'failed'
                         ? 'border-red-500/40 bg-red-500/10 text-red-200'
                         : role.status === 'waiting'
                           ? 'border-yellow-500/40 bg-yellow-500/10 text-yellow-200'
-                          : 'border-gray-700 bg-gray-800/60 text-gray-500'
+                          : 'border-gray-700/70 bg-gray-800/40 text-gray-500'
                 }`}
               >
                 {role.label}
@@ -256,18 +262,25 @@ export default function TaskPanel({ task, onOpenFull }: TaskPanelProps) {
       {isCompany && roleGroups.length > 0 && (
         <div className="mt-2.5 flex flex-col gap-1.5">
           {roleGroups.map((g) => (
-            <div key={g.role} className="rounded-lg bg-gray-800/50 px-2.5 py-1.5">
-              <p className="mb-1 flex items-center gap-1.5 font-medium text-gray-300">
+            <div key={g.role} className="rounded-lg border border-white/5 bg-gray-800/40 px-2.5 py-1.5">
+              <p className="mb-1 flex items-center gap-1.5 font-medium text-gray-200">
                 {roleLabel(g.role)}
                 <RoleIcon status={g.status} />
-                <span className="text-[10px] font-normal text-gray-500">
+                <span className="ml-auto flex items-center gap-1.5 text-[10px] font-normal text-gray-500">
+                  <span className="inline-block h-1 w-12 overflow-hidden rounded-full bg-gray-700">
+                    <span
+                      className="block h-full rounded-full bg-gradient-to-r from-blue-500 to-green-400 transition-all duration-500"
+                      style={{ width: `${g.entries.length ? (g.entries.filter((e) => e.status === 'done').length / g.entries.length) * 100 : 0}%` }}
+                    />
+                  </span>
                   {g.entries.filter((e) => e.status === 'done').length}/{g.entries.length}
                 </span>
               </p>
               {g.entries.map(({ status, item }) => {
-                const meta = ITEM_STATUS_META[status] ?? { label: status, cls: 'bg-gray-700/60 text-gray-300' };
+                const meta = ITEM_STATUS_META[status] ?? { label: status, cls: 'bg-gray-700/60 text-gray-300', bar: 'bg-gray-500' };
                 return (
                   <div key={item.id} className="mb-1 flex items-start gap-1.5 text-[11px] last:mb-0">
+                    <span className={`mt-1 h-3 w-0.5 shrink-0 rounded-full ${meta.bar}`} />
                     <span className={`mt-0.5 shrink-0 rounded px-1 py-px text-[10px] ${meta.cls}`}>
                       {meta.label}
                     </span>
@@ -304,10 +317,15 @@ export default function TaskPanel({ task, onOpenFull }: TaskPanelProps) {
             {showTimeline ? '▲ 收合時間軸' : `▼ 事件時間軸（${task.events.length}）`}
           </button>
           {showTimeline && (
-            <div className="mt-1.5 border-l border-gray-700 pl-3">
+            <div className="task-expand-in relative mt-1.5 ml-1 border-l border-gray-700/70 pl-3.5">
               {task.events.slice(-10).map((e, i) => (
-                <div key={i} className="mb-1 flex items-baseline gap-2 text-[11px] last:mb-0">
-                  <span className="shrink-0 text-gray-400">{EVENT_LABELS[e.event] ?? e.event}</span>
+                <div key={i} className="relative mb-1 flex items-baseline gap-2 text-[11px] last:mb-0">
+                  <span className={`absolute -left-[19px] top-1.5 h-1.5 w-1.5 rounded-full ${
+                    e.event === 'work_item_error' ? 'bg-red-400'
+                      : e.event === 'work_item_done' || e.event === 'review_pass' || e.event === 'company_done' ? 'bg-green-400'
+                        : 'bg-blue-400/80'
+                  }`} />
+                  <span className="shrink-0 text-gray-300">{EVENT_LABELS[e.event] ?? e.event}</span>
                   <span className="min-w-0 flex-1 truncate text-gray-500">
                     {String(e.data.title ?? e.data.phase ?? '')}
                   </span>
@@ -331,7 +349,7 @@ export default function TaskPanel({ task, onOpenFull }: TaskPanelProps) {
       {onOpenFull && (
         <button
           onClick={onOpenFull}
-          className="mt-2 w-full rounded-lg border border-gray-700 py-1 text-[11px] text-gray-400 transition-colors hover:border-blue-500 hover:text-blue-300"
+          className="mt-2.5 w-full rounded-lg border border-gray-700/70 bg-gray-800/40 py-1.5 text-[11px] font-medium text-gray-300 transition-all duration-200 hover:border-blue-500/70 hover:bg-blue-500/10 hover:text-blue-300 active:scale-[0.98]"
         >
           ⛶ 開啟任務頁面
         </button>
