@@ -1,231 +1,240 @@
-# EvoLoop
+<p align="center">
+  <h1 align="center">⚡ EvoLoop</h1>
+  <p align="center">
+    <strong>自我反思 × 多代理人公司 × 工業閉環</strong>
+    <br />
+    生成 → 評估 → 反思 → 優化，永不停止進化的 AI 系統
+  </p>
+</p>
 
-EvoLoop 是一個具備「自我反思閉環」的 AI 助手系統，並擴展為多代理人公司運行時。它不只是單次回答使用者問題，而是透過 **生成 → 評估 → 反思 → 優化** 的迴圈持續改進回答品質，並將成功經驗存入向量記憶庫（ChromaDB），作為後續回答的 few-shot 提示。在面對複雜目標時，系統可切換至**公司模式**，由 Manager 分解任務、多角色分工平行執行、Reviewer 審查把關、Synthesizer 整合交付——公司產出同樣進入評估/反思/改進的迭代迴圈，確保最終交付品質達標。全程內建預算感知與模型層級路由。此外，透過 OPC UA 整合可接入工業感測與控制數據，實現「感知 → 預處理 → 分析 → 診斷 → 決策 → 執行」的 6 級工業閉環。
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.12-blue?logo=python" alt="Python" />
+  <img src="https://img.shields.io/badge/FastAPI-0.115+-teal?logo=fastapi" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/LangGraph-0.2+-purple?logo=langchain" alt="LangGraph" />
+  <img src="https://img.shields.io/badge/React-18-61dafb?logo=react" alt="React" />
+  <img src="https://img.shields.io/badge/Tests-185%20passed-green" alt="Tests" />
+  <img src="https://img.shields.io/badge/License-MIT-yellow" alt="License" />
+</p>
 
-## 核心架構
+---
 
-### 反思迭代迴圈（標準模式 + 公司模式共用）
+## 🧠 什麼是 EvoLoop？
 
-```
-使用者查詢
-   |
-   v
-[retrieve_memories]         從向量記憶庫檢索相似經驗（few-shot）
-   |
-   v
-[route_to_company] ──公司模式──> [run_company] ──> [should_evaluate_company]
-   |                                      |
-   標準模式                    成功 ──┐     └── 失敗 ──> [archive_state] ──> END
-   v                                      v
-[generate_initial_answer]          [evaluate_answer]  自動評分（0-10）
-   |                                      |
-   v                                      v
-[evaluate_answer]          [should_improve]
-   |                                      |
-   v                                      |-- 評分 < 8 且未達最大迭代 --> [reflect] --> [improve_answer] --> 重新評估（迴圈）
-[should_improve]              |
-   |                          +-- 評分 >= 8 或達上限 --> [decide_final_answer] --> [save_memory] --> [archive_state] --> END
-   |-- 評分 < 8 ... --> [reflect] → [improve_answer] → 重新評估（迴圈）
-   |
-   +-- 評分 >= 8 ... --> [decide_final_answer] → [save_memory] → [archive_state] → END
-```
+EvoLoop 不是一個普通的 AI 助手——它是一個**具備自我反思閉環的多代理人公司運行時**。
 
-> **公司模式迭代**：`run_company` 執行完整公司流程（分解→執行→審查→整合→最終審查）後，
-> 產出設為 `current_answer` 並進入與標準模式相同的 `evaluate_answer → reflect → improve_answer`
-> 迭代迴圈。若公司執行失敗，則跳過迭代直接存檔。
+- **標準模式**：對每個回答自動評分（0-10），低於 8 分自動進入反思迴圈，迭代改進直到達標
+- **公司模式**：Manager 分解任務 → 多角色平行執行 → Reviewer 審查 → Synthesizer 整合，像一家真正的軟體公司運作
+- **OPC 模式**：感知 → 預處理 → 分析 → 診斷 → 決策 → 執行，6 級工業閉環
+- **雲控制台**：費用帳單、資源監控、告警中心、實例管理——像 AWS 一樣管理你的 AI 基礎設施
+- **預算管控**：公司全權控制容器預算，按時計費，壓力過高自動停止非核心服務
 
-### 多代理人公司模式（內部流程）
-
-```
-使用者目標
-   |
-   v
-[Manager 分解] ── 產出工作項（含依賴 DAG）
-   |
-   v
-[平行執行] ── Developer 角色依依賴順序並發處理
-   |         （無依賴的工作項同時執行，有依賴的等待上游完成）
-   v
-[Reviewer 審查] ── 通過 → DONE ／ 不通過 → REWORK → 重新執行（最多 N 輪）
-   |
-   v
-[Synthesizer 整合] ── 合併所有工作項交付物為統一產出
-   |
-   v
-[Manager 最終審查] ── 產出最終交付物 + 看板 + 預算報告
-   |
-   v
-（公司產出進入上方反思迭代迴圈，由外部 evaluate_answer 評估與改進）
+```mermaid
+graph LR
+    A[使用者查詢] --> B{模式路由}
+    B -->|標準| C[生成回答]
+    B -->|公司| D[Manager 分解]
+    B -->|OPC| E[6 級工業閉環]
+    C --> F[評估評分]
+    D --> G[多角色平行執行]
+    G --> H[Reviewer 審查]
+    H --> F
+    E --> F
+    F -->|分數 < 8| I[反思 → 改進]
+    I --> F
+    F -->|分數 ≥ 8| J[存入記憶庫]
 ```
 
-### OPC 工業閉環（6 級思考邏輯）
+---
+
+## 🏗️ 架構總覽
 
 ```
-[sense_opc]        讀取 OPC UA 感測器數據
-   |
-   v
-[preprocess_opc]   數據清洗、品質過濾、標準化
-   |
-   v
-[analyze_opc]      統計計算、閾值違規檢測、趨勢識別
-   |
-   v
-[diagnose_opc]     LLM 深度分析、異常檢測與根因分析
-   |
-   v
-[decide_opc]       控制策略制定、優先級排序、風險評估
-   |
-   v
-[act_opc]          執行控制動作（經安全護欄檢查）、結果驗證
+┌──────────────────────────────────────────────────┐
+│                    🖥️ 前端 (React + Vite)          │
+│  ActivityBar │ SidePanel │ MonitorView │ Chat    │
+│  雲控制台 · 控制面版 · OPC 監控 · Docker 管理     │
+└──────────────────────┬───────────────────────────┘
+                       │ REST API
+┌──────────────────────┴───────────────────────────┐
+│               ⚙️ 後端 (FastAPI + LangGraph)        │
+│                                                   │
+│  ┌─────────────┐  ┌──────────────┐  ┌──────────┐ │
+│  │ 反思閉環     │  │ 公司運行時    │  │ OPC 整合 │ │
+│  │ generate     │  │ orchestrator │  │ sense    │ │
+│  │ evaluate     │  │ decomposer   │  │ analyze  │ │
+│  │ reflect      │  │ reviewer     │  │ diagnose │ │
+│  │ improve      │  │ synthesizer  │  │ act      │ │
+│  └─────────────┘  └──────────────┘  └──────────┘ │
+│                                                   │
+│  ┌──────────────────────────────────────────────┐ │
+│  │ 雲控制台 (Cloud Console)                      │ │
+│  │ CloudBilling · CloudMonitor · CloudAlerts     │ │
+│  │ DockerManager · BudgetManager · EventBus      │ │
+│  └──────────────────────────────────────────────┘ │
+└──────────────────────┬───────────────────────────┘
+                       │
+┌──────────────────────┴───────────────────────────┐
+│               🗄️ 基礎設施 (Docker Compose)         │
+│  Redis · ChromaDB · OPC Simulator · Nginx        │
+└──────────────────────────────────────────────────┘
 ```
 
-## 專案結構
+### 公司模式內部流程
+
+```
+Manager 分解目標
+  │  TaskDecomposer（LLM / 模板 / 規則 三策略）
+  ▼
+工作項 DAG（依賴 + 優先級排序）
+  │
+  ▼
+平行執行池（Semaphore 限流，預設 4 並行）
+  │  Developer 角色依優先級執行
+  ▼
+Reviewer 審查閘
+  ├─ ✅ 通過 → Done
+  └─ ❌ 不通過 → Rework（最多 N 輪，失敗後角色升級）
+  ▼
+Synthesizer 整合 → Manager 最終審查
+  │
+  ▼
+外部反思迴圈（評估 → 反思 → 改進）
+```
+
+---
+
+## 📁 專案結構
 
 ```
 evoloop/
-├── backend/                # FastAPI 後端 + LangGraph 核心閉環
-│   ├── main.py             #   FastAPI 應用入口（/chat, /tasks, /dashboard, /config）
-│   ├── Dockerfile          #   容器化構建檔
-│   ├── core/               #   狀態模型、節點、圖定義
-│   │   ├── graph.py        #     反思迴圈圖（含公司模式路由）
-│   │   ├── nodes.py        #     標準模式節點（生成/評估/反思/改進/存檔）
-│   │   ├── company_nodes.py#     公司模式節點（路由/執行/結果收集）
-│   │   ├── llm.py          #     LiteLLM 統一呼叫層
-│   │   ├── llm_config.py   #     運行時 LLM 配置管理（動態更新/持久化）
-│   │   └── state.py        #     EvoLoopState 定義
-│   ├── company/            #   多代理人公司運行時（Phase 6+）
-│   │   ├── orchestrator.py #     公司協調器（分解→執行→審查→整合→最終審查）
-│   │   ├── decomposer.py   #     任務拆分器（LLM/模板/規則三策略，獨立主模組）
-│   │   ├── roles.py        #     預定義角色設定檔與組織模板
-│   │   ├── work_item.py    #     工作項管理（狀態機 + 依賴 DAG + 優先級排序）
-│   │   ├── budget.py       #     預算控制 + 模型層級路由 + 成本追蹤
-│   │   ├── state.py        #     公司/角色/工作項/預算/重試/優先級資料結構
-│   │   ├── events.py       #     生命週期事件系統（EventBus + CompanyEvent）
-│   │   └── prompts.py      #     各角色 Prompt 模板（PromptConfig 可自定義）
-│   ├── prompts/            #   標準模式 Prompt 模板
-│   ├── memory/             #   記憶儲存
-│   │   ├── vector_store.py #     ChromaDB 向量記憶庫（Phase 2）
-│   │   └── json_store.py   #     JSON 暫存（Phase 1 遺留）
-│   ├── services/           #   營運服務
-│   │   ├── archiver.py     #     文本化存檔（Task 8.6，JSONL）
-│   │   ├── task_manager.py #     後台任務管理器（建立/執行/進度輪詢/Redis 持久化）
-│   │   └── dashboard.py    #     控制面版聚合服務（統計/任務/存檔/OPC 審計/能力註冊）
-│   ├── data/               #   運行時持久化資料（存檔/公司運行日誌/LLM 配置）
-│   ├── scripts/            #   工具腳本
-│   │   ├── test_llm_connection.py  # LLM 連線測試
-│   │   └── smoke_test.py           # 向量記憶庫冒煙測試
-│   └── tests/              #   單元 / 整合測試
-├── opc_service/            # OPC UA 工業數據微服務（Phase 7）
-│   ├── Dockerfile          #   容器化構建檔
-│   ├── main.py             #   FastAPI 應用入口
-│   ├── app.py              #   FastAPI 應用實例與中介軟體
-│   ├── sense.py            #   感知節點（讀取原始感測器數據）
-│   ├── preprocess.py       #   預處理節點（數據清洗/品質過濾）
-│   ├── analyze.py          #   分析節點（統計/閾值/趨勢）
-│   ├── diagnose.py         #   診斷節點（LLM 深度分析）
-│   ├── decide.py           #   決策節點（策略制定/風險評估）
-│   ├── act.py              #   執行節點（控制動作寫入）
-│   ├── guard.py            #   安全護欄（白名單/邊界檢查/審計日誌）
-│   ├── audit.py            #   審計日誌記錄
-│   ├── config.py           #   環境設定
-│   ├── client/             #   OPC UA 客戶端（連線/讀取/寫入/訂閱/瀏覽）
-│   ├── models/             #   Pydantic 請求/回應模型
-│   ├── routes/             #   REST + WebSocket API 路由
-│   └── simulator/          #   模擬 OPC UA 伺服器（開發測試用）
-├── frontend/               # React + Vite + TypeScript 前端介面
-│   ├── src/
-│   │   ├── api/client.ts        #   API 客戶端（後端通訊）
-│   │   ├── components/
-│   │   │   ├── Dashboard.tsx    #     控制面版（統計/任務/存檔/審計/能力）
-│   │   │   ├── TaskPage.tsx     #     任務詳情頁（進度/事件流/看板/預算）
-│   │   │   ├── TaskPanel.tsx    #     任務列表面板（建立/輪詢/狀態顯示）
-│   │   │   ├── MessageBubble.tsx#     消息氣泡（Markdown 渲染/代碼高亮）
-│   │   │   ├── MessageList.tsx  #     消息列表
-│   │   │   ├── InputBar.tsx     #     輸入欄（支援標準/公司模式切換）
-│   │   │   ├── Sidebar.tsx      #     側邊欄導航
-│   │   │   └── SettingsModal.tsx#     設定彈窗（LLM 配置動態更新）
-│   │   ├── lib/storage.ts       #   本地儲存輔助
-│   │   ├── App.tsx              #   主應用（路由/佈局）
-│   │   ├── types.ts             #   TypeScript 型別定義
-│   │   └── main.tsx             #   應用入口
-│   ├── Dockerfile          #   生產版構建檔（nginx + 靜態資源）
-│   ├── nginx.conf           #   nginx 反向代理配置
-│   ├── package.json         #   前端依賴
-│   └── vite.config.ts       #   Vite 構建配置
-├── dspy_pipeline/          # DSPy 自動提示優化（待實作）
-├── docker/                 # 容器化設定（待完善）
-├── docker-compose.yml      # 五服務編排（frontend/backend/opc/redis/chroma）
-├── docker-compose.dev.yml  # 開發模式編排（熱重載：uvicorn --reload + vite HMR）
-├── requirements.txt        # Python 依賴
-└── .env.example            # 環境變數範本
+├── backend/                     # FastAPI 後端 + LangGraph 核心
+│   ├── main.py                  #   應用入口（/chat /tasks /dashboard /cloud/*）
+│   ├── core/                    #   圖定義、狀態、LLM 調用層
+│   │   ├── graph.py             #     反思迴圈圖（標準/公司/OPC 路由）
+│   │   ├── nodes.py             #     標準節點（生成/評估/反思/改進）
+│   │   ├── company_nodes.py     #     公司節點（路由/執行/收集）
+│   │   ├── llm.py               #     LiteLLM 統一調用層
+│   │   └── state.py             #     EvoLoopState
+│   ├── company/                 #   多代理人公司運行時
+│   │   ├── orchestrator.py      #     公司協調器（含 Docker 預算管控）
+│   │   ├── decomposer.py        #     任務拆分器（獨立主模組）
+│   │   ├── budget.py            #     預算控制 + 模型路由 + Docker 成本
+│   │   ├── docker_tools.py      #     Docker 工具定義 + 按時計費費率
+│   │   ├── work_item.py         #     工作項狀態機 + 依賴 DAG
+│   │   ├── roles.py             #     角色定義 + 組織模板
+│   │   ├── events.py            #     EventBus 生命週期事件
+│   │   ├── run_log.py           #     持久化運行日誌 (JSONL)
+│   │   └── prompts.py           #     Prompt 模板（PromptConfig）
+│   ├── services/                #   營運服務
+│   │   ├── docker_manager.py    #     Docker 容器管理（SDK 封裝 + Stub 降級）
+│   │   ├── cloud_console.py     #     雲控制台（計費/監控/告警/事件）
+│   │   ├── task_manager.py      #     後台任務管理器
+│   │   ├── dashboard.py         #     控制面版聚合
+│   │   └── archiver.py          #     文本化存檔 (JSONL)
+│   ├── memory/                  #   向量記憶庫 (ChromaDB)
+│   ├── scripts/                 #   工具腳本
+│   └── tests/                   #   185 個測試案例
+├── opc_service/                 # OPC UA 工業微服務
+│   ├── main.py                  #   FastAPI 入口
+│   ├── client/                  #   OPC UA 客戶端
+│   ├── routes/                  #   REST + WebSocket
+│   ├── guard.py                 #   安全護欄（白名單/邊界檢查）
+│   └── simulator/               #   模擬 OPC 伺服器
+├── frontend/                    # React + Vite + TypeScript
+│   └── src/
+│       ├── components/          #   UI 組件（IDE 風格佈局）
+│       │   ├── CloudConsoleView.tsx  #   雲控制台
+│       │   ├── MonitorView.tsx       #   監控視圖
+│       │   ├── DockerView.tsx        #   容器管理
+│       │   ├── StatusBar.tsx         #   全局狀態欄
+│       │   └── ...
+│       ├── api/client.ts        #   API 客戶端
+│       └── types.ts             #   TypeScript 型別
+├── docker-compose.yml           # 五服務編排
+├── docker-compose.dev.yml       # 開發模式（熱重載）
+└── requirements.txt
 ```
 
-## 關鍵特性
+---
 
-### 反思閉環
-- 自動評分（0-10 分），低於門檻（預設 8）自動進入反思迴圈
-- 最大迭代次數可配置（預設 3 輪），避免無限循環
-- 成功經驗存入向量記憶庫，供後續查詢做 few-shot 參考
+## ✨ 核心能力
 
-### 多代理人公司運行時
-- **層級角色體系**（Level 0-4）：Manager → Tech Lead / Architect → 領域主管 → 執行者（UI/CSS/JS/Backend/Tester/DevOps）→ 支援角色（Reviewer/Synthesizer/Analyst/Coordinator）
-- **五種內建組織模板**：`page_dev`（頁面開發）、`fullstack_app`（全端開發）、`research_report`（研究報告）、`quick_task`（快速任務）、`full_company`（完整公司）
-- **任務拆分器**（TaskDecomposer，獨立主模組）：支援 LLM 驅動、模板驅動、規則驅動三種策略，可根據預算壓力自動降級
-- **工作項狀態機**（7 狀態）：Planning → Ready → Executing → In Review → Rework ↺ / Done / Blocked
-- **優先級調度**：四級優先級（Critical/High/Medium/Low），就緒工作項按優先級排序執行
-- **並行工作池**：Semaphore 限制最大並行數（預設 4），避免資源耗盡
-- **依賴 DAG 平行執行**：無依賴的工作項並發處理，有依賴的等待上游完成
-- **審查閘**：每個工作項執行完畢後由 Reviewer 審查，不通過則退回修改（最多 N 輪）
-- **看板管理**：即時查看各狀態工作項分佈與進度
+### 🔄 反思閉環
 
-### 事件系統與錯誤處理
-- **生命週期事件**（13 種 CompanyEvent）：涵蓋公司啟動/完成、階段切換、工作項執行/重試/升級、審查通過/退回、預算警告/降級
-- **非阻塞事件匯流排**（EventBus）：監聽器異常不中斷主流程，支援動態註冊/移除
-- **重試與角色升級**（RetryConfig）：LLM 失敗時指數退避重試，耗盡後自動升級到上級角色處理
-- **超時控制**：可為單一工作項設定 deadline，超時自動觸發重試
+| 特性 | 說明 |
+|------|------|
+| 自動評分 | 0-10 分，門檻可配置（預設 8） |
+| 迭代改進 | 最多 N 輪（預設 3），避免無限循環 |
+| 記憶注入 | 成功經驗存入 ChromaDB，做 few-shot 參考 |
+| 文本存檔 | JSONL 結構化保存，支援審計與回溯 |
 
-### 檢查點與狀態恢復
-- **序列化檢查點**（`to_checkpoint`）：將完整運行狀態（工作項、預算、日誌）序列化為字典，供中斷後恢復
-- **反序列化恢復**（`from_checkpoint`）：從檢查點重建 Orchestrator，恢復所有工作項狀態與預算
-- **可注入提示詞配置**（PromptConfig）：所有角色 Prompt 皆可透過 CompanyConfig / TaskDecomposer / Orchestrator 構造函數自定義，支援部分覆蓋
+### 🏢 多代理人公司
 
-### 預算感知模型路由
-- **四級模型層級**：`critical`（關鍵決策）→ `reasoning`（多步推理）→ `routine`（常規任務）→ `summary`（摘要生成）
-- **三級預算控制**：任務級 / 會話級 / 月度級，超支自動降級至更便宜的模型
-- **成本追蹤**：基於 token 計價估算每次 LLM 呼叫成本，全程透明
+| 特性 | 說明 |
+|------|------|
+| 層級角色 | Level 0-4，Manager → Tech Lead → Domain Lead → Executor → Support |
+| 組織模板 | `page_dev` / `fullstack_app` / `research_report` / `quick_task` / `full_company` |
+| 任務拆分 | LLM · 模板 · 規則 三策略，預算壓力下自動降級 |
+| 工作項狀態機 | Planning → Ready → Executing → In Review → Rework / Done / Blocked |
+| 依賴 DAG | 無依賴並行，有依賴等待上游 |
+| 審查閘 | Reviewer 審查不通過 → 退回修改（最多 N 輪） |
+| 角色升級 | LLM 失敗後自動升級到上級角色處理 |
 
-### 後台任務與即時進度
-- **非同步任務執行**：所有對話任務（標準/公司模式）改為後台執行，透過 `POST /tasks` 建立、`GET /tasks/{id}` 輪詢進度
-- **即時事件流**：階段切換、評分、公司生命週期事件即時推送，前端任務頁動態展示
-- **Redis 持久化**：任務記錄寫入 Redis（TTL 7 天），服務重啟後可恢復；Redis 不可用時降級為記憶體
+### 💰 預算與 Docker 管控（公司全權控制）
 
-### 控制面版
-- **聚合儀表板**（`GET /dashboard`）：任務統計、存檔瀏覽、OPC 審計摘要、能力註冊表一站式檢視
-- **能力註冊表**：展示 LLM 層、反思閉環、公司運行時、記憶庫、OPC UA、存檔服務六大能力模組的即時狀態
+| 特性 | 說明 |
+|------|------|
+| 按時計費 | 阿里雲 ECS 模型：容器 uptime × 小時費率 |
+| 預算壓力 | Docker 成本計入公司總預算，影響模型路由決策 |
+| 自動優化 | 壓力 ≥ 90% → 自動停止非核心容器；≥ 70% → 建議停止 |
+| 費率透明 | 5 種服務費率（backend $0.02/h · opc $0.015/h · frontend $0.01/h · redis $0.005/h · chroma $0.005/h） |
+| 成本快照 | 任務開始/結束自動記錄 Docker 成本差異 |
 
-### OPC UA 工業整合
-- **REST + WebSocket API**：讀取/寫入/瀏覽 OPC 標籤，支援即時訂閱
-- **安全護欄**：寫入白名單、數值邊界檢查、完整審計日誌
-- **模擬伺服器**：內建模擬 OPC UA 環境（溫度/壓力/流量/閥門/馬達），無需真實設備即可開發測試
-- **6 級思考閉環節點**：`sense_opc`（感知）→ `preprocess_opc`（預處理）→ `analyze_opc`（分析）→ `diagnose_opc`（LLM 診斷）→ `decide_opc`（LLM 決策）→ `act_opc`（執行控制）
+### ☁️ 雲控制台
 
-### 文本化存檔
-- 每次對話完整生命週期結構化保存為 JSONL（以 UTC 日期分割檔案）
-- 非同步寫入（aiofiles），不阻塞主回應流程
-- 供審計、除錯、訓練資料回溯與系統行為分析
+```
+費用帳單                    資源監控
+📊 今日/本月/預估費用        📈 CPU · 記憶體 · 網路 SVG 折線圖
+各服務費用佔比進度條          1h / 6h / 24h 範圍切換
+                             後台 60s 自動輪詢
 
-## 快速開始
+實例管理                    告警中心
+🐳 容器啟停 · 日誌 · 健康     ⚠️ CPU/記憶體閾值規則
+按時費率顯示 · 費用計算        JSON 持久化 · 觸發歷史時間線
+```
+
+### 🏭 OPC UA 工業整合
+
+| 特性 | 說明 |
+|------|------|
+| 6 級閉環 | 感知 → 預處理 → 分析 → 診斷 → 決策 → 執行 |
+| 安全護欄 | 寫入白名單 + 數值邊界檢查 + 審計日誌 |
+| 模擬伺服器 | 內建溫度/壓力/流量/閥門/馬達模擬 |
+| 雙協議 | REST API + WebSocket 即時訂閱 |
+
+### 🔧 工程品質
+
+| 特性 | 說明 |
+|------|------|
+| 事件系統 | 13 種 CompanyEvent，非阻塞 EventBus，監聽器異常不中斷主流程 |
+| 檢查點 | 序列化/反序列化完整運行狀態，支援中斷恢復 |
+| 後台任務 | 非同步執行，Redis 持久化（TTL 7 天），記憶體降級 |
+| 能力註冊表 | 六大能力模組即時狀態一覽 |
+
+---
+
+## 🚀 快速開始
 
 ### 環境需求
 
-- Python 3.10–3.12
-- Node.js 20+（前端開發）
-- （選用）Redis 7+、ChromaDB — 亦可透過 Docker Compose 啟動
+- **Python** 3.10–3.12
+- **Node.js** 20+
+- **Docker**（可選，用於容器化部署）
 
-### 安裝與設定
+### 一鍵安裝
 
 ```powershell
-# 1. 建立虛擬環境
+# 1. 虛擬環境
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 
@@ -233,168 +242,124 @@ python -m venv .venv
 pip install -r requirements.txt
 
 # 3. 設定環境變數
-copy .env.example .env   # 填入你的 OPENAI_API_KEY
+copy .env.example .env
 
-# 4. 測試 LLM 連線
+# 4. 驗證
 python backend/scripts/test_llm_connection.py
-
-# 5. 冒煙測試（向量記憶庫核心功能）
-python -m backend.scripts.smoke_test
-
-# 6. 執行測試
-pytest backend/tests/
+pytest backend/tests/ -q
 ```
 
-### 啟動後端
+### 啟動服務
 
 ```powershell
-# 使用 uvicorn（含熱重載）
+# 後端（含熱重載）
 python -m backend.main
 
-# 或指定主機/埠
-uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
-```
+# 前端（Vite HMR）
+cd frontend && npm install && npm run dev
 
-### 啟動前端
-
-```powershell
-cd frontend
-npm install
-npm run dev     # 開發模式（Vite HMR，預設 http://localhost:5173）
-```
-
-### 啟動 OPC 微服務
-
-```powershell
-# 僅啟動 API（連接外部 OPC 伺服器）
-python -m opc_service.main
-
-# 同時啟動模擬 OPC 伺服器 + API（開發測試用）
+# OPC 微服務（含模擬伺服器）
 $env:OPC_SIM_ENABLED="true"; python -m opc_service.main
-
-# 使用 uvicorn（含熱重載）
-uvicorn opc_service.main:app --host 0.0.0.0 --port 8001 --reload
 ```
 
-### Docker Compose 部署
-
-> **注意**：Docker 容器內服務間透過服務名通訊，請在 `.env` 中將主機名調整為服務名：
-> `REDIS_URL=redis://redis:6379/0`、`CHROMA_HOST=chroma`、`OPC_SERVICE_URL=http://opc_service:8001`。
+### Docker Compose 一鍵部署
 
 ```powershell
-# 開發模式（預設，含熱重載：後端 uvicorn --reload + 前端 vite HMR）
+# 開發模式（熱重載）
 docker compose up -d
 
-# 生產模式（含 nginx 靜態前端）
-COMPOSE_PROFILES=prod docker compose -f docker-compose.yml up -d --build
-
-# 僅啟動基礎設施（redis + chroma）
+# 僅基礎設施
 docker compose up -d redis chroma
 
-# 單獨構建並啟動 backend
+# 單獨構建
 docker compose up -d --build backend
 ```
 
-| 服務 | 連接埠 | Dockerfile | 說明 |
-| --- | --- | --- | --- |
-| backend | 8000 | `backend/Dockerfile` | FastAPI 後端 + LangGraph 核心閉環 |
-| frontend | 5173（dev）/ 80（prod） | `frontend/Dockerfile` | React + Vite + TypeScript 前端介面 |
-| opc_service | 8001 | `opc_service/Dockerfile` | OPC UA 工業數據微服務 |
-| redis | 6379 | 官方映像 | 會話快取與任務持久化 |
-| chroma | 8100 | 官方映像 | 向量資料庫 |
+| 服務 | 埠 | 說明 |
+|------|-----|------|
+| `backend` | 8000 | FastAPI + LangGraph 核心 |
+| `frontend` | 5173 / 80 | React + Vite（dev/prod） |
+| `opc_service` | 8001 | OPC UA 微服務 |
+| `redis` | 6379 | 任務持久化 |
+| `chroma` | 8100 | 向量記憶庫 |
 
-> 開發模式（`docker-compose.dev.yml`）將原始碼卷掛載至容器，後端使用 `uvicorn --reload`、前端使用 `vite dev`（HMR），修改代碼即時生效，無需重建鏡像。
+---
 
-## 環境變數
+## ⚙️ 環境變數
 
 | 變數 | 預設值 | 說明 |
-| --- | --- | --- |
-| `OPENAI_API_KEY` | — | **必填**，LLM 服務金鑰 |
-| `EVOL_MODEL` | `gpt-4o` | LiteLLM 模型名稱（可換 claude/gemini 等） |
-| `EVOL_PASS_THRESHOLD` | `8` | 反思迴圈評分門檻 |
-| `EVOL_MAX_ITERATIONS` | `3` | 反思迴圈最大迭代次數 |
-| `BACKEND_HOST` / `BACKEND_PORT` | `0.0.0.0` / `8000` | 後端服務綁定 |
-| `REDIS_URL` | `redis://localhost:6379/0` | Redis 連線位址 |
+|------|--------|------|
+| `OPENAI_API_KEY` | — | **必填**，LLM 金鑰（支援 OpenAI / Claude / Gemini） |
+| `EVOL_MODEL` | `gpt-4o` | 預設模型 |
+| `EVOL_PASS_THRESHOLD` | `8` | 反思迴圈通過門檻 |
+| `EVOL_MAX_ITERATIONS` | `3` | 最大迭代次數 |
+| `REDIS_URL` | `redis://localhost:6379/0` | Redis 連線 |
 | `CHROMA_HOST` / `CHROMA_PORT` | `localhost` / `8100` | ChromaDB 連線 |
-| `EVOL_ARCHIVE_DIR` | `backend/data/archives` | JSONL 存檔目錄 |
-| `EVOL_CONFIG_DIR` | `backend/data` | LLM 運行時配置持久化目錄 |
-| `OPC_SERVER_URL` | `opc.tcp://localhost:4840/...` | OPC UA 伺服器位址 |
-| `OPC_SERVICE_HOST` / `OPC_SERVICE_PORT` | `0.0.0.0` / `8001` | OPC 微服務綁定 |
-| `OPC_WRITE_WHITELIST` | （空，不限制） | 允許寫入的標籤名稱前綴（逗號分隔） |
 | `OPC_SIM_ENABLED` | `false` | 啟用模擬 OPC 伺服器 |
-| `OPC_SIM_PORT` | `4840` | 模擬伺服器連接埠 |
+| `OPC_WRITE_WHITELIST` | — | 寫入白名單（逗號分隔） |
 
-## 技術棧
+---
 
-| 元件 | 技術 | 版本 |
-| --- | --- | --- |
-| 核心閉環 | LangGraph + LiteLLM | ≥0.2.50 / ≥1.52 |
-| 後端 API | FastAPI + uvicorn | ≥0.115 |
-| 多代理人公司 | 自研運行時（company/） | — |
-| 向量資料庫 | ChromaDB | ≥0.5 |
-| 會話快取 | Redis | ≥5.2 |
-| 工業協議 | OPC UA（asyncua） | ≥1.1 |
-| 前端 | React 18 + Vite + TypeScript | — |
-| 提示優化 | DSPy | 待實作 |
-| 部署 | Docker Compose | — |
-| 測試 | pytest + pytest-asyncio | ≥8.3 / ≥0.24 |
-
-## 測試
-
-### 冒煙測試（無需 API）
+## 🧪 測試
 
 ```powershell
-# 向量記憶庫冒煙測試（add / search / cleanup / reset）
-python -m backend.scripts.smoke_test
+# 全部測試（185 案例，無需 API 金鑰）
+pytest backend/tests/ -q
+
+# 分類測試
+pytest backend/tests/test_company.py        # 公司模式（預算/角色/事件/檢查點）
+pytest backend/tests/test_docker_manager.py # Docker 管理（容器/工具/API）
+pytest backend/tests/test_opc_service.py    # OPC 工業閉環
+pytest backend/tests/test_reflection_loop.py# 反思迴圈
+pytest backend/tests/test_architecture.py   # 架構約束
 ```
 
-### pytest 測試套件
+| 測試類別 | 案例數 | 涵蓋範圍 |
+|----------|--------|----------|
+| 公司模式 | 84 | 工作項狀態機、預算管理、模型路由、任務拆分、事件系統、檢查點、優先級 |
+| Docker 管理 | 39 | 容器操作、健康檢查、工具權限、API 端點、Stub 降級 |
+| OPC 服務 | 15 | 6 級閉環、安全護欄、審計日誌 |
+| 反思迴圈 | 4 | 高分通過、低分迭代、記憶注入 |
+| 架構約束 | 8 | LLM 調用層、安全護欄、禁止操作 |
+| 控制面版 | 3 | 儀表板聚合、降級安全 |
+| 文本存檔 | 4 | JSONL 寫入、反思映射 |
 
-```powershell
-# 執行全部測試
-pytest backend/tests/
+---
 
-# 執行特定模組測試
-pytest backend/tests/test_reflection_loop.py   # 反思迴圈
-pytest backend/tests/test_company.py           # 多代理人公司
-pytest backend/tests/test_opc_service.py       # OPC 服務
-pytest backend/tests/test_archiver.py          # 文本化存檔
-pytest backend/tests/test_dashboard.py         # 控制面版
-pytest backend/tests/test_architecture.py      # 專案架構
-```
+## 🛠️ 技術棧
 
-測試使用 mock / patch 隔離 LLM 呼叫與外部服務，無需真實 API 金鑰即可執行。
+| 層級 | 技術 | 用途 |
+|------|------|------|
+| 核心閉環 | LangGraph + LiteLLM | 反思迴圈圖 + 多模型路由 |
+| 後端 | FastAPI + uvicorn | REST API 服務 |
+| 公司運行時 | 自研 (company/) | 多代理人協調 · 預算管控 · Docker 控制 |
+| 向量資料庫 | ChromaDB | 記憶存儲與相似檢索 |
+| 快取 | Redis | 任務持久化 · 會話狀態 |
+| 工業協議 | OPC UA (asyncua) | 工業數據讀寫與訂閱 |
+| 容器管理 | Docker SDK | 容器生命週期 · 資源監控 · 按時計費 |
+| 前端 | React 18 + Vite + TypeScript | IDE 風格 UI · Tailwind CSS v4 |
+| 測試 | pytest + pytest-asyncio | 185 案例 · Mock 隔離 |
+| 部署 | Docker Compose | 五服務一鍵編排 |
 
-目前共 146 個測試案例，覆蓋：
+---
 
-| 測試類別 | 測試檔 | 涵蓋範圍 |
-| --- | --- | --- |
-| 專案架構 | `test_architecture.py` | 模組完整性、關鍵約束（LLM 調用層/安全護欄/禁止操作） |
-| 反思迭代迴圈 | `test_reflection_loop.py` | 高分通過、低分迭代、最大迭代上限、記憶檢索 |
-| 公司狀態與預算 | `test_company.py` | 工作項狀態機、預算管理、模型路由、成本追蹤 |
-| 任務拆分器 | `test_company.py` | LLM/模板/規則三策略、自動策略選擇、並行規劃、依賴解析 |
-| 公司協調器 | `test_company.py` | 完整執行流程、審查退回、預算追蹤、看板 |
-| PromptConfig 自定義 | `test_company.py` | 部分覆蓋、全欄位自定義、多注入路徑 |
-| 事件系統 | `test_company.py` | EventBus 基礎功能、多監聽器、異常安全、完整事件枚舉 |
-| 錯誤處理 | `test_company.py` | RetryConfig、重試邏輯、角色升級、停用升級 |
-| 檢查點 | `test_company.py` | 序列化、工作項欄位完整性、狀態恢復 |
-| 優先級與工作池 | `test_company.py` | Priority 排序、Semaphore 並行限制 |
-| EvoLoop 圖整合 | `test_company.py` | 公司模式路由、迭代迴圈、失敗跳過迭代 |
-| 控制面版 | `test_dashboard.py` | 儀表板聚合、任務摘要、能力註冊表、降級安全 |
-| OPC 服務 | `test_opc_service.py` | 6 級閉環（感知→預處理→分析→診斷→決策→執行）、白名單、邊界檢查、審計日誌 |
-| 文本化存檔 | `test_archiver.py` | JSONL 寫入、反思映射、完整圖存檔 |
-
-## 開發路線
+## 🗺️ 路線圖
 
 | 階段 | 內容 | 狀態 |
-| --- | --- | --- |
-| Phase 0 | 環境建設 | ✅ 完成 |
-| Phase 1 | 核心反思閉環 | ✅ 完成 |
-| Phase 2 | 記憶與向量庫（ChromaDB） | ✅ 完成 |
-| Phase 3 | FastAPI 服務 | ✅ 完成 |
-| Phase 4 | 前端介面 | ✅ 完成 |
-| Phase 5 | DSPy 提示優化 | 待實作 |
-| Phase 6 | 多代理人公司運行時 | ✅ 完成 |
-| Phase 7 | OPC UA 工業整合 | ✅ 完成 |
-| Phase 8 | 測試部署監控（含 Task 8.6 文本化存檔） | ✅ 完成 |
-| Phase 9 | 文件 | 進行中 |
+|------|------|:----:|
+| Phase 0 | 環境建設 | ✅ |
+| Phase 1 | 核心反思閉環 | ✅ |
+| Phase 2 | 向量記憶庫 (ChromaDB) | ✅ |
+| Phase 3 | FastAPI 服務 | ✅ |
+| Phase 4 | 前端介面 (IDE 風格) | ✅ |
+| Phase 5 | DSPy 提示優化 | ⏳ |
+| Phase 6 | 多代理人公司運行時 | ✅ |
+| Phase 7 | OPC UA 工業整合 | ✅ |
+| Phase 8 | 雲控制台 · Docker 預算管控 | ✅ |
+| Phase 9 | 文件 · 持續完善 | 🔄 |
+
+---
+
+<p align="center">
+  <sub>Built with ❤️ using Python · LangGraph · React · Docker</sub>
+</p>

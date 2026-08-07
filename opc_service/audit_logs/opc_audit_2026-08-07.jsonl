@@ -20,3 +20,7 @@
 {"timestamp":"2026-08-07T09:22:47.517907Z","operation":"write","tag_name":"FlowRate","value":50.0,"reason":"測試","result":"blocked","detail":"标签 FlowRate 不在写入白名单中，已拒绝"}
 {"timestamp":"2026-08-07T09:39:06.257634Z","operation":"write","tag_name":"FlowRate","value":50.0,"reason":"測試","result":"blocked","detail":"标签 FlowRate 不在写入白名单中，已拒绝"}
 {"timestamp":"2026-08-07T09:49:15.851742Z","operation":"write","tag_name":"FlowRate","value":50.0,"reason":"測試","result":"blocked","detail":"标签 FlowRate 不在写入白名单中，已拒绝"}
+{"timestamp":"2026-08-07T10:08:10.670405Z","operation":"write","tag_name":"FlowRate","value":50.0,"reason":"測試","result":"blocked","detail":"标签 FlowRate 不在写入白名单中，已拒绝"}
+{"timestamp":"2026-08-07T10:11:16.950544Z","operation":"write","tag_name":"FlowRate","value":50.0,"reason":"測試","result":"blocked","detail":"标签 FlowRate 不在写入白名单中，已拒绝"}
+{"timestamp":"2026-08-07T10:13:00.099348Z","operation":"write","tag_name":"FlowRate","value":50.0,"reason":"測試","result":"blocked","detail":"标签 FlowRate 不在写入白名单中，已拒绝"}
+{"timestamp":"2026-08-07T10:15:09.648907Z","operation":"write","tag_name":"FlowRate","value":50.0,"reason":"測試","result":"blocked","detail":"标签 FlowRate 不在写入白名单中，已拒绝"}
