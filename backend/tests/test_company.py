@@ -1702,7 +1702,7 @@ class TestEventSystem:
         from backend.company.events import CompanyEvent
 
         expected = {
-            "company_start", "company_done", "phase_change",
+            "company_start", "company_done", "phase_change", "decompose_done",
             "work_item_start", "work_item_done", "work_item_error",
             "work_item_retry", "work_item_escalate",
             "review_pass", "review_rework", "review_force_done",

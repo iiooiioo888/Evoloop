@@ -22,7 +22,7 @@ from typing import Any
 
 import aiofiles
 
-from backend.core.llm import DEFAULT_MODEL
+from backend.core.llm_config import get_runtime_config
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ def build_archive_record(state: Mapping[str, Any], session_id: str) -> dict:
         "final_answer": state.get("final_answer"),
         "memory_items": state.get("retrieved_memories") or [],
         "metadata": {
-            "model": DEFAULT_MODEL,
+            "model": get_runtime_config().get("model"),
             "iterations": state.get("iteration", 0),
             "memory_saved": state.get("memory_saved", False),
             **(state.get("archive_metadata") or {}),

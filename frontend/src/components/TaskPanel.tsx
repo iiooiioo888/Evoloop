@@ -1,0 +1,341 @@
+/** 任務介面面板（參考 PysdnOPC 任務列表風格）。
+ *
+ * 公司模式：角色流水線芯片（Manager → 執行角色 → Reviewer →
+ * Synthesizer）+ 按角色分組的工作項內容 + 事件時間軸。
+ * 標準模式：階段進度 + 評分軌跡。
+ */
+import { useMemo, useState } from 'react';
+import type { TaskProgress, KanbanItem } from '../types';
+
+interface TaskPanelProps {
+  task: TaskProgress;
+  /** 設定後顯示「開啟任務頁面」按鈕 */
+  onOpenFull?: () => void;
+}
+
+// ── 階段定義（匯出供整頁視圖复用） ──
+
+export const STANDARD_PHASES: { key: string; label: string }[] = [
+  { key: 'retrieve_memories', label: '記憶檢索' },
+  { key: 'generate', label: '生成回答' },
+  { key: 'evaluate', label: '自動評估' },
+  { key: 'reflect', label: '反思' },
+  { key: 'improve', label: '改進' },
+  { key: 'done', label: '完成' },
+];
+
+export const COMPANY_PHASES: { key: string; label: string }[] = [
+  { key: 'decompose', label: '任務分解' },
+  { key: 'execute_review', label: '執行與審查' },
+  { key: 'synthesize', label: '整合交付' },
+  { key: 'final_review', label: '最終審查' },
+  { key: 'evaluate', label: '品質評估' },
+  { key: 'done', label: '完成' },
+];
+
+// ── 角色顯示名稱 ──
+
+export const ROLE_LABELS: Record<string, string> = {
+  manager: 'Manager',
+  tech_lead: '技術主管',
+  architect: '架構師',
+  frontend_lead: '前端主管',
+  backend_lead: '後端主管',
+  test_lead: '測試主管',
+  ui_designer: 'UI 設計師',
+  css_dev: 'CSS 開發',
+  js_dev: 'JS 開發',
+  backend_dev: '後端開發',
+  tester: '測試工程師',
+  devops: 'DevOps',
+  reviewer: 'Reviewer',
+  synthesizer: 'Synthesizer',
+  analyst: '分析師',
+  coordinator: '協調員',
+  developer: '開發者',
+};
+
+export function roleLabel(roleId: string): string {
+  return ROLE_LABELS[roleId] ?? roleId.replace(/_/g, ' ');
+}
+
+// ── 角色狀態（對應 PysdnOPC 芯片圖標） ──
+
+export type RoleStatus = 'pending' | 'active' | 'waiting' | 'done' | 'failed';
+
+export function RoleIcon({ status }: { status: RoleStatus }) {
+  if (status === 'done') return <span className="text-green-400">✓</span>;
+  if (status === 'failed') return <span className="text-red-400">✗</span>;
+  if (status === 'active') return <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-blue-400 align-middle" />;
+  if (status === 'waiting') return <span className="inline-block h-2 w-2 rounded-full bg-yellow-400/80 align-middle" />;
+  return null;
+}
+
+export const ITEM_STATUS_META: Record<string, { label: string; cls: string }> = {
+  planning: { label: '規劃中', cls: 'bg-gray-700/60 text-gray-300' },
+  ready: { label: '就緒', cls: 'bg-blue-500/15 text-blue-300' },
+  executing: { label: '執行中', cls: 'bg-yellow-500/15 text-yellow-300' },
+  in_review: { label: '審查中', cls: 'bg-purple-500/15 text-purple-300' },
+  rework: { label: '修改中', cls: 'bg-orange-500/15 text-orange-300' },
+  done: { label: '完成', cls: 'bg-green-500/15 text-green-300' },
+  blocked: { label: '阻塞', cls: 'bg-red-500/15 text-red-300' },
+};
+
+export const EVENT_LABELS: Record<string, string> = {
+  company_start: '🏁 公司啟動',
+  company_done: '✅ 公司流程完成',
+  phase_change: '🔀 階段切換',
+  decompose_done: '📋 分解完成',
+  work_item_start: '▶️ 開始執行',
+  work_item_done: '✔️ 執行完成',
+  work_item_error: '❌ 執行失敗',
+  work_item_retry: '🔁 重試',
+  work_item_escalate: '⬆️ 升級處理',
+  review_pass: '👌 審查通過',
+  review_rework: '↩️ 審查退回',
+  review_force_done: '⚠️ 強制完成',
+  budget_warning: '💰 預算警告',
+  budget_degrade: '📉 預算降級',
+  evaluation: '📊 評估',
+};
+
+export function phaseIndex(phases: { key: string }[], phase: string): number {
+  return phases.findIndex((p) => p.key === phase);
+}
+
+export function elapsed(ts: number): string {
+  const sec = Math.floor((Date.now() - ts * 1000) / 1000);
+  if (sec < 5) return '剛剛';
+  if (sec < 60) return `${sec} 秒前`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min} 分鐘前`;
+  return `${Math.floor(min / 60)} 小時前`;
+}
+
+export default function TaskPanel({ task, onOpenFull }: TaskPanelProps) {
+  const [showTimeline, setShowTimeline] = useState(false);
+  const isCompany = task.mode === 'company';
+  const phases = isCompany ? COMPANY_PHASES : STANDARD_PHASES;
+  const running = task.status === 'running' || task.status === 'pending';
+  const failed = task.status === 'failed';
+  const currentIdx = phaseIndex(phases, task.phase);
+  const phasePassed = (i: number) => (failed ? i < currentIdx : i < currentIdx || (!running && i <= currentIdx));
+
+  // ── 公司模式：按角色分組工作項 ──
+  const roleGroups = useMemo(() => {
+    if (!isCompany) return [];
+    const groups = new Map<string, { status: string; item: KanbanItem }[]>();
+    for (const [status, items] of Object.entries(task.kanban)) {
+      for (const item of items) {
+        const role = item.assignee || 'developer';
+        if (!groups.has(role)) groups.set(role, []);
+        groups.get(role)!.push({ status, item });
+      }
+    }
+    return [...groups.entries()].map(([role, entries]) => {
+      const statusSet = new Set(entries.map((e) => e.status));
+      let status: RoleStatus = 'pending';
+      if (statusSet.has('executing')) status = 'active';
+      else if (statusSet.has('blocked')) status = 'failed';
+      else if (statusSet.has('in_review') || statusSet.has('rework') || statusSet.has('ready')) status = 'waiting';
+      else if ([...statusSet].every((s) => s === 'done')) status = 'done';
+      return { role, status, entries };
+    });
+  }, [isCompany, task.kanban]);
+
+  // 流水線特殊角色狀態
+  const managerStatus: RoleStatus =
+    task.phase === 'decompose' || task.phase === 'final_review'
+      ? 'active'
+      : currentIdx > 0 || task.status === 'completed'
+        ? 'done'
+        : 'pending';
+  const reviewerStatus: RoleStatus =
+    (task.kanban.in_review?.length ?? 0) > 0
+      ? 'active'
+      : (task.kanban.done?.length ?? 0) > 0
+        ? 'done'
+        : 'pending';
+  const synthesizerStatus: RoleStatus =
+    task.phase === 'synthesize' ? 'active' : currentIdx > 2 || task.status === 'completed' ? 'done' : 'pending';
+
+  // ── 流水線芯片（特殊角色只出現一次，工作項明細仍保留分組） ──
+  const SPECIAL_ROLES = new Set(['manager', 'reviewer', 'synthesizer']);
+  const pipeline: { key: string; label: string; status: RoleStatus }[] = isCompany
+    ? [
+        { key: 'manager', label: 'Manager', status: managerStatus },
+        ...roleGroups
+          .filter((g) => !SPECIAL_ROLES.has(g.role))
+          .map((g) => ({ key: g.role, label: roleLabel(g.role), status: g.status })),
+        { key: 'reviewer', label: 'Reviewer', status: reviewerStatus },
+        { key: 'synthesizer', label: 'Synthesizer', status: synthesizerStatus },
+      ]
+    : [];
+
+  const evaluations = task.events.filter((e) => e.event === 'evaluation');
+  const doneCount = task.kanban.done?.length ?? 0;
+  const totalCount = Object.values(task.kanban).reduce((s, items) => s + items.length, 0);
+
+  return (
+    <div className="mb-2 w-full min-w-[240px] rounded-xl border border-gray-700/70 bg-gray-900/70 p-3 text-xs">
+      {/* ── 標題列 ── */}
+      <div className="flex items-center gap-2">
+        {running && (
+          <span className="inline-block h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
+        )}
+        {failed && <span>❌</span>}
+        {task.status === 'completed' && <span>✅</span>}
+        <span className="font-medium text-gray-200">
+          {isCompany ? '🏢 公司任務' : '⚙️ 反思任務'}
+        </span>
+        <span className="truncate text-gray-500">
+          {running
+            ? `${phases[currentIdx]?.label ?? task.phase}${totalCount > 0 ? ` · ${doneCount}/${totalCount} 工作項` : ''}`
+            : failed
+              ? '執行失敗'
+              : `評分 ${task.score ?? '-'} · 迭代 ${task.iteration}`}
+        </span>
+      </div>
+
+      {/* ── 階段進度條 ── */}
+      <div className="mt-2.5 flex items-center gap-1">
+        {phases.map((p, i) => {
+          const active = running && i === currentIdx;
+          return (
+            <div key={p.key} className="flex flex-1 flex-col items-center gap-1">
+              <div
+                className={`h-1.5 w-full rounded-full ${
+                  phasePassed(i) ? 'bg-blue-500' : active ? 'animate-pulse bg-blue-400' : 'bg-gray-700'
+                }`}
+              />
+              <span
+                className={`whitespace-nowrap text-[10px] ${
+                  active ? 'text-blue-300' : phasePassed(i) ? 'text-gray-300' : 'text-gray-600'
+                }`}
+              >
+                {p.label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── 錯誤訊息 ── */}
+      {failed && task.error && (
+        <p className="mt-2 rounded-lg bg-red-900/30 px-2 py-1.5 text-red-300">{task.error}</p>
+      )}
+
+      {/* ══ 公司模式：角色流水線（PysdnOPC 風格） ══ */}
+      {isCompany && pipeline.length > 1 && (
+        <div className="mt-3 flex flex-wrap items-center gap-1">
+          {pipeline.map((role, i) => (
+            <span key={role.key} className="flex items-center gap-1">
+              <span
+                className={`flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] ${
+                  role.status === 'active'
+                    ? 'border-blue-500/50 bg-blue-500/10 text-blue-200'
+                    : role.status === 'done'
+                      ? 'border-green-500/40 bg-green-500/10 text-green-200'
+                      : role.status === 'failed'
+                        ? 'border-red-500/40 bg-red-500/10 text-red-200'
+                        : role.status === 'waiting'
+                          ? 'border-yellow-500/40 bg-yellow-500/10 text-yellow-200'
+                          : 'border-gray-700 bg-gray-800/60 text-gray-500'
+                }`}
+              >
+                {role.label}
+                <RoleIcon status={role.status} />
+              </span>
+              {i < pipeline.length - 1 && <span className="text-gray-600">→</span>}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* ══ 公司模式：按角色分組的工作項內容 ══ */}
+      {isCompany && roleGroups.length > 0 && (
+        <div className="mt-2.5 flex flex-col gap-1.5">
+          {roleGroups.map((g) => (
+            <div key={g.role} className="rounded-lg bg-gray-800/50 px-2.5 py-1.5">
+              <p className="mb-1 flex items-center gap-1.5 font-medium text-gray-300">
+                {roleLabel(g.role)}
+                <RoleIcon status={g.status} />
+                <span className="text-[10px] font-normal text-gray-500">
+                  {g.entries.filter((e) => e.status === 'done').length}/{g.entries.length}
+                </span>
+              </p>
+              {g.entries.map(({ status, item }) => {
+                const meta = ITEM_STATUS_META[status] ?? { label: status, cls: 'bg-gray-700/60 text-gray-300' };
+                return (
+                  <div key={item.id} className="mb-1 flex items-start gap-1.5 text-[11px] last:mb-0">
+                    <span className={`mt-0.5 shrink-0 rounded px-1 py-px text-[10px] ${meta.cls}`}>
+                      {meta.label}
+                    </span>
+                    <span className="min-w-0 flex-1 text-gray-300" title={item.description}>
+                      {item.title}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── 評分軌跡（多輪迭代時） ── */}
+      {evaluations.length > 1 && (
+        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+          {evaluations.map((e, i) => (
+            <span key={i} className="rounded-full bg-gray-800 px-2 py-0.5 text-[11px] text-gray-300">
+              第 {Number(e.data.iteration ?? 0) + 1} 次：
+              <span className="ml-1 font-medium text-blue-300">{String(e.data.score ?? '?')} 分</span>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* ══ 事件時間軸（可展開） ══ */}
+      {isCompany && task.events.length > 0 && (
+        <div className="mt-2.5">
+          <button
+            onClick={() => setShowTimeline((v) => !v)}
+            className="text-[11px] text-gray-400 hover:text-gray-200"
+          >
+            {showTimeline ? '▲ 收合時間軸' : `▼ 事件時間軸（${task.events.length}）`}
+          </button>
+          {showTimeline && (
+            <div className="mt-1.5 border-l border-gray-700 pl-3">
+              {task.events.slice(-10).map((e, i) => (
+                <div key={i} className="mb-1 flex items-baseline gap-2 text-[11px] last:mb-0">
+                  <span className="shrink-0 text-gray-400">{EVENT_LABELS[e.event] ?? e.event}</span>
+                  <span className="min-w-0 flex-1 truncate text-gray-500">
+                    {String(e.data.title ?? e.data.phase ?? '')}
+                  </span>
+                  <span className="shrink-0 text-gray-600">{elapsed(e.ts)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── 預算 ── */}
+      {isCompany && Object.keys(task.budget).length > 0 && (
+        <p className="mt-2 text-[11px] text-gray-500">
+          💰 花費 ${String(task.budget.task_spent ?? 0)} / 上限 ${String(task.budget.task_limit ?? '-')}
+          <span className="ml-2">模型：{String(task.budget.active_tier ?? '-')}</span>
+        </p>
+      )}
+
+      {/* ── 開啟整頁任務視圖 ── */}
+      {onOpenFull && (
+        <button
+          onClick={onOpenFull}
+          className="mt-2 w-full rounded-lg border border-gray-700 py-1 text-[11px] text-gray-400 transition-colors hover:border-blue-500 hover:text-blue-300"
+        >
+          ⛶ 開啟任務頁面
+        </button>
+      )}
+    </div>
+  );
+}

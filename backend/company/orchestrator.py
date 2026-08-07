@@ -115,6 +115,11 @@ class CompanyOrchestrator:
             "strategy": decompose_result.strategy.value,
             "execution_plan": decompose_result.execution_plan,
         })
+        self.events.emit(CompanyEvent.DECOMPOSE_DONE, {
+            "subtask_count": len(work_items),
+            "strategy": decompose_result.strategy.value,
+            "execution_plan": decompose_result.execution_plan,
+        })
 
         # ── 階段 2：執行-審查迴圈 ──
         self._log("phase", {"phase": "execute_review", "work_items": len(work_items)})

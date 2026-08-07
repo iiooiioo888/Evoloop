@@ -228,15 +228,18 @@ class WorkItemManager:
             s: [] for s in WorkItemStatus
         }
         for item in self._items.values():
+            # 產出物預覽：截斷避免回應過大
+            output = str(item.artifacts.get("output", "")) if item.artifacts else ""
             board[item.status].append({
                 "id": item.id,
                 "title": item.title,
-                "description": item.description[:100],
+                "description": item.description[:300],
                 "assignee": item.assignee.value if item.assignee else None,
                 "depends_on": item.depends_on,
                 "tier": item.tier.value,
                 "actual_cost": round(item.actual_cost, 4),
-                "feedback_count": len(item.feedback),
+                "feedback": [fb for fb in item.feedback[-3:]],
+                "output": output[:1500],
                 "created_at": item.created_at,
                 "updated_at": item.updated_at,
             })

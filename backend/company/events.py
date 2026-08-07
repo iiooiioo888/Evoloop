@@ -31,6 +31,7 @@ class CompanyEvent(str, Enum):
     COMPANY_START = "company_start"          # 公司開始執行
     COMPANY_DONE = "company_done"            # 公司執行完成
     PHASE_CHANGE = "phase_change"            # 階段切換（decompose/execute/synthesize/final_review）
+    DECOMPOSE_DONE = "decompose_done"        # 任務分解完成（含策略與執行計劃）
 
     # ── 工作項層級 ──
     WORK_ITEM_START = "work_item_start"      # 工作項開始執行
