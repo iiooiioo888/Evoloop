@@ -21,10 +21,26 @@ export interface KanbanItem {
   updated_at?: string;
 }
 
+/** 任務進階控制選項 */
+export interface TaskOptions {
+  /** 預算上限 */
+  budget_limit?: number;
+  /** 最大並行工作數 */
+  max_parallel?: number;
+  /** 最大迭代次數 */
+  max_iterations?: number;
+  /** 最大審查輪數 */
+  max_review_rounds?: number;
+  /** 通過門檻分數 */
+  pass_threshold?: number;
+  /** 模型層級偏好 */
+  model_tier?: string;
+}
+
 /** 任務即時狀態（POST /tasks + GET /tasks/{id}） */
 export interface TaskProgress {
   task_id: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
   mode: 'standard' | 'company' | 'opc';
   query: string;
   template: string;
@@ -36,6 +52,12 @@ export interface TaskProgress {
   score: number | null;
   iteration: number;
   error: string;
+  /** 是否已請求取消 */
+  cancel_requested?: boolean;
+  /** 是否有可用的檢查點（可斷點續跑） */
+  resumable?: boolean;
+  /** 進階控制選項 */
+  options?: TaskOptions;
   /** 公司模式：分解計劃 */
   plan?: {
     subtask_count?: number;
@@ -52,6 +74,74 @@ export interface TaskProgress {
   created_at?: number;
 }
 
+// ==================== 思考過程軌跡 ====================
+
+/** 思考過程軌跡事件 */
+export interface TraceEntry {
+  seq: number;
+  ts: string;
+  task_id: string;
+  event: string;
+  phase?: string;
+  role?: string;
+  item_id?: string;
+  iteration?: number;
+  model?: string | null;
+  system?: string | null;
+  prompt?: string;
+  response?: string;
+  prompt_length?: number;
+  response_length?: number;
+  cost?: number | null;
+  duration_ms?: number | null;
+  source?: string;
+  query?: string;
+  count?: number;
+  items?: string[];
+  score?: number | null;
+  feedback?: string;
+  strengths?: string;
+  weaknesses?: string;
+  raw_response?: string;
+  reflection?: string;
+  current_answer_preview?: string;
+  improved_answer?: string;
+  based_on_reflection?: string;
+  tool?: string;
+  args?: Record<string, unknown>;
+  result?: string;
+  success?: boolean;
+  label?: string;
+  state?: Record<string, unknown>;
+  operation?: string;
+  memory_id?: string;
+  text?: string;
+  metadata?: Record<string, unknown>;
+  error?: string;
+  recoverable?: boolean;
+  context?: string;
+  [key: string]: unknown;
+}
+
+/** 軌跡檔案摘要 */
+export interface TraceSummary {
+  task_id: string;
+  event_count: number;
+  first_ts: string;
+  last_ts: string;
+  file_size_kb: number;
+}
+
+/** 檢查點摘要 */
+export interface CheckpointSummary {
+  task_id: string;
+  saved_at: string;
+  goal: string;
+  phase: string;
+  config_name: string;
+  work_item_count: number;
+}
+
 /** 聊天訊息模型 */
 export interface ChatMessage {
   id: string;
@@ -60,6 +150,8 @@ export interface ChatMessage {
   timestamp: number;
   /** 是否正在生成中 */
   streaming?: boolean;
+  /** SSE 串流當前階段（標準模式打字機效果） */
+  streamPhase?: string;
   /** 使用者回饋：1=👎 2=👍 */
   feedback?: 1 | 2;
   /** 是否以公司模式發送 */

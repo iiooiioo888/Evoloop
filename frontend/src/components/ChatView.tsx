@@ -17,6 +17,7 @@ interface ChatViewProps {
   onRetry: () => void;
   onDismissError: () => void;
   onOpenTask: (messageId: string) => void;
+  onOpenTrace?: (taskId: string) => void;
   onSuggest: (text: string, company: boolean) => void;
 }
 
@@ -31,6 +32,7 @@ export default function ChatView({
   onRetry,
   onDismissError,
   onOpenTask,
+  onOpenTrace,
   onSuggest,
 }: ChatViewProps) {
   return (
@@ -66,6 +68,7 @@ export default function ChatView({
         sessionId={sessionId}
         loading={loading}
         onOpenTask={onOpenTask}
+        onOpenTrace={onOpenTrace}
         onSuggest={onSuggest}
       />
 

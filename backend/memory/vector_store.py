@@ -14,9 +14,11 @@ cleanup 供記憶維護使用。
 可注入自訂 embedding function（測試用，避免真實 API 呼叫）。
 """
 
+import hashlib
 import logging
 import os
 import uuid
+from collections import OrderedDict
 from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -64,11 +66,19 @@ def _sanitize_metadata(metadata: dict | None) -> dict:
     return cleaned
 
 
+# ── 檢索快取（LRU）──
+# 相同查詢短時間內重複檢索時，避免重複呼叫嵌入 API
+_SEARCH_CACHE_MAX_SIZE = int(os.getenv("EVOL_SEARCH_CACHE_SIZE", "128"))
+
+
 class VectorMemoryStore:
     """以 ChromaDB 儲存的向量記憶庫。
 
     連線與 collection 皆惰性初始化，匯入本模組不會產生
     外部連線，方便測試替換與離線環境使用。
+
+    檢索快取：LRU 快取查詢結果，減少重複嵌入 API 呼叫。
+    相似度門檻：distance > EVOL_SIMILARITY_THRESHOLD 的結果不注入。
     """
 
     def __init__(
@@ -82,6 +92,10 @@ class VectorMemoryStore:
         self._embedding_function = embedding_function
         self._client: Any = None
         self._collection: Any = None
+        # LRU 快取：key = (query_hash, k) → results
+        self._search_cache: OrderedDict[tuple[str, int], list[dict]] = OrderedDict()
+        # 相似度門檻（distance 越小越相似，超過此值不注入）
+        self.similarity_threshold = float(os.getenv("EVOL_SIMILARITY_THRESHOLD", "1.2"))
 
     # ---- 連線（惰性） ----
 
@@ -122,6 +136,8 @@ class VectorMemoryStore:
         self._get_collection().add(
             documents=[text], metadatas=[meta], ids=[record_id]
         )
+        # 新增記憶後使快取失效，確保後續檢索能取得最新結果
+        self.invalidate_cache()
         return record_id
 
     def search_similar(self, query: str, k: int = 3) -> list[dict]:
@@ -129,10 +145,26 @@ class VectorMemoryStore:
 
         回傳 [{"text": ..., "metadata": ..., "distance": ...}, ...]，
         distance 越小越相似；記憶庫為空時回傳空列表。
+
+        優化：
+        - LRU 快取：相同查詢直接回傳快取結果
+        - 相似度門檻：過濾 distance 過高的低質量結果
         """
+        if k <= 0:
+            return []
+
+        # ── LRU 快取查詢 ──
+        query_hash = hashlib.md5(query.encode()).hexdigest()
+        cache_key = (query_hash, k)
+        if cache_key in self._search_cache:
+            # 移動到末尾（最近使用）
+            self._search_cache.move_to_end(cache_key)
+            return self._search_cache[cache_key]
+
         collection = self._get_collection()
         total = collection.count()
-        if total == 0 or k <= 0:
+        if total == 0:
+            self._search_cache[cache_key] = []
             return []
         results = collection.query(
             query_texts=[query], n_results=min(k, total)
@@ -143,8 +175,21 @@ class VectorMemoryStore:
             results["metadatas"][0],
             results["distances"][0],
         ):
+            # 相似度門檻過濾：distance 過高表示不相關
+            if distance > self.similarity_threshold:
+                continue
             memories.append({"text": text, "metadata": meta, "distance": distance})
+
+        # ── 寫入快取（LRU 淘汰）──
+        self._search_cache[cache_key] = memories
+        if len(self._search_cache) > _SEARCH_CACHE_MAX_SIZE:
+            self._search_cache.popitem(last=False)
+
         return memories
+
+    def invalidate_cache(self) -> None:
+        """清空檢索快取（新增記憶後可呼叫）。"""
+        self._search_cache.clear()
 
     def all(self) -> list[dict]:
         """回傳全部記憶（含 metadata）。"""

@@ -139,7 +139,9 @@ class TestTierRouter:
         tier = router.select_tier("low", is_critical=True)
         assert tier == BudgetTier.CRITICAL
 
-    def test_resolve_model_normal(self):
+    def test_resolve_model_normal(self, monkeypatch):
+        # 隔離 LLM 配置：無顯式配置時使用傳統多模型層級預設
+        monkeypatch.setattr("backend.core.llm_config.get_explicit_model", lambda: "")
         router = TierRouter(BudgetConfig())
         model = router.resolve_model(BudgetTier.ROUTINE, budget_pressure=0.0)
         assert model == "gpt-4o-mini"
@@ -200,7 +202,9 @@ class TestBudgetManager:
         bm.reset_task()
         assert bm.task_spent == 0.0
 
-    def test_resolve_model_for_tier(self):
+    def test_resolve_model_for_tier(self, monkeypatch):
+        # 隔離 LLM 配置：無顯式配置時使用傳統多模型層級預設
+        monkeypatch.setattr("backend.core.llm_config.get_explicit_model", lambda: "")
         bm = BudgetManager(BudgetConfig())
         model = bm.resolve_model_for_tier(BudgetTier.ROUTINE)
         assert model == "gpt-4o-mini"
@@ -1705,6 +1709,7 @@ class TestEventSystem:
             "company_start", "company_done", "phase_change", "decompose_done",
             "work_item_start", "work_item_done", "work_item_error",
             "work_item_retry", "work_item_escalate",
+            "tool_call", "tool_result",
             "review_pass", "review_rework", "review_force_done",
             "final_review_degraded",
             "budget_warning", "budget_degrade",

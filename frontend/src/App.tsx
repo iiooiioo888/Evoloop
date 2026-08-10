@@ -6,7 +6,8 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ChatMessage, ChatSession, TaskProgress } from './types';
-import { createTask, fetchConfig, fetchTask } from './api/client';
+import { createTask, fetchConfig, fetchTask, sendChatStream, TaskWebSocket } from './api/client';
+import type { TaskWsMessage } from './api/client';
 import {
   loadActiveSessionId,
   loadSessions,
@@ -20,6 +21,7 @@ import ChatView from './components/ChatView';
 import type { SendOptions } from './components/InputBar';
 import MonitorView from './components/MonitorView';
 import SettingsModal from './components/SettingsModal';
+import TraceView from './components/TraceView';
 
 function createSession(): ChatSession {
   const now = Date.now();
@@ -157,12 +159,85 @@ export default function App() {
         messages: [...s.messages, userMsg, placeholder],
       }));
 
+      // ── 標準模式：SSE 串流打字機效果 ──
+      if (!options.companyMode && !options.opcMode) {
+        setSending(false);
+
+        // 構建對話歷史（最近 6 輪，排除當前佔位訊息）
+        const currentMessages = activeSession.messages.filter(
+          (m) => m.id !== assistantId && m.content.trim(),
+        );
+        const history = currentMessages.slice(-12).map((m) => ({
+          role: m.role,
+          content: m.content,
+        }));
+
+        sendChatStream(query, sessionId, {
+          onPhase: (phase) => {
+            updateSession(sessionId, (s) => ({
+              ...s,
+              updatedAt: Date.now(),
+              messages: s.messages.map((m) =>
+                m.id === assistantId ? { ...m, streamPhase: phase } : m,
+              ),
+            }));
+          },
+          onToken: (token) => {
+            updateSession(sessionId, (s) => ({
+              ...s,
+              updatedAt: Date.now(),
+              messages: s.messages.map((m) =>
+                m.id === assistantId ? { ...m, content: m.content + token } : m,
+              ),
+            }));
+          },
+          onEvaluation: (score, iteration) => {
+            updateSession(sessionId, (s) => ({
+              ...s,
+              messages: s.messages.map((m) =>
+                m.id === assistantId
+                  ? { ...m, meta: { ...m.meta, score, iteration } }
+                  : m,
+              ),
+            }));
+          },
+          onDone: (answer, score, iteration) => {
+            updateSession(sessionId, (s) => ({
+              ...s,
+              updatedAt: Date.now(),
+              messages: s.messages.map((m) =>
+                m.id === assistantId
+                  ? {
+                      ...m,
+                      content: answer || m.content,
+                      streaming: false,
+                      meta: { score, iteration },
+                    }
+                  : m,
+              ),
+            }));
+          },
+          onError: (errMsg) => {
+            setError(errMsg);
+            updateSession(sessionId, (s) => ({
+              ...s,
+              messages: s.messages.map((m) =>
+                m.id === assistantId ? { ...m, streaming: false } : m,
+              ),
+            }));
+          },
+        }, history);
+        return;
+      }
+
+      // ── 公司/OPC 模式：任務 API + WebSocket ──
       try {
         const { task_id } = await createTask(
           query,
           options.companyMode,
           options.companyTemplate,
           options.opcMode,
+          options.taskOptions,
         );
         updateSession(sessionId, (s) => ({
           ...s,
@@ -173,15 +248,14 @@ export default function App() {
 
         setSending(false);
 
-        // 轮询任务进度
-        while (true) {
-          await new Promise((r) => setTimeout(r, 1500));
-          let progress: TaskProgress;
-          try {
-            progress = await fetchTask(task_id);
-          } catch {
-            continue;
-          }
+        // ── 任务进度监听：优先 WebSocket，降级轮询 ──
+        let finished = false;
+        let wsClient: TaskWebSocket | null = null;
+        let pollTimer: ReturnType<typeof setTimeout> | null = null;
+        let lastProgress: TaskProgress | null = null;
+
+        const applyProgress = (progress: TaskProgress) => {
+          lastProgress = progress;
           updateSession(sessionId, (s) => ({
             ...s,
             updatedAt: Date.now(),
@@ -195,7 +269,8 @@ export default function App() {
             setRightPanelTask(progress);
           }
 
-          if (progress.status === 'completed') {
+          if (progress.status === 'completed' && !finished) {
+            finished = true;
             updateSession(sessionId, (s) => ({
               ...s,
               messages: s.messages.map((m) =>
@@ -209,13 +284,14 @@ export default function App() {
                   : m,
               ),
             }));
-            // 更新右侧面板最终数据
             if (options.opcMode) {
               setRightPanelTask(progress);
             }
-            break;
+            wsClient?.close();
+            if (pollTimer) clearTimeout(pollTimer);
           }
-          if (progress.status === 'failed') {
+          if (progress.status === 'failed' && !finished) {
+            finished = true;
             updateSession(sessionId, (s) => ({
               ...s,
               messages: s.messages.map((m) =>
@@ -223,8 +299,80 @@ export default function App() {
               ),
             }));
             setError(progress.error || '任务执行失败');
-            break;
+            wsClient?.close();
+            if (pollTimer) clearTimeout(pollTimer);
           }
+        };
+
+        // 轮询降级方案
+        const pollProgress = async () => {
+          if (finished) return;
+          try {
+            const progress = await fetchTask(task_id);
+            applyProgress(progress);
+          } catch {
+            // 忽略单次轮询失败
+          }
+          if (!finished) {
+            pollTimer = setTimeout(pollProgress, 1500);
+          }
+        };
+
+        // WebSocket 消息处理
+        const handleWsMessage = (msg: TaskWsMessage) => {
+          if (msg.event === 'snapshot') {
+            // 初始快照
+            applyProgress(msg.data as unknown as TaskProgress);
+          } else if (msg.event === 'task_finished') {
+            // 任务结束：获取最终状态
+            fetchTask(task_id).then(applyProgress).catch(() => {
+              // 降级：使用事件数据
+              const data = msg.data;
+              if (lastProgress) {
+                const statusValue = data.status;
+                const validStatus: TaskProgress['status'] =
+                  statusValue === 'completed' || statusValue === 'failed' ||
+                  statusValue === 'running' || statusValue === 'pending'
+                    ? statusValue
+                    : 'completed';
+                applyProgress({
+                  ...lastProgress,
+                  status: validStatus,
+                  score: (data.score as number) ?? null,
+                  iteration: (data.iteration as number) ?? 0,
+                  error: (data.error as string) ?? '',
+                });
+              }
+            });
+          } else if (msg.event === 'phase_change' || msg.event === 'evaluation') {
+            // 增量更新：获取最新状态
+            fetchTask(task_id).then(applyProgress).catch(() => {});
+          }
+        };
+
+        // 尝试 WebSocket 连接
+        try {
+          wsClient = new TaskWebSocket(
+            task_id,
+            handleWsMessage,
+            () => {
+              // WebSocket 关闭且任务未完成 → 降级轮询
+              if (!finished) {
+                pollProgress();
+              }
+            },
+          );
+          wsClient.connect();
+
+          // 3 秒后检查连接状态，未连接则启动轮询
+          setTimeout(() => {
+            if (!wsClient?.connected && !finished) {
+              pollProgress();
+            }
+          }, 3000);
+        } catch {
+          // WebSocket 不可用，直接轮询
+          pollProgress();
         }
       } catch (err) {
         setError((err as Error).message);
@@ -275,6 +423,11 @@ export default function App() {
     setRightPanelTask(task);
   }, []);
 
+  // ── 打開執行軌跡視圖 ──
+  const handleOpenTrace = useCallback((_taskId: string) => {
+    setActiveView('traces');
+  }, []);
+
   // ── 状态栏信息 ──
   const statusInfo = useMemo(
     () => ({
@@ -312,12 +465,14 @@ export default function App() {
             onRetry={handleRetry}
             onDismissError={() => setError(null)}
             onOpenTask={handleOpenTask}
+            onOpenTrace={handleOpenTrace}
             onSuggest={handleSuggest}
           />
         )}
         {activeView === 'monitor' && (
           <MonitorView onOpenTask={handleDashboardOpenTask} />
         )}
+        {activeView === 'traces' && <TraceView />}
       </AppShell>
 
       {/* LLM 设置弹窗 */}

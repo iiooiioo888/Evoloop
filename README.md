@@ -1,157 +1,171 @@
-<p align="center">
-  <h1 align="center">⚡ EvoLoop</h1>
-  <p align="center">
-    <strong>自我反思 × 多代理人公司 × 工業閉環</strong>
-    <br />
-    生成 → 評估 → 反思 → 優化，永不停止進化的 AI 系統
-  </p>
-</p>
+<div align="center">
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Python-3.12-blue?logo=python" alt="Python" />
-  <img src="https://img.shields.io/badge/FastAPI-0.115+-teal?logo=fastapi" alt="FastAPI" />
-  <img src="https://img.shields.io/badge/LangGraph-0.2+-purple?logo=langchain" alt="LangGraph" />
-  <img src="https://img.shields.io/badge/React-18-61dafb?logo=react" alt="React" />
-  <img src="https://img.shields.io/badge/Tests-185%20passed-green" alt="Tests" />
-  <img src="https://img.shields.io/badge/License-MIT-yellow" alt="License" />
-</p>
+# 🔄 EvoLoop
+
+**自我反思 × 多代理人公司 × 工业闭环**
+
+生成 → 评估 → 反思 → 优化，永不停止进化的 AI 系统
+
+[![Python](https://img.shields.io/badge/Python-3.12+-3776ab?logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![LangGraph](https://img.shields.io/badge/LangGraph-0.2+-1c3d5a?logo=langchain&logoColor=white)](https://github.com/langchain-ai/langgraph)
+[![React](https://img.shields.io/badge/React-18-61dafb?logo=react&logoColor=white)](https://react.dev/)
+[![Tests](https://img.shields.io/badge/Tests-185%20passed-success?logo=pytest&logoColor=white)](backend/tests/)
+[![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
+
+</div>
 
 ---
 
-## 🧠 什麼是 EvoLoop？
+## 📖 目录
 
-EvoLoop 不是一個普通的 AI 助手——它是一個**具備自我反思閉環的多代理人公司運行時**。
+- [什么是 EvoLoop？](#-什么是-evoloop)
+- [架构总览](#️-架构总览)
+- [项目结构](#-项目结构)
+- [核心能力](#-核心能力)
+- [快速开始](#-快速开始)
+- [环境变数](#️-环境变数)
+- [测试](#-测试)
+- [技术栈](#️-技术栈)
+- [常见问题](#-常见问题)
+- [路线图](#️-路线图)
 
-- **標準模式**：對每個回答自動評分（0-10），低於 8 分自動進入反思迴圈，迭代改進直到達標
-- **公司模式**：Manager 分解任務 → 多角色平行執行 → Reviewer 審查 → Synthesizer 整合，像一家真正的軟體公司運作
-- **OPC 模式**：感知 → 預處理 → 分析 → 診斷 → 決策 → 執行，6 級工業閉環
-- **雲控制台**：費用帳單、資源監控、告警中心、實例管理——像 AWS 一樣管理你的 AI 基礎設施
-- **預算管控**：公司全權控制容器預算，按時計費，壓力過高自動停止非核心服務
+---
+
+## 🧠 什么是 EvoLoop？
+
+EvoLoop 不是一个普通的 AI 助手——它是一个**具备自我反思闭环的多代理人公司运行时**。
+
+| 模式 | 说明 |
+|:---:|------|
+| 🔄 **标准模式** | 对每个回答自动评分（0-10），低于 8 分自动进入反思回圈，迭代改进直到达标 |
+| 🏢 **公司模式** | Manager 分解任务 → 多角色并行执行 → Reviewer 审查 → Synthesizer 整合，像一家真正的软体公司运作 |
+| 🏭 **OPC 模式** | 感知 → 预处理 → 分析 → 诊断 → 决策 → 执行，6 级工业闭环 |
+| ☁️ **云控制台** | 费用账单、资源监控、告警中心、实例管理——像 AWS 一样管理你的 AI 基础设施 |
 
 ```mermaid
 graph LR
-    A[使用者查詢] --> B{模式路由}
-    B -->|標準| C[生成回答]
+    A[使用者查询] --> B{模式路由}
+    B -->|标准| C[生成回答]
     B -->|公司| D[Manager 分解]
-    B -->|OPC| E[6 級工業閉環]
-    C --> F[評估評分]
-    D --> G[多角色平行執行]
-    G --> H[Reviewer 審查]
+    B -->|OPC| E[6 级工业闭环]
+    C --> F[评估评分]
+    D --> G[多角色并行执行]
+    G --> H[Reviewer 审查]
     H --> F
     E --> F
-    F -->|分數 < 8| I[反思 → 改進]
+    F -->|分数 < 8| I[反思 → 改进]
     I --> F
-    F -->|分數 ≥ 8| J[存入記憶庫]
+    F -->|分数 ≥ 8| J[存入记忆库]
 ```
 
 ---
 
-## 🏗️ 架構總覽
+## 🏗️ 架构总览
 
 ```
-┌──────────────────────────────────────────────────┐
-│                    🖥️ 前端 (React + Vite)          │
-│  ActivityBar │ SidePanel │ MonitorView │ Chat    │
-│  雲控制台 · 控制面版 · OPC 監控 · Docker 管理     │
-└──────────────────────┬───────────────────────────┘
-                       │ REST API
-┌──────────────────────┴───────────────────────────┐
-│               ⚙️ 後端 (FastAPI + LangGraph)        │
-│                                                   │
-│  ┌─────────────┐  ┌──────────────┐  ┌──────────┐ │
-│  │ 反思閉環     │  │ 公司運行時    │  │ OPC 整合 │ │
-│  │ generate     │  │ orchestrator │  │ sense    │ │
-│  │ evaluate     │  │ decomposer   │  │ analyze  │ │
-│  │ reflect      │  │ reviewer     │  │ diagnose │ │
-│  │ improve      │  │ synthesizer  │  │ act      │ │
-│  └─────────────┘  └──────────────┘  └──────────┘ │
-│                                                   │
-│  ┌──────────────────────────────────────────────┐ │
-│  │ 雲控制台 (Cloud Console)                      │ │
-│  │ CloudBilling · CloudMonitor · CloudAlerts     │ │
-│  │ DockerManager · BudgetManager · EventBus      │ │
-│  └──────────────────────────────────────────────┘ │
-└──────────────────────┬───────────────────────────┘
-                       │
-┌──────────────────────┴───────────────────────────┐
-│               🗄️ 基礎設施 (Docker Compose)         │
-│  Redis · ChromaDB · OPC Simulator · Nginx        │
-└──────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                        🖥️ 前端 (React + Vite)                     │
+│    ActivityBar │ SidePanel │ ChatView │ MonitorView │ TraceView  │
+│    IDE 风格布局 · 即时任务追踪 · OPC 监控 · 执行轨迹可视化          │
+└───────────────────────────────┬──────────────────────────────────┘
+                                │ REST API + WebSocket
+┌───────────────────────────────┴──────────────────────────────────┐
+│                    ⚙️ 后端 (FastAPI + LangGraph)                  │
+│                                                                   │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐   │
+│  │    反思闭环      │  │    公司运行时    │  │    OPC 整合     │   │
+│  │  ─────────────  │  │  ─────────────  │  │  ─────────────  │   │
+│  │  generate       │  │  orchestrator   │  │  sense          │   │
+│  │  evaluate       │  │  decomposer     │  │  preprocess     │   │
+│  │  reflect        │  │  reviewer       │  │  analyze        │   │
+│  │  improve        │  │  synthesizer    │  │  diagnose       │   │
+│  │                 │  │  budget         │  │  decide / act   │   │
+│  └─────────────────┘  └─────────────────┘  └─────────────────┘   │
+│                                                                   │
+│  ┌─────────────────────────────────────────────────────────────┐ │
+│  │  基础设施服务：TaskManager · Archiver · TraceLogger · EventBus │ │
+│  └─────────────────────────────────────────────────────────────┘ │
+└───────────────────────────────┬──────────────────────────────────┘
+                                │
+┌───────────────────────────────┴──────────────────────────────────┐
+│                    🗄️ 基础设施 (Docker Compose)                   │
+│         Redis · ChromaDB · OPC Simulator · Nginx                 │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-### 公司模式內部流程
+### 公司模式内部流程
 
 ```
-Manager 分解目標
-  │  TaskDecomposer（LLM / 模板 / 規則 三策略）
+Manager 分解目标
+  │  TaskDecomposer（LLM / 模板 / 规则 三策略）
   ▼
-工作項 DAG（依賴 + 優先級排序）
+工作项 DAG（依赖 + 优先级排序）
   │
   ▼
-平行執行池（Semaphore 限流，預設 4 並行）
-  │  Developer 角色依優先級執行
+并行执行池（Semaphore 限流，预设 4 并行）
+  │  Developer 角色依优先级执行
   ▼
-Reviewer 審查閘
-  ├─ ✅ 通過 → Done
-  └─ ❌ 不通過 → Rework（最多 N 輪，失敗後角色升級）
+Reviewer 审查闸
+  ├─ ✅ 通过 → Done
+  └─ ❌ 不通过 → Rework（最多 N 轮，失败后角色升级）
   ▼
-Synthesizer 整合 → Manager 最終審查
+Synthesizer 整合 → Manager 最终审查
   │
   ▼
-外部反思迴圈（評估 → 反思 → 改進）
+外部反思回圈（评估 → 反思 → 改进）
 ```
 
 ---
 
-## 📁 專案結構
+## 📁 项目结构
 
 ```
 evoloop/
-├── backend/                     # FastAPI 後端 + LangGraph 核心
-│   ├── main.py                  #   應用入口（/chat /tasks /dashboard /cloud/*）
-│   ├── core/                    #   圖定義、狀態、LLM 調用層
-│   │   ├── graph.py             #     反思迴圈圖（標準/公司/OPC 路由）
-│   │   ├── nodes.py             #     標準節點（生成/評估/反思/改進）
-│   │   ├── company_nodes.py     #     公司節點（路由/執行/收集）
-│   │   ├── llm.py               #     LiteLLM 統一調用層
+├── backend/                     # FastAPI 后端 + LangGraph 核心
+│   ├── main.py                  #   应用入口（/chat /tasks /dashboard /trace）
+│   ├── core/                    #   图定义、状态、LLM 调用层
+│   │   ├── graph.py             #     反思回圈图（标准/公司/OPC 路由）
+│   │   ├── nodes.py             #     标准节点（生成/评估/反思/改进）
+│   │   ├── company_nodes.py     #     公司节点（路由/执行/收集）
+│   │   ├── llm.py               #     LiteLLM 统一调用层
 │   │   └── state.py             #     EvoLoopState
-│   ├── company/                 #   多代理人公司運行時
-│   │   ├── orchestrator.py      #     公司協調器（含 Docker 預算管控）
-│   │   ├── decomposer.py        #     任務拆分器（獨立主模組）
-│   │   ├── budget.py            #     預算控制 + 模型路由 + Docker 成本
-│   │   ├── docker_tools.py      #     Docker 工具定義 + 按時計費費率
-│   │   ├── work_item.py         #     工作項狀態機 + 依賴 DAG
-│   │   ├── roles.py             #     角色定義 + 組織模板
-│   │   ├── events.py            #     EventBus 生命週期事件
-│   │   ├── run_log.py           #     持久化運行日誌 (JSONL)
+│   ├── company/                 #   多代理人公司运行时
+│   │   ├── orchestrator.py      #     公司协调器
+│   │   ├── decomposer.py        #     任务拆分器（独立主模组）
+│   │   ├── budget.py            #     预算控制 + 模型路由
+│   │   ├── work_item.py         #     工作项状态机 + 依赖 DAG
+│   │   ├── roles.py             #     角色定义 + 组织模板
+│   │   ├── events.py            #     EventBus 生命周期事件
+│   │   ├── run_log.py           #     持久化运行日志 (JSONL)
 │   │   └── prompts.py           #     Prompt 模板（PromptConfig）
-│   ├── services/                #   營運服務
-│   │   ├── docker_manager.py    #     Docker 容器管理（SDK 封裝 + Stub 降級）
-│   │   ├── cloud_console.py     #     雲控制台（計費/監控/告警/事件）
-│   │   ├── task_manager.py      #     後台任務管理器
+│   ├── services/                #   营运服务
+│   │   ├── task_manager.py      #     后台任务管理器
+│   │   ├── trace_logger.py      #     执行轨迹记录器
 │   │   ├── dashboard.py         #     控制面版聚合
 │   │   └── archiver.py          #     文本化存檔 (JSONL)
-│   ├── memory/                  #   向量記憶庫 (ChromaDB)
-│   ├── scripts/                 #   工具腳本
-│   └── tests/                   #   185 個測試案例
-├── opc_service/                 # OPC UA 工業微服務
+│   ├── memory/                  #   向量记忆库 (ChromaDB)
+│   └── tests/                   #   185 个测试案例
+├── opc_service/                 # OPC UA 工业微服务
 │   ├── main.py                  #   FastAPI 入口
-│   ├── client/                  #   OPC UA 客戶端
+│   ├── client/                  #   OPC UA 客户端
 │   ├── routes/                  #   REST + WebSocket
-│   ├── guard.py                 #   安全護欄（白名單/邊界檢查）
-│   └── simulator/               #   模擬 OPC 伺服器
+│   ├── guard.py                 #   安全护栏（白名单/边界检查）
+│   └── simulator/               #   模拟 OPC 伺服器
 ├── frontend/                    # React + Vite + TypeScript
 │   └── src/
-│       ├── components/          #   UI 組件（IDE 風格佈局）
-│       │   ├── CloudConsoleView.tsx  #   雲控制台
-│       │   ├── MonitorView.tsx       #   監控視圖
-│       │   ├── DockerView.tsx        #   容器管理
-│       │   ├── StatusBar.tsx         #   全局狀態欄
+│       ├── components/          #   UI 组件（IDE 风格布局）
+│       │   ├── AppShell.tsx     #     布局容器
+│       │   ├── ChatView.tsx     #     聊天视图
+│       │   ├── MessageBubble.tsx#     消息气泡
+│       │   ├── InputBar.tsx     #     输入栏
+│       │   ├── MonitorView.tsx  #     监控视图
+│       │   ├── TraceView.tsx    #     执行轨迹
 │       │   └── ...
-│       ├── api/client.ts        #   API 客戶端
-│       └── types.ts             #   TypeScript 型別
-├── docker-compose.yml           # 五服務編排
-├── docker-compose.dev.yml       # 開發模式（熱重載）
+│       ├── api/client.ts        #   API 客户端
+│       └── types.ts             #   TypeScript 型别
+├── docker-compose.yml           # 五服务编排
+├── docker-compose.dev.yml       # 开发模式（热重载）
 └── requirements.txt
 ```
 
@@ -159,207 +173,249 @@ evoloop/
 
 ## ✨ 核心能力
 
-### 🔄 反思閉環
+### 🔄 反思闭环
 
-| 特性 | 說明 |
+| 特性 | 说明 |
 |------|------|
-| 自動評分 | 0-10 分，門檻可配置（預設 8） |
-| 迭代改進 | 最多 N 輪（預設 3），避免無限循環 |
-| 記憶注入 | 成功經驗存入 ChromaDB，做 few-shot 參考 |
-| 文本存檔 | JSONL 結構化保存，支援審計與回溯 |
+| 自动评分 | 0-10 分，门槛可配置（预设 8） |
+| 迭代改进 | 最多 N 轮（预设 3），避免无限循环 |
+| 记忆注入 | 成功经验存入 ChromaDB，做 few-shot 参考 |
+| 文本存档 | JSONL 结构化保存，支援审计与回溯 |
 
 ### 🏢 多代理人公司
 
-| 特性 | 說明 |
+| 特性 | 说明 |
 |------|------|
-| 層級角色 | Level 0-4，Manager → Tech Lead → Domain Lead → Executor → Support |
-| 組織模板 | `page_dev` / `fullstack_app` / `research_report` / `quick_task` / `full_company` |
-| 任務拆分 | LLM · 模板 · 規則 三策略，預算壓力下自動降級 |
-| 工作項狀態機 | Planning → Ready → Executing → In Review → Rework / Done / Blocked |
-| 依賴 DAG | 無依賴並行，有依賴等待上游 |
-| 審查閘 | Reviewer 審查不通過 → 退回修改（最多 N 輪） |
-| 角色升級 | LLM 失敗後自動升級到上級角色處理 |
+| 层级角色 | Level 0-4，Manager → Tech Lead → Domain Lead → Executor → Support |
+| 组织模板 | `page_dev` / `fullstack_app` / `research_report` / `quick_task` / `full_company` |
+| 任务拆分 | LLM · 模板 · 规则 三策略，预算压力下自动降级 |
+| 工作项状态机 | Planning → Ready → Executing → In Review → Rework / Done / Blocked |
+| 依赖 DAG | 无依赖并行，有依赖等待上游 |
+| 审查闸 | Reviewer 审查不通过 → 退回修改（最多 N 轮） |
+| 角色升级 | LLM 失败后自动升级到上级角色处理 |
 
-### 💰 預算與 Docker 管控（公司全權控制）
+### 💰 预算管控
 
-| 特性 | 說明 |
+| 特性 | 说明 |
 |------|------|
-| 按時計費 | 阿里雲 ECS 模型：容器 uptime × 小時費率 |
-| 預算壓力 | Docker 成本計入公司總預算，影響模型路由決策 |
-| 自動優化 | 壓力 ≥ 90% → 自動停止非核心容器；≥ 70% → 建議停止 |
-| 費率透明 | 5 種服務費率（backend $0.02/h · opc $0.015/h · frontend $0.01/h · redis $0.005/h · chroma $0.005/h） |
-| 成本快照 | 任務開始/結束自動記錄 Docker 成本差異 |
+| 模型路由 | 依任务复杂度选择 tier（routine / normal / critical） |
+| 预算压力 | 软限制提醒 + 硬限制停止 |
+| 成本追踪 | 每笔 LLM 调用记录 token 数与费用 |
 
-### ☁️ 雲控制台
+### 🏭 OPC UA 工业整合
 
-```
-費用帳單                    資源監控
-📊 今日/本月/預估費用        📈 CPU · 記憶體 · 網路 SVG 折線圖
-各服務費用佔比進度條          1h / 6h / 24h 範圍切換
-                             後台 60s 自動輪詢
-
-實例管理                    告警中心
-🐳 容器啟停 · 日誌 · 健康     ⚠️ CPU/記憶體閾值規則
-按時費率顯示 · 費用計算        JSON 持久化 · 觸發歷史時間線
-```
-
-### 🏭 OPC UA 工業整合
-
-| 特性 | 說明 |
+| 特性 | 说明 |
 |------|------|
-| 6 級閉環 | 感知 → 預處理 → 分析 → 診斷 → 決策 → 執行 |
-| 安全護欄 | 寫入白名單 + 數值邊界檢查 + 審計日誌 |
-| 模擬伺服器 | 內建溫度/壓力/流量/閥門/馬達模擬 |
-| 雙協議 | REST API + WebSocket 即時訂閱 |
+| 6 级闭环 | 感知 → 预处理 → 分析 → 诊断 → 决策 → 执行 |
+| 安全护栏 | 写入白名单 + 数值边界检查 + 审计日志 |
+| 模拟伺服器 | 内建温度/压力/流量/阀门/马达模拟 |
+| 双协议 | REST API + WebSocket 即时订阅 |
 
-### 🔧 工程品質
+### 🔧 工程品质
 
-| 特性 | 說明 |
+| 特性 | 说明 |
 |------|------|
-| 事件系統 | 13 種 CompanyEvent，非阻塞 EventBus，監聽器異常不中斷主流程 |
-| 檢查點 | 序列化/反序列化完整運行狀態，支援中斷恢復 |
-| 後台任務 | 非同步執行，Redis 持久化（TTL 7 天），記憶體降級 |
-| 能力註冊表 | 六大能力模組即時狀態一覽 |
+| 事件系统 | 13 种 CompanyEvent，非阻塞 EventBus |
+| 检查点 | 序列化/反序列化完整运行状态，支援中断恢复 |
+| 后台任务 | 非同步执行，Redis 持久化（TTL 7 天），记忆体降级 |
+| 执行轨迹 | 完整记录每个节点的输入输出，可视化追踪 |
 
 ---
 
-## 🚀 快速開始
+## 🚀 快速开始
 
-### 環境需求
+### 环境需求
 
-- **Python** 3.10–3.12
-- **Node.js** 20+
-- **Docker**（可選，用於容器化部署）
+| 工具 | 版本 | 说明 |
+|------|------|------|
+| Python | 3.10–3.12 | 后端运行时 |
+| Node.js | 20+ | 前端构建 |
+| Docker | 可选 | 容器化部署 |
 
-### 一鍵安裝
+### 1️⃣ 安装
 
 ```powershell
-# 1. 虛擬環境
+# 克隆仓库
+git clone https://github.com/iiooiioo888/Evoloop.git
+cd Evoloop
+
+# 虚拟环境
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 
-# 2. 安裝依賴
+# 安装依赖
 pip install -r requirements.txt
 
-# 3. 設定環境變數
+# 设定环境变数
 copy .env.example .env
+# 编辑 .env 填入你的 API 金钥
+```
 
-# 4. 驗證
+### 2️⃣ 验证安装
+
+```powershell
+# LLM 连线测试
 python backend/scripts/test_llm_connection.py
+
+# 运行测试（无需 API 金钥）
 pytest backend/tests/ -q
 ```
 
-### 啟動服務
+### 3️⃣ 启动服务
 
 ```powershell
-# 後端（含熱重載）
+# 后端 API（http://localhost:8000）
 python -m backend.main
 
-# 前端（Vite HMR）
+# 前端（http://localhost:5173）
 cd frontend && npm install && npm run dev
 
-# OPC 微服務（含模擬伺服器）
+# OPC 微服务（可选，含模拟伺服器）
 $env:OPC_SIM_ENABLED="true"; python -m opc_service.main
 ```
 
-### Docker Compose 一鍵部署
+### Docker Compose 一键部署
 
 ```powershell
-# 開發模式（熱重載）
+# 全部服务
 docker compose up -d
 
-# 僅基礎設施
+# 仅基础设施（Redis + ChromaDB）
 docker compose up -d redis chroma
 
-# 單獨構建
-docker compose up -d --build backend
+# 查看日志
+docker compose logs -f backend
 ```
 
-| 服務 | 埠 | 說明 |
-|------|-----|------|
+| 服务 | 端口 | 说明 |
+|------|------|------|
 | `backend` | 8000 | FastAPI + LangGraph 核心 |
 | `frontend` | 5173 / 80 | React + Vite（dev/prod） |
-| `opc_service` | 8001 | OPC UA 微服務 |
-| `redis` | 6379 | 任務持久化 |
-| `chroma` | 8100 | 向量記憶庫 |
+| `opc_service` | 8001 | OPC UA 微服务 |
+| `redis` | 6379 | 任务持久化 |
+| `chroma` | 8100 | 向量记忆库 |
 
 ---
 
-## ⚙️ 環境變數
+## ⚙️ 环境变数
 
-| 變數 | 預設值 | 說明 |
+| 变数 | 预设值 | 说明 |
 |------|--------|------|
-| `OPENAI_API_KEY` | — | **必填**，LLM 金鑰（支援 OpenAI / Claude / Gemini） |
-| `EVOL_MODEL` | `gpt-4o` | 預設模型 |
-| `EVOL_PASS_THRESHOLD` | `8` | 反思迴圈通過門檻 |
-| `EVOL_MAX_ITERATIONS` | `3` | 最大迭代次數 |
-| `REDIS_URL` | `redis://localhost:6379/0` | Redis 連線 |
-| `CHROMA_HOST` / `CHROMA_PORT` | `localhost` / `8100` | ChromaDB 連線 |
-| `OPC_SIM_ENABLED` | `false` | 啟用模擬 OPC 伺服器 |
-| `OPC_WRITE_WHITELIST` | — | 寫入白名單（逗號分隔） |
+| `OPENAI_API_KEY` | — | **必填**，LLM 金钥（支援 OpenAI / Claude / Gemini） |
+| `EVOL_MODEL` | `gpt-4o` | 预设模型 |
+| `EVOL_PASS_THRESHOLD` | `8` | 反思回圈通过门槛 |
+| `EVOL_MAX_ITERATIONS` | `3` | 最大迭代次数 |
+| `REDIS_URL` | `redis://localhost:6379/0` | Redis 连线 |
+| `CHROMA_HOST` / `CHROMA_PORT` | `localhost` / `8100` | ChromaDB 连线 |
+| `OPC_SIM_ENABLED` | `false` | 启用模拟 OPC 伺服器 |
+| `OPC_WRITE_WHITELIST` | — | 写入白名单（逗号分隔） |
 
 ---
 
-## 🧪 測試
+## 🧪 测试
 
 ```powershell
-# 全部測試（185 案例，無需 API 金鑰）
+# 全部测试（185 案例，无需 API 金钥）
 pytest backend/tests/ -q
 
-# 分類測試
-pytest backend/tests/test_company.py        # 公司模式（預算/角色/事件/檢查點）
-pytest backend/tests/test_docker_manager.py # Docker 管理（容器/工具/API）
-pytest backend/tests/test_opc_service.py    # OPC 工業閉環
-pytest backend/tests/test_reflection_loop.py# 反思迴圈
-pytest backend/tests/test_architecture.py   # 架構約束
+# 分类测试
+pytest backend/tests/test_company.py         # 公司模式
+pytest backend/tests/test_opc_service.py     # OPC 工业闭环
+pytest backend/tests/test_reflection_loop.py # 反思回圈
+pytest backend/tests/test_architecture.py    # 架构约束
 ```
 
-| 測試類別 | 案例數 | 涵蓋範圍 |
+| 测试类别 | 案例数 | 涵盖范围 |
 |----------|--------|----------|
-| 公司模式 | 84 | 工作項狀態機、預算管理、模型路由、任務拆分、事件系統、檢查點、優先級 |
-| Docker 管理 | 39 | 容器操作、健康檢查、工具權限、API 端點、Stub 降級 |
-| OPC 服務 | 15 | 6 級閉環、安全護欄、審計日誌 |
-| 反思迴圈 | 4 | 高分通過、低分迭代、記憶注入 |
-| 架構約束 | 8 | LLM 調用層、安全護欄、禁止操作 |
-| 控制面版 | 3 | 儀表板聚合、降級安全 |
-| 文本存檔 | 4 | JSONL 寫入、反思映射 |
+| 公司模式 | 84 | 工作项状态机、预算管理、模型路由、任务拆分、事件系统、检查点、优先级 |
+| Docker 管理 | 39 | 容器操作、健康检查、工具权限、API 端点、Stub 降级 |
+| OPC 服务 | 15 | 6 级闭环、安全护栏、审计日志 |
+| 反思回圈 | 4 | 高分通过、低分迭代、记忆注入 |
+| 架构约束 | 8 | LLM 调用层、安全护栏、禁止操作 |
+| 控制面版 | 3 | 仪表板聚合、降级安全 |
+| 文本存档 | 4 | JSONL 写入、反思映射 |
 
 ---
 
-## 🛠️ 技術棧
+## 🛠️ 技术栈
 
-| 層級 | 技術 | 用途 |
+| 层级 | 技术 | 用途 |
 |------|------|------|
-| 核心閉環 | LangGraph + LiteLLM | 反思迴圈圖 + 多模型路由 |
-| 後端 | FastAPI + uvicorn | REST API 服務 |
-| 公司運行時 | 自研 (company/) | 多代理人協調 · 預算管控 · Docker 控制 |
-| 向量資料庫 | ChromaDB | 記憶存儲與相似檢索 |
-| 快取 | Redis | 任務持久化 · 會話狀態 |
-| 工業協議 | OPC UA (asyncua) | 工業數據讀寫與訂閱 |
-| 容器管理 | Docker SDK | 容器生命週期 · 資源監控 · 按時計費 |
-| 前端 | React 18 + Vite + TypeScript | IDE 風格 UI · Tailwind CSS v4 |
-| 測試 | pytest + pytest-asyncio | 185 案例 · Mock 隔離 |
-| 部署 | Docker Compose | 五服務一鍵編排 |
+| 核心闭环 | LangGraph + LiteLLM | 反思回圈图 + 多模型路由 |
+| 后端 | FastAPI + uvicorn | REST API 服务 |
+| 公司运行时 | 自研 (company/) | 多代理人协调 · 预算管控 |
+| 向量资料库 | ChromaDB | 记忆存储与相似检索 |
+| 快取 | Redis | 任务持久化 · 会话状态 |
+| 工业协议 | OPC UA (asyncua) | 工业数据读写与订阅 |
+| 前端 | React 18 + Vite + TypeScript | IDE 风格 UI · Tailwind CSS v4 |
+| 测试 | pytest + pytest-asyncio | 185 案例 · Mock 隔离 |
+| 部署 | Docker Compose | 五服务一键编排 |
 
 ---
 
-## 🗺️ 路線圖
+## ❓ 常见问题
 
-| 階段 | 內容 | 狀態 |
+<details>
+<summary><b>Q: 测试失败，出现 OSError: could not create numbered dir</b></summary>
+
+这是 Windows 临时目录权限问题。已在 `pyproject.toml` 中配置使用项目内临时目录：
+
+```toml
+[tool.pytest.ini_options]
+addopts = "-v --basetemp=.pytest_tmp"
+```
+
+如仍有问题，手动指定：`pytest backend/tests/ --basetemp=.pytest_tmp`
+</details>
+
+<details>
+<summary><b>Q: 支援哪些 LLM 供应商？</b></summary>
+
+通过 LiteLLM 统一调用层，支援：
+- OpenAI (GPT-4o, GPT-4, GPT-3.5)
+- Anthropic (Claude 3.5/3)
+- Google (Gemini Pro/Flash)
+- Azure OpenAI
+- 其他 LiteLLM 支援的模型
+
+只需设定对应的 API Key 环境变量即可。
+</details>
+
+<details>
+<summary><b>Q: 如何自定义公司模式的组织模板？</b></summary>
+
+参考 `backend/company/roles.py` 中的模板定义，可通过 `CompanyConfig` 传入自定义角色和模板。详见 `backend/tests/test_company.py` 中的 `TestPromptConfig` 测试案例。
+</details>
+
+<details>
+<summary><b>Q: OPC 模式需要真实工业设备吗？</b></summary>
+
+不需要。设定 `OPC_SIM_ENABLED=true` 即可使用内建模拟伺服器进行测试。
+</details>
+
+---
+
+## 🗺️ 路线图
+
+| 阶段 | 内容 | 状态 |
 |------|------|:----:|
-| Phase 0 | 環境建設 | ✅ |
-| Phase 1 | 核心反思閉環 | ✅ |
-| Phase 2 | 向量記憶庫 (ChromaDB) | ✅ |
-| Phase 3 | FastAPI 服務 | ✅ |
-| Phase 4 | 前端介面 (IDE 風格) | ✅ |
-| Phase 5 | DSPy 提示優化 | ⏳ |
-| Phase 6 | 多代理人公司運行時 | ✅ |
-| Phase 7 | OPC UA 工業整合 | ✅ |
-| Phase 8 | 雲控制台 · Docker 預算管控 | ✅ |
-| Phase 9 | 文件 · 持續完善 | 🔄 |
+| Phase 0 | 环境建设 | ✅ |
+| Phase 1 | 核心反思闭环 | ✅ |
+| Phase 2 | 向量记忆库 (ChromaDB) | ✅ |
+| Phase 3 | FastAPI 服务 | ✅ |
+| Phase 4 | 前端介面 (IDE 风格) | ✅ |
+| Phase 5 | DSPy 提示优化 | ⏳ |
+| Phase 6 | 多代理人公司运行时 | ✅ |
+| Phase 7 | OPC UA 工业整合 | ✅ |
+| Phase 8 | 执行轨迹可视化 | ✅ |
+| Phase 9 | 文件 · 持续完善 | 🔄 |
 
 ---
 
-<p align="center">
-  <sub>Built with ❤️ using Python · LangGraph · React · Docker</sub>
-</p>
+<div align="center">
+
+**Built with ❤️ using Python · LangGraph · React · Docker**
+
+[⬆ 回到顶部](#-evoloop)
+
+</div>

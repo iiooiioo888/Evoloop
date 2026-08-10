@@ -12,6 +12,12 @@ interface TaskPanelProps {
   task: TaskProgress;
   /** 設定後顯示「開啟任務頁面」按鈕 */
   onOpenFull?: () => void;
+  /** 取消任務回調 */
+  onCancel?: (taskId: string) => void;
+  /** 斷點續跑回調 */
+  onResume?: (taskId: string) => void;
+  /** 查看執行軌跡回調 */
+  onOpenTrace?: (taskId: string) => void;
 }
 
 // ── 階段定義（匯出供整頁視圖复用） ──
@@ -94,6 +100,9 @@ export const EVENT_LABELS: Record<string, string> = {
   work_item_error: '❌ 執行失敗',
   work_item_retry: '🔁 重試',
   work_item_escalate: '⬆️ 升級處理',
+  tool_call: '🔧 調用工具',
+  tool_result: '📥 工具結果',
+  cancel_requested: '🚫 請求取消',
   review_pass: '👌 審查通過',
   review_rework: '↩️ 審查退回',
   review_force_done: '⚠️ 強制完成',
@@ -115,13 +124,15 @@ export function elapsed(ts: number): string {
   return `${Math.floor(min / 60)} 小時前`;
 }
 
-export default function TaskPanel({ task, onOpenFull }: TaskPanelProps) {
+export default function TaskPanel({ task, onOpenFull, onCancel, onResume, onOpenTrace }: TaskPanelProps) {
   const [showTimeline, setShowTimeline] = useState(false);
+  const [resuming, setResuming] = useState(false);
   const isCompany = task.mode === 'company';
   const isOPC = task.mode === 'opc';
+  const isCancelled = task.status === 'cancelled';
   const phases = isOPC ? OPC_PHASES : isCompany ? COMPANY_PHASES : STANDARD_PHASES;
   const running = task.status === 'running' || task.status === 'pending';
-  const failed = task.status === 'failed';
+  const failed = task.status === 'failed' || isCancelled;
   const currentIdx = phaseIndex(phases, task.phase);
   const phasePassed = (i: number) => (failed ? i < currentIdx : i < currentIdx || (!running && i <= currentIdx));
 
@@ -180,6 +191,15 @@ export default function TaskPanel({ task, onOpenFull }: TaskPanelProps) {
   const doneCount = task.kanban.done?.length ?? 0;
   const totalCount = Object.values(task.kanban).reduce((s, items) => s + items.length, 0);
 
+  // ── 工具調用狀態（Agent 工具閉環可視化）──
+  const toolCalls = task.events.filter((e) => e.event === 'tool_call');
+  const toolResults = task.events.filter((e) => e.event === 'tool_result');
+  // 最近一次工具調用（用於執行中顯示）
+  const lastToolCall = toolCalls[toolCalls.length - 1];
+  const lastToolResult = toolResults[toolResults.length - 1];
+  // 判斷最近調用是否仍在進行中（無對應結果）
+  const toolPending = lastToolCall && (!lastToolResult || lastToolResult.ts < lastToolCall.ts);
+
   return (
     <div className="mb-2 w-full min-w-[240px] rounded-xl border border-white/8 bg-gradient-to-b from-gray-900/90 to-gray-900/60 p-3 text-xs shadow-lg shadow-black/20">
       {/* ── 標題列 ── */}
@@ -187,7 +207,7 @@ export default function TaskPanel({ task, onOpenFull }: TaskPanelProps) {
         {running && (
           <span className="inline-block h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
         )}
-        {failed && <span>❌</span>}
+        {failed && <span>{isCancelled ? '🚫' : '❌'}</span>}
         {task.status === 'completed' && <span>✅</span>}
         <span className="font-medium text-gray-100">
           {isOPC ? '🏭 OPC 診斷' : isCompany ? '🏢 公司任務' : '⚙️ 反思任務'}
@@ -195,10 +215,37 @@ export default function TaskPanel({ task, onOpenFull }: TaskPanelProps) {
         <span className="truncate text-gray-500">
           {running
             ? `${phases[currentIdx]?.label ?? task.phase}${totalCount > 0 ? ` · ${doneCount}/${totalCount} 工作項` : ''}`
-            : failed
-              ? '執行失敗'
-              : `評分 ${task.score ?? '-'} · 迭代 ${task.iteration}`}
+            : isCancelled
+              ? '已取消'
+              : failed
+                ? '執行失敗'
+                : `評分 ${task.score ?? '-'} · 迭代 ${task.iteration}`}
         </span>
+        {/* 取消按鈕：執行中且未請求取消時顯示 */}
+        {running && !task.cancel_requested && onCancel && (
+          <button
+            onClick={() => onCancel(task.task_id)}
+            className="ml-auto shrink-0 rounded border border-red-500/40 bg-red-500/10 px-1.5 py-0.5 text-[10px] text-red-300 transition-colors hover:bg-red-500/20"
+          >
+            ✕ 取消
+          </button>
+        )}
+        {running && task.cancel_requested && (
+          <span className="ml-auto shrink-0 text-[10px] text-yellow-400">取消中...</span>
+        )}
+        {/* 斷點續跑按鈕：任務失敗/取消且有檢查點時顯示 */}
+        {!running && task.resumable && onResume && (
+          <button
+            onClick={() => {
+              setResuming(true);
+              onResume(task.task_id);
+            }}
+            disabled={resuming}
+            className="ml-auto shrink-0 rounded border border-[#5e6ad2]/50 bg-[#5e6ad2]/10 px-1.5 py-0.5 text-[10px] text-[#828fff] transition-colors hover:bg-[#5e6ad2]/20 disabled:opacity-50"
+          >
+            {resuming ? '恢復中...' : '▶ 斷點續跑'}
+          </button>
+        )}
       </div>
 
       {/* ── 階段進度條（執行中帶流光） ── */}
@@ -233,6 +280,26 @@ export default function TaskPanel({ task, onOpenFull }: TaskPanelProps) {
       {/* ── 錯誤訊息 ── */}
       {failed && task.error && (
         <p className="mt-2 rounded-lg border border-red-500/25 bg-red-500/10 px-2.5 py-1.5 leading-relaxed text-red-300">⚠️ {task.error}</p>
+      )}
+
+      {/* ── Agent 工具調用狀態 ── */}
+      {isCompany && toolCalls.length > 0 && (
+        <div className="mt-2 rounded-lg border border-cyan-500/20 bg-cyan-500/5 px-2.5 py-1.5">
+          <p className="flex items-center gap-1.5 text-[11px] text-cyan-300">
+            {toolPending && (
+              <span className="inline-block h-2.5 w-2.5 animate-spin rounded-full border-2 border-cyan-400 border-t-transparent" />
+            )}
+            🔧 {toolPending
+              ? `正在調用工具 ${String(lastToolCall.data.tool ?? '')}...`
+              : `已調用 ${toolCalls.length} 次工具`}
+          </p>
+          {!toolPending && lastToolResult && (
+            <p className="mt-0.5 truncate text-[10px] text-gray-500">
+              {lastToolResult.data.success ? '✓' : '✗'} {String(lastToolResult.data.tool ?? '')}
+              {lastToolResult.data.observation ? `：${String(lastToolResult.data.observation).slice(0, 80)}` : ''}
+            </p>
+          )}
+        </div>
       )}
 
       {/* ══ 公司模式：角色流水線（PysdnOPC 風格） ══ */}
@@ -327,11 +394,14 @@ export default function TaskPanel({ task, onOpenFull }: TaskPanelProps) {
                   <span className={`absolute -left-[19px] top-1.5 h-1.5 w-1.5 rounded-full ${
                     e.event === 'work_item_error' ? 'bg-red-400'
                       : e.event === 'work_item_done' || e.event === 'review_pass' || e.event === 'company_done' ? 'bg-green-400'
-                        : 'bg-blue-400/80'
+                        : e.event === 'tool_call' || e.event === 'tool_result' ? 'bg-cyan-400'
+                          : 'bg-blue-400/80'
                   }`} />
                   <span className="shrink-0 text-gray-300">{EVENT_LABELS[e.event] ?? e.event}</span>
                   <span className="min-w-0 flex-1 truncate text-gray-500">
-                    {String(e.data.title ?? e.data.phase ?? '')}
+                    {e.event === 'tool_call' || e.event === 'tool_result'
+                      ? String(e.data.tool ?? '')
+                      : String(e.data.title ?? e.data.phase ?? '')}
                   </span>
                   <span className="shrink-0 text-gray-600">{elapsed(e.ts)}</span>
                 </div>
@@ -349,15 +419,25 @@ export default function TaskPanel({ task, onOpenFull }: TaskPanelProps) {
         </p>
       )}
 
-      {/* ── 開啟整頁任務視圖 ── */}
-      {onOpenFull && (
-        <button
-          onClick={onOpenFull}
-          className="mt-2.5 w-full rounded-lg border border-gray-700/70 bg-gray-800/40 py-1.5 text-[11px] font-medium text-gray-300 transition-all duration-200 hover:border-blue-500/70 hover:bg-blue-500/10 hover:text-blue-300 active:scale-[0.98]"
-        >
-          ⛶ 開啟任務頁面
-        </button>
-      )}
+      {/* ── 操作按鈕列 ── */}
+      <div className="mt-2.5 flex gap-1.5">
+        {onOpenFull && (
+          <button
+            onClick={onOpenFull}
+            className="flex-1 rounded-lg border border-gray-700/70 bg-gray-800/40 py-1.5 text-[11px] font-medium text-gray-300 transition-all duration-200 hover:border-blue-500/70 hover:bg-blue-500/10 hover:text-blue-300 active:scale-[0.98]"
+          >
+            ⛶ 開啟任務頁面
+          </button>
+        )}
+        {onOpenTrace && (
+          <button
+            onClick={() => onOpenTrace(task.task_id)}
+            className="flex-1 rounded-lg border border-gray-700/70 bg-gray-800/40 py-1.5 text-[11px] font-medium text-gray-300 transition-all duration-200 hover:border-[#5e6ad2]/70 hover:bg-[#5e6ad2]/10 hover:text-[#828fff] active:scale-[0.98]"
+          >
+            📜 思考過程
+          </button>
+        )}
+      </div>
     </div>
   );
 }

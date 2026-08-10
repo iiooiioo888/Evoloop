@@ -11,12 +11,17 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+import asyncio
+import json as json_mod
+
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from backend.core.graph import evoloop_graph
-from backend.core.llm import call_llm
+from backend.core.graph import MAX_ITERATIONS, PASS_THRESHOLD, evoloop_graph
+from backend.core import nodes
+from backend.core.llm import call_llm, call_llm_stream
 from backend.core.llm_config import get_runtime_config, masked_key, save_runtime_config
 from backend.services.dashboard import collect_dashboard
 from backend.services.docker_manager import get_docker_manager
@@ -27,6 +32,7 @@ from backend.services.cloud_console import (
     get_cloud_events,
     get_cloud_monitor,
 )
+from backend.services.task_broadcaster import task_broadcaster
 from backend.services.task_manager import task_manager
 
 # ═══════════════════════════════════════════════════════════════
@@ -76,6 +82,8 @@ class ChatRequest(BaseModel):
     session_id: str | None = None
     company_mode: bool = False
     company_template: str = "quick_task"
+    # 多輪對話歷史：[{"role": "user"|"assistant", "content": "..."}, ...]
+    history: list[dict[str, str]] = []
 
 
 class ChatResponse(BaseModel):
@@ -96,6 +104,8 @@ class TaskRequest(BaseModel):
     company_mode: bool = False
     company_template: str = "quick_task"
     opc_mode: bool = False
+    # 控制細項（進階參數）
+    options: dict[str, Any] = {}
 
 
 @app.get("/health")
@@ -136,7 +146,7 @@ async def test_config():
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
-    """执行 EvoLoop 反思闭环图。"""
+    """执行 EvoLoop 反思闭环图（支援多輪對話歷史）。"""
     session_id = req.session_id or uuid.uuid4().hex[:12]
     initial_state = {
         "query": req.query,
@@ -146,6 +156,7 @@ async def chat(req: ChatRequest):
         "current_answer": "",
         "reflection": "",
         "memories": [],
+        "history": req.history or [],
         "company_mode": req.company_mode,
         "company_template": req.company_template,
     }
@@ -155,6 +166,109 @@ async def chat(req: ChatRequest):
         answer=result.get("current_answer", ""),
         score=result.get("score"),
         iteration=result.get("iteration", 0),
+    )
+
+
+# ==================== 串流聊天 API（SSE 打字機效果） ====================
+
+
+@app.post("/chat/stream")
+async def chat_stream(req: ChatRequest):
+    """SSE 串流聊天：即時推送階段進度與生成 token。
+
+    事件格式（Server-Sent Events）：
+      event: phase      → 階段切換 {"phase": "..."}
+      event: token      → 生成片段 {"token": "..."}
+      event: evaluation → 評分 {"score": n, "iteration": n}
+      event: done       → 完成 {"answer": "...", "score": n, "iteration": n}
+      event: error      → 錯誤 {"error": "..."}
+
+    僅標準模式支援串流；公司模式自動降級為同步 /chat。
+    """
+    if req.company_mode:
+        # 公司模式流程複雜，降級為同步回傳
+        result = await chat(req)
+        async def single():
+            yield f"event: done\ndata: {json_mod.dumps({'answer': result.answer, 'score': result.score, 'iteration': result.iteration}, ensure_ascii=False)}\n\n"
+        return StreamingResponse(single(), media_type="text/event-stream")
+
+    session_id = req.session_id or uuid.uuid4().hex[:12]
+
+    async def event_stream():
+        state: dict[str, Any] = {
+            "query": req.query,
+            "session_id": session_id,
+            "history": req.history or [],
+        }
+        try:
+            # 階段 1：記憶檢索
+            yield f"event: phase\ndata: {json_mod.dumps({'phase': 'retrieve_memories'})}\n\n"
+            state.update(await asyncio.to_thread(nodes.retrieve_memories, state))
+
+            # 階段 2：生成回答（串流 token，Queue 橋接同步生成器與非同步迴圈）
+            yield f"event: phase\ndata: {json_mod.dumps({'phase': 'generate'})}\n\n"
+            from backend.prompts import templates
+            gen_prompt = templates.GENERATE_INITIAL_ANSWER.format(
+                query=state["query"],
+                history_context=nodes._format_history(state.get("history", [])),
+                memory_context=nodes._format_memories(state.get("retrieved_memories", [])),
+            )
+            loop = asyncio.get_running_loop()
+            token_queue: asyncio.Queue[str | None] = asyncio.Queue()
+
+            def _produce_tokens() -> None:
+                try:
+                    for token in call_llm_stream(gen_prompt, system=templates.GENERATE_INITIAL_ANSWER_SYSTEM):
+                        loop.call_soon_threadsafe(token_queue.put_nowait, token)
+                finally:
+                    loop.call_soon_threadsafe(token_queue.put_nowait, None)
+
+            asyncio.get_running_loop().run_in_executor(None, _produce_tokens)
+
+            answer_parts: list[str] = []
+            while True:
+                token = await token_queue.get()
+                if token is None:
+                    break
+                answer_parts.append(token)
+                yield f"event: token\ndata: {json_mod.dumps({'token': token}, ensure_ascii=False)}\n\n"
+            answer = "".join(answer_parts)
+            state.update({"initial_answer": answer, "current_answer": answer, "iteration": 0})
+
+            # 階段 3：評估
+            yield f"event: phase\ndata: {json_mod.dumps({'phase': 'evaluate'})}\n\n"
+            state.update(await asyncio.to_thread(nodes.evaluate_answer, state))
+            yield f"event: evaluation\ndata: {json_mod.dumps({'score': state.get('score'), 'iteration': 0})}\n\n"
+
+            # 反思/改進迴圈
+            while (
+                state.get("score", 0.0) < PASS_THRESHOLD
+                and state.get("iteration", 0) < MAX_ITERATIONS
+            ):
+                yield f"event: phase\ndata: {json_mod.dumps({'phase': 'reflect', 'iteration': state.get('iteration', 0)})}\n\n"
+                state.update(await asyncio.to_thread(nodes.reflect, state))
+
+                yield f"event: phase\ndata: {json_mod.dumps({'phase': 'improve', 'iteration': state.get('iteration', 0)})}\n\n"
+                state.update(await asyncio.to_thread(nodes.improve_answer, state))
+
+                yield f"event: phase\ndata: {json_mod.dumps({'phase': 'evaluate'})}\n\n"
+                state.update(await asyncio.to_thread(nodes.evaluate_answer, state))
+                yield f"event: evaluation\ndata: {json_mod.dumps({'score': state.get('score'), 'iteration': state.get('iteration', 0)})}\n\n"
+
+            final_answer = state.get("current_answer", "")
+            # 儲存記憶（盡力而為）
+            state["final_answer"] = final_answer
+            await asyncio.to_thread(nodes.save_memory, state)
+
+            yield f"event: done\ndata: {json_mod.dumps({'answer': final_answer, 'score': state.get('score'), 'iteration': state.get('iteration', 0)}, ensure_ascii=False)}\n\n"
+        except Exception as exc:  # noqa: BLE001
+            logger.error("串流聊天失敗：%s", exc)
+            yield f"event: error\ndata: {json_mod.dumps({'error': str(exc)}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
@@ -171,7 +285,7 @@ async def create_task(req: TaskRequest):
         mode = "company"
     else:
         mode = "standard"
-    record = task_manager.create_task(req.query, mode, req.company_template)
+    record = task_manager.create_task(req.query, mode, req.company_template, options=req.options)
     task_manager.start_task(record)
     return {"task_id": record.task_id, "mode": mode}
 
@@ -183,6 +297,163 @@ async def get_task(task_id: str):
     if record is None:
         raise HTTPException(status_code=404, detail="任務不存在")
     return record.to_dict()
+
+
+@app.post("/tasks/{task_id}/cancel")
+async def cancel_task(task_id: str):
+    """請求取消執行中的任務。
+
+    設置取消標誌，任務會在下一個檢查點中止。
+    已完成/已失敗的任務無法取消。
+    """
+    ok, message = task_manager.cancel_task(task_id)
+    if not ok:
+        raise HTTPException(status_code=400, detail=message)
+    return {"success": True, "message": message}
+
+
+@app.post("/tasks/{task_id}/resume")
+async def resume_task(task_id: str):
+    """斷點續跑：從檢查點恢復任務執行。
+
+    僅支援公司模式任務（有 orchestrator checkpoint）。
+    """
+    ok, message = task_manager.resume_task(task_id)
+    if not ok:
+        raise HTTPException(status_code=400, detail=message)
+    return {"success": True, "message": message}
+
+
+# ==================== 思考過程軌跡 API ====================
+
+from backend.services.trace_logger import (
+    list_checkpoints,
+    list_traces,
+    load_checkpoint,
+    read_trace,
+)
+
+
+@app.get("/tasks/{task_id}/trace")
+async def get_task_trace(task_id: str, limit: int = 100, offset: int = 0):
+    """獲取任務的思考過程記錄（分頁）。
+
+    記錄內容：LLM 調用、上下文注入、評估、反思、改進、階段切換等。
+    """
+    events = await asyncio.to_thread(read_trace, task_id, limit, offset)
+    return {"task_id": task_id, "offset": offset, "limit": limit, "events": events}
+
+
+@app.get("/tasks/{task_id}/checkpoint")
+async def get_task_checkpoint(task_id: str):
+    """獲取任務的檢查點信息。"""
+    checkpoint = await asyncio.to_thread(load_checkpoint, task_id)
+    if checkpoint is None:
+        return {"task_id": task_id, "exists": False}
+    return {"task_id": task_id, "exists": True, "checkpoint": checkpoint}
+
+
+@app.get("/traces")
+async def get_traces(limit: int = 50):
+    """列出所有思考過程軌跡檔案摘要。"""
+    traces = await asyncio.to_thread(list_traces, limit)
+    return {"traces": traces}
+
+
+@app.get("/checkpoints")
+async def get_checkpoints():
+    """列出所有可恢復的檢查點。"""
+    checkpoints = await asyncio.to_thread(list_checkpoints)
+    return {"checkpoints": checkpoints}
+
+
+@app.websocket("/tasks/{task_id}/ws")
+async def task_websocket(websocket: WebSocket, task_id: str):
+    """WebSocket 实时推送任务进度。
+
+    客户端连接后自动订阅任务事件，收到消息格式：
+    {"task_id": "...", "event": "phase_change|evaluation|task_finished|...", "data": {...}}
+
+    任务完成/失败后发送 task_finished 事件，客户端可主动关闭连接。
+    """
+    # 检查任务是否存在
+    record = task_manager.get_task(task_id)
+    if record is None:
+        await websocket.close(code=4004, reason="任务不存在")
+        return
+
+    await websocket.accept()
+    await task_broadcaster.subscribe(task_id, websocket)
+
+    try:
+        # 发送当前状态作为初始快照
+        await websocket.send_json({
+            "task_id": task_id,
+            "event": "snapshot",
+            "data": record.to_dict(),
+        })
+
+        # 保持连接，等待客户端关闭或任务完成
+        while True:
+            try:
+                # 接收客户端消息（心跳或关闭请求）
+                data = await websocket.receive_text()
+                if data == "ping":
+                    await websocket.send_json({"task_id": task_id, "event": "pong", "data": {}})
+                elif data == "close":
+                    break
+            except WebSocketDisconnect:
+                break
+    finally:
+        await task_broadcaster.unsubscribe(task_id, websocket)
+
+
+# ==================== 記憶庫管理 API ====================
+
+from backend.memory.vector_store import VectorMemoryStore
+
+_memory_store_api = VectorMemoryStore()
+
+
+@app.get("/memories")
+async def list_memories(limit: int = 50, offset: int = 0):
+    """列出記憶庫中的記憶（分頁，按建立時間降序）。"""
+    try:
+        all_memories = await asyncio.to_thread(_memory_store_api.all)
+        total = len(all_memories)
+        all_memories.sort(
+            key=lambda m: (m.get("metadata") or {}).get("created_at", ""),
+            reverse=True,
+        )
+        page = all_memories[offset : offset + limit]
+        return {"total": total, "offset": offset, "limit": limit, "memories": page}
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("記憶庫讀取失敗：%s", exc)
+        return {"total": 0, "offset": offset, "limit": limit, "memories": [], "error": str(exc)}
+
+
+@app.delete("/memories/{memory_id}")
+async def delete_memory(memory_id: str):
+    """刪除單條記憶。"""
+    try:
+        collection = await asyncio.to_thread(_memory_store_api._get_collection)
+        collection.delete(ids=[memory_id])
+        _memory_store_api.invalidate_cache()
+        return {"deleted": True, "id": memory_id}
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"刪除失敗：{exc}") from exc
+
+
+@app.post("/memories/cleanup")
+async def cleanup_memories(max_age_days: int = 30, min_score: float | None = None):
+    """清理過期或低品質記憶。"""
+    try:
+        deleted = await asyncio.to_thread(
+            _memory_store_api.cleanup, max_age_days, min_score
+        )
+        return {"deleted_count": deleted}
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"清理失敗：{exc}") from exc
 
 
 @app.get("/dashboard")

@@ -109,34 +109,6 @@ function SessionList({
   );
 }
 
-/** Dashboard 子导航 */
-function DashboardNav() {
-  return (
-    <div className="p-3">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">控制面版</p>
-      <nav className="space-y-0.5">
-        {[
-          { key: 'console', label: '控制台', icon: '💬' },
-          { key: 'overview', label: '总览', icon: '📈' },
-          { key: 'tasks', label: '任务历史', icon: '📋' },
-          { key: 'content', label: '生成内容', icon: '📦' },
-          { key: 'skills', label: '工具与 Skills', icon: '🛠' },
-          { key: 'audit', label: 'OPC 审计', icon: '🔍' },
-        ].map((item) => (
-          <a
-            key={item.key}
-            href={`#${item.key}`}
-            className="flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs text-gray-400 transition-colors hover:bg-gray-800 hover:text-gray-200"
-          >
-            <span>{item.icon}</span>
-            {item.label}
-          </a>
-        ))}
-      </nav>
-    </div>
-  );
-}
-
 /** 监控面板子导航 */
 function MonitorNav() {
   return (

@@ -8,7 +8,7 @@
  * 生產環境可設定 VITE_API_URL 環境變數指向後端位址。
  */
 
-import type { CloudAlertsData, CloudBilling, CloudEventsData, CloudMonitoring, DashboardData, DockerActionResult, DockerBudget, DockerStatus, TaskProgress } from '../types';
+import type { CheckpointSummary, CloudAlertsData, CloudBilling, CloudEventsData, CloudMonitoring, DashboardData, DockerActionResult, DockerBudget, DockerStatus, TaskOptions, TaskProgress, TraceEntry, TraceSummary } from '../types';
 
 const API_BASE: string = import.meta.env.VITE_API_URL ?? '/api';
 
@@ -21,6 +21,8 @@ export interface ChatOptions {
   companyMode?: boolean;
   /** 公司組織模板（company_mode 為 true 時生效） */
   companyTemplate?: string;
+  /** 多輪對話歷史：[{"role": "user"|"assistant", "content": "..."}] */
+  history?: Array<{ role: string; content: string }>;
 }
 
 export interface ChatResult {
@@ -28,6 +30,105 @@ export interface ChatResult {
   answer: string;
   score: number | null;
   iteration: number;
+}
+
+/** SSE 串流事件回調 */
+export interface StreamCallbacks {
+  onPhase?: (phase: string) => void;
+  onToken?: (token: string) => void;
+  onEvaluation?: (score: number | null, iteration: number) => void;
+  onDone?: (answer: string, score: number | null, iteration: number) => void;
+  onError?: (error: string) => void;
+}
+
+/**
+ * 送出聊天並以 SSE 串流接收回答（打字機效果）。
+ *
+ * 僅標準模式支援串流；公司/OPC 模式請使用 sendChat 或 createTask。
+ * 回傳 AbortController 供取消請求。
+ */
+export function sendChatStream(
+  query: string,
+  sessionId: string,
+  callbacks: StreamCallbacks,
+  history?: Array<{ role: string; content: string }>,
+): AbortController {
+  const controller = new AbortController();
+
+  (async () => {
+    try {
+      const resp = await fetch(apiUrl('/chat/stream'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, session_id: sessionId, history: history ?? [] }),
+        signal: controller.signal,
+      });
+
+      if (!resp.ok || !resp.body) {
+        callbacks.onError?.(`請求失敗（HTTP ${resp.status}）`);
+        return;
+      }
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        // 解析 SSE 事件（以 \n\n 分隔）
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop() ?? '';
+
+        for (const part of parts) {
+          const eventMatch = part.match(/^event:\s*(.+)$/m);
+          const dataMatch = part.match(/^data:\s*(.+)$/m);
+          if (!eventMatch || !dataMatch) continue;
+
+          const eventType = eventMatch[1].trim();
+          let data: Record<string, unknown>;
+          try {
+            data = JSON.parse(dataMatch[1]);
+          } catch {
+            continue;
+          }
+
+          switch (eventType) {
+            case 'phase':
+              callbacks.onPhase?.(String(data.phase ?? ''));
+              break;
+            case 'token':
+              callbacks.onToken?.(String(data.token ?? ''));
+              break;
+            case 'evaluation':
+              callbacks.onEvaluation?.(
+                (data.score as number) ?? null,
+                (data.iteration as number) ?? 0,
+              );
+              break;
+            case 'done':
+              callbacks.onDone?.(
+                String(data.answer ?? ''),
+                (data.score as number) ?? null,
+                (data.iteration as number) ?? 0,
+              );
+              break;
+            case 'error':
+              callbacks.onError?.(String(data.error ?? '未知錯誤'));
+              break;
+          }
+        }
+      }
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        callbacks.onError?.((err as Error).message || '網路連線失敗');
+      }
+    }
+  })();
+
+  return controller;
 }
 
 /** 送出聊天並取得完整回答（同步模式，支援公司模式）。 */
@@ -46,6 +147,7 @@ export async function sendChat(
         session_id: sessionId,
         company_mode: options.companyMode ?? false,
         company_template: options.companyTemplate ?? 'quick_task',
+        history: options.history ?? [],
       }),
     });
   } catch {
@@ -123,6 +225,7 @@ export async function createTask(
   companyMode: boolean,
   companyTemplate: string,
   opcMode: boolean = false,
+  options?: TaskOptions,
 ): Promise<{ task_id: string; mode: string }> {
   let resp: Response;
   try {
@@ -134,6 +237,7 @@ export async function createTask(
         company_mode: companyMode,
         company_template: companyTemplate,
         opc_mode: opcMode,
+        options: options ?? {},
       }),
     });
   } catch {
@@ -143,10 +247,219 @@ export async function createTask(
   return resp.json();
 }
 
+/** 斷點續跑：從檢查點恢復任務執行。 */
+export async function resumeTask(taskId: string): Promise<{ success: boolean; message: string }> {
+  const resp = await fetch(apiUrl(`/tasks/${encodeURIComponent(taskId)}/resume`), {
+    method: 'POST',
+  });
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({}));
+    throw new Error((data as { detail?: string }).detail ?? `恢復失敗（HTTP ${resp.status}）`);
+  }
+  return resp.json();
+}
+
+/** 獲取任務的思考過程記錄（分頁）。 */
+export async function fetchTaskTrace(
+  taskId: string,
+  limit: number = 100,
+  offset: number = 0,
+): Promise<{ task_id: string; offset: number; limit: number; events: TraceEntry[] }> {
+  const resp = await fetch(apiUrl(`/tasks/${encodeURIComponent(taskId)}/trace?limit=${limit}&offset=${offset}`));
+  if (!resp.ok) throw new Error(`讀取軌跡失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
+/** 獲取任務的檢查點信息。 */
+export async function fetchTaskCheckpoint(taskId: string): Promise<{
+  task_id: string;
+  exists: boolean;
+  checkpoint?: Record<string, unknown>;
+}> {
+  const resp = await fetch(apiUrl(`/tasks/${encodeURIComponent(taskId)}/checkpoint`));
+  if (!resp.ok) throw new Error(`讀取檢查點失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
+/** 列出所有思考過程軌跡檔案摘要。 */
+export async function fetchTraces(limit: number = 50): Promise<{ traces: TraceSummary[] }> {
+  const resp = await fetch(apiUrl(`/traces?limit=${limit}`));
+  if (!resp.ok) throw new Error(`讀取軌跡列表失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
+/** 列出所有可恢復的檢查點。 */
+export async function fetchCheckpoints(): Promise<{ checkpoints: CheckpointSummary[] }> {
+  const resp = await fetch(apiUrl('/checkpoints'));
+  if (!resp.ok) throw new Error(`讀取檢查點列表失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
 /** 查詢任務進度。 */
 export async function fetchTask(taskId: string): Promise<TaskProgress> {
   const resp = await fetch(apiUrl(`/tasks/${encodeURIComponent(taskId)}`));
   if (!resp.ok) throw new Error(`查詢任務失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
+/** 請求取消執行中的任務。 */
+export async function cancelTask(taskId: string): Promise<{ success: boolean; message: string }> {
+  const resp = await fetch(apiUrl(`/tasks/${encodeURIComponent(taskId)}/cancel`), {
+    method: 'POST',
+  });
+  if (!resp.ok) {
+    const data = await resp.json().catch(() => ({}));
+    throw new Error((data as { detail?: string }).detail ?? `取消失敗（HTTP ${resp.status}）`);
+  }
+  return resp.json();
+}
+
+// ==================== 任務 WebSocket 實時推送 ====================
+
+/** WebSocket 事件消息格式。 */
+export interface TaskWsMessage {
+  task_id: string;
+  event: string;
+  data: Record<string, unknown>;
+}
+
+/** 取得 WebSocket URL（適配 Vite 代理與生產環境）。 */
+function wsUrl(path: string): string {
+  const base = import.meta.env.VITE_API_URL ?? '/api';
+  // 生產環境或完整 URL：轉換 http(s) → ws(s)
+  if (base.startsWith('http')) {
+    return base.replace(/^http/, 'ws') + path;
+  }
+  // 開發環境 Vite 代理：使用當前 host
+  const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  return `${proto}://${window.location.host}${base}${path}`;
+}
+
+/**
+ * 任務 WebSocket 客戶端。
+ *
+ * 連接後自動接收任務進度推送，支援：
+ * - onMessage: 事件回調
+ * - 自動重連（可選）
+ * - 心跳保持連接
+ */
+export class TaskWebSocket {
+  private ws: WebSocket | null = null;
+  private taskId: string;
+  private onMessage: (msg: TaskWsMessage) => void;
+  private onClose?: () => void;
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 3;
+  private shouldReconnect = true;
+
+  constructor(
+    taskId: string,
+    onMessage: (msg: TaskWsMessage) => void,
+    onClose?: () => void,
+  ) {
+    this.taskId = taskId;
+    this.onMessage = onMessage;
+    this.onClose = onClose;
+  }
+
+  /** 建立 WebSocket 連接。 */
+  connect(): void {
+    try {
+      this.ws = new WebSocket(wsUrl(`/tasks/${encodeURIComponent(this.taskId)}/ws`));
+    } catch {
+      // WebSocket 不可用時降級為輪詢
+      this.onClose?.();
+      return;
+    }
+
+    this.ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data) as TaskWsMessage;
+        this.onMessage(msg);
+      } catch {
+        // 忽略解析失敗的消息
+      }
+    };
+
+    this.ws.onclose = () => {
+      if (this.shouldReconnect && this.reconnectAttempts < this.maxReconnectAttempts) {
+        this.reconnectAttempts++;
+        setTimeout(() => this.connect(), 1000 * this.reconnectAttempts);
+      } else {
+        this.onClose?.();
+      }
+    };
+
+    this.ws.onerror = () => {
+      // 錯誤時關閉連接（觸發重連或降級）
+      this.ws?.close();
+    };
+  }
+
+  /** 發送心跳。 */
+  ping(): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send('ping');
+    }
+  }
+
+  /** 關閉連接（不再重連）。 */
+  close(): void {
+    this.shouldReconnect = false;
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send('close');
+    }
+    this.ws?.close();
+  }
+
+  /** 連接是否已建立。 */
+  get connected(): boolean {
+    return this.ws?.readyState === WebSocket.OPEN;
+  }
+}
+
+// ==================== 記憶庫管理 ====================
+
+/** 記憶項目 */
+export interface MemoryItem {
+  id: string;
+  text: string;
+  metadata: Record<string, unknown>;
+}
+
+/** 列出記憶庫中的記憶（分頁）。 */
+export async function fetchMemories(limit: number = 50, offset: number = 0): Promise<{
+  total: number;
+  offset: number;
+  limit: number;
+  memories: MemoryItem[];
+  error?: string;
+}> {
+  const resp = await fetch(apiUrl(`/memories?limit=${limit}&offset=${offset}`));
+  if (!resp.ok) throw new Error(`讀取記憶庫失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
+/** 刪除單條記憶。 */
+export async function deleteMemory(memoryId: string): Promise<{ deleted: boolean; id: string }> {
+  const resp = await fetch(apiUrl(`/memories/${encodeURIComponent(memoryId)}`), {
+    method: 'DELETE',
+  });
+  if (!resp.ok) throw new Error(`刪除記憶失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
+/** 清理過期或低品質記憶。 */
+export async function cleanupMemories(
+  maxAgeDays: number = 30,
+  minScore?: number,
+): Promise<{ deleted_count: number }> {
+  const params = new URLSearchParams({ max_age_days: String(maxAgeDays) });
+  if (minScore != null) params.set('min_score', String(minScore));
+  const resp = await fetch(apiUrl(`/memories/cleanup?${params.toString()}`), {
+    method: 'POST',
+  });
+  if (!resp.ok) throw new Error(`清理記憶失敗（HTTP ${resp.status}）`);
   return resp.json();
 }
 

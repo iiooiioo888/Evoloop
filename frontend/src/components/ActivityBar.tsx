@@ -1,7 +1,7 @@
 /**
  * ActivityBar — VS Code 风格活动栏（48px 图标列）。
  *
- * 4 个导航图标：💬 对话 / 📊 控制面版 / 🏭 OPC 监控 / ⚙ 设置
+ * 导航图标：💬 对话 / 📊 控制面版 / 📜 执行轨迹
  * 当前活跃项左侧蓝色竖条指示器。
  */
 import type { ViewKey } from './AppShell';
@@ -14,6 +14,7 @@ interface ActivityBarProps {
 const ITEMS: { key: ViewKey; icon: string; label: string }[] = [
   { key: 'chat', icon: '💬', label: '对话' },
   { key: 'monitor', icon: '📊', label: '监控' },
+  { key: 'traces', icon: '📜', label: '执行轨迹' },
 ];
 
 export default function ActivityBar({ activeView, onViewChange }: ActivityBarProps) {

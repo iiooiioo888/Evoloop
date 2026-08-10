@@ -13,6 +13,7 @@ env/
 
 # ---------- 測試 / 快取 ----------
 .pytest_cache/
+.pytest_tmp/
 .mypy_cache/
 .ruff_cache/
 .coverage

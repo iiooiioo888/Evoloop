@@ -7,7 +7,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchCloudMonitoring } from '../api/client';
-import type { CloudMonitoring, CloudServiceMetrics } from '../types';
+import type { CloudMonitoring } from '../types';
 
 const RANGE_OPTIONS = [
   { value: '1h', label: '1 小時' },

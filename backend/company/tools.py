@@ -1,0 +1,317 @@
+"""Agent 工具調用框架。
+
+提供結構化的工具註冊、權限控制與執行機制，取代原有的
+Prompt 注入方式。支援：
+
+- 工具註冊表：名稱、描述、參數 schema、執行函數
+- 角色權限控制：按角色過濾可用工具
+- ReAct 格式解析：解析 LLM 輸出中的工具調用請求
+- 安全執行：超時控制、錯誤處理
+
+工具調用格式（LLM 輸出）：
+```tool_call
+{"tool": "web_search", "args": {"query": "Python asyncio"}}
+```
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import re
+from dataclasses import dataclass, field
+from typing import Any, Callable
+
+logger = logging.getLogger(__name__)
+
+# 工具調用正則（匹配 ```tool_call ... ``` 區塊）
+TOOL_CALL_PATTERN = re.compile(
+    r"```tool_call\s*\n?(.*?)\n?```",
+    re.DOTALL,
+)
+
+
+@dataclass
+class ToolDefinition:
+    """工具定義。"""
+
+    name: str
+    description: str
+    parameters: dict[str, Any]  # JSON Schema 格式
+    execute: Callable[..., Any]
+    # 允許使用此工具的角色列表（空列表 = 所有角色）
+    allowed_roles: list[str] = field(default_factory=list)
+    # 是否為只讀工具（只讀工具權限更寬鬆）
+    readonly: bool = True
+    # 超時秒數
+    timeout_seconds: float = 30.0
+
+
+@dataclass
+class ToolCallRequest:
+    """解析後的工具調用請求。"""
+
+    tool: str
+    args: dict[str, Any]
+    raw: str = ""
+
+
+@dataclass
+class ToolCallResult:
+    """工具執行結果。"""
+
+    tool: str
+    success: bool
+    result: Any = None
+    error: str = ""
+
+
+class ToolRegistry:
+    """工具註冊表：管理所有可用工具。"""
+
+    def __init__(self) -> None:
+        self._tools: dict[str, ToolDefinition] = {}
+
+    def register(
+        self,
+        name: str,
+        description: str,
+        parameters: dict[str, Any],
+        execute: Callable[..., Any],
+        allowed_roles: list[str] | None = None,
+        readonly: bool = True,
+        timeout_seconds: float = 30.0,
+    ) -> None:
+        """註冊工具。"""
+        self._tools[name] = ToolDefinition(
+            name=name,
+            description=description,
+            parameters=parameters,
+            execute=execute,
+            allowed_roles=allowed_roles or [],
+            readonly=readonly,
+            timeout_seconds=timeout_seconds,
+        )
+        logger.debug("工具註冊：%s", name)
+
+    def get(self, name: str) -> ToolDefinition | None:
+        """獲取工具定義。"""
+        return self._tools.get(name)
+
+    def list_tools(self, role: str | None = None) -> list[ToolDefinition]:
+        """列出可用工具（按角色過濾）。
+
+        Args:
+            role: 角色名稱，None 表示列出所有工具
+
+        Returns:
+            該角色可用的工具列表
+        """
+        if role is None:
+            return list(self._tools.values())
+
+        result = []
+        for tool in self._tools.values():
+            # 空列表 = 所有角色可用
+            if not tool.allowed_roles:
+                result.append(tool)
+            elif role in tool.allowed_roles:
+                result.append(tool)
+            elif tool.readonly:
+                # 只讀工具對所有角色開放
+                result.append(tool)
+        return result
+
+    def format_tools_prompt(self, role: str | None = None) -> str:
+        """生成工具說明文字（注入 Prompt）。
+
+        Args:
+            role: 角色名稱，用於過濾可用工具
+
+        Returns:
+            格式化的工具說明，若無可用工具則回傳空字串
+        """
+        tools = self.list_tools(role)
+        if not tools:
+            return ""
+
+        lines = ["【可用的工具】", "你可以使用以下工具來完成任務。若需使用工具，請在回覆中輸出："]
+        lines.append('```tool_call')
+        lines.append('{"tool": "<工具名>", "args": {<參數>}}')
+        lines.append('```')
+        lines.append("")
+        lines.append("工具列表：")
+        for tool in tools:
+            params_desc = ", ".join(
+                f"{k}: {v.get('description', v.get('type', 'any'))}"
+                for k, v in tool.parameters.items()
+            ) if tool.parameters else "無參數"
+            readonly_tag = "（只讀）" if tool.readonly else "（控制）"
+            lines.append(f"- {tool.name}{readonly_tag}: {tool.description}")
+            lines.append(f"  參數：{params_desc}")
+        lines.append("")
+        lines.append("注意：每次只能調用一個工具。調用後請等待結果，再決定下一步。")
+        return "\n".join(lines)
+
+    def parse_tool_call(self, text: str) -> ToolCallRequest | None:
+        """解析 LLM 輸出中的工具調用請求。
+
+        Args:
+            text: LLM 輸出的文字
+
+        Returns:
+            ToolCallRequest 或 None（無工具調用）
+        """
+        match = TOOL_CALL_PATTERN.search(text)
+        if not match:
+            return None
+
+        raw = match.group(1).strip()
+        try:
+            data = json.loads(raw)
+            tool_name = data.get("tool", "")
+            args = data.get("args", {})
+            if not tool_name:
+                return None
+            return ToolCallRequest(tool=tool_name, args=args, raw=raw)
+        except json.JSONDecodeError:
+            logger.warning("工具調用解析失敗：%s", raw[:200])
+            return None
+
+    def execute(
+        self,
+        request: ToolCallRequest,
+        role: str | None = None,
+    ) -> ToolCallResult:
+        """執行工具調用。
+
+        Args:
+            request: 工具調用請求
+            role: 調用者角色（用於權限檢查）
+
+        Returns:
+            ToolCallResult
+        """
+        tool = self.get(request.tool)
+        if tool is None:
+            return ToolCallResult(
+                tool=request.tool,
+                success=False,
+                error=f"未知工具：{request.tool}",
+            )
+
+        # 權限檢查
+        if role and tool.allowed_roles:
+            if role not in tool.allowed_roles and not tool.readonly:
+                return ToolCallResult(
+                    tool=request.tool,
+                    success=False,
+                    error=f"角色 {role} 無權使用工具 {request.tool}",
+                )
+
+        try:
+            result = tool.execute(**request.args)
+            return ToolCallResult(tool=request.tool, success=True, result=result)
+        except TypeError as exc:
+            return ToolCallResult(
+                tool=request.tool,
+                success=False,
+                error=f"參數錯誤：{exc}",
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.error("工具 %s 執行失敗：%s", request.tool, exc)
+            return ToolCallResult(
+                tool=request.tool,
+                success=False,
+                error=str(exc),
+            )
+
+
+# ═══════════════════════════════════════════════════════════════
+# 全域工具註冊表
+# ═══════════════════════════════════════════════════════════════
+
+tool_registry = ToolRegistry()
+
+
+def _register_builtin_tools() -> None:
+    """註冊內建工具。"""
+    from backend.company.docker_tools import execute_docker_tool
+
+    # Docker 工具（向後相容）
+    tool_registry.register(
+        name="docker_ps",
+        description="查詢所有 EvoLoop 容器狀態（名稱、運行狀態、健康狀態、端口）",
+        parameters={},
+        execute=lambda: execute_docker_tool("docker_ps"),
+        readonly=True,
+    )
+    tool_registry.register(
+        name="docker_logs",
+        description="讀取指定服務的最近日誌",
+        parameters={"service": {"type": "string", "description": "服務名稱"}, "tail": {"type": "integer", "description": "日誌行數（預設 100）"}},
+        execute=lambda service, tail=100: execute_docker_tool("docker_logs", {"service": service, "tail": tail}),
+        readonly=True,
+    )
+    tool_registry.register(
+        name="docker_stats",
+        description="查看所有容器的資源使用統計（CPU、記憶體、網路）",
+        parameters={},
+        execute=lambda: execute_docker_tool("docker_stats"),
+        readonly=True,
+    )
+    tool_registry.register(
+        name="docker_health",
+        description="檢查所有服務的健康狀態",
+        parameters={},
+        execute=lambda: execute_docker_tool("docker_health"),
+        readonly=True,
+    )
+    tool_registry.register(
+        name="docker_restart",
+        description="重啟指定服務",
+        parameters={"service": {"type": "string", "description": "服務名稱"}},
+        execute=lambda service: execute_docker_tool("docker_restart", {"service": service}),
+        allowed_roles=["manager", "devops"],
+        readonly=False,
+    )
+    tool_registry.register(
+        name="docker_stop",
+        description="停止指定服務",
+        parameters={"service": {"type": "string", "description": "服務名稱"}},
+        execute=lambda service: execute_docker_tool("docker_stop", {"service": service}),
+        allowed_roles=["manager", "devops"],
+        readonly=False,
+    )
+    tool_registry.register(
+        name="docker_start",
+        description="啟動指定服務",
+        parameters={"service": {"type": "string", "description": "服務名稱"}},
+        execute=lambda service: execute_docker_tool("docker_start", {"service": service}),
+        allowed_roles=["manager", "devops"],
+        readonly=False,
+    )
+
+    # 記憶查詢工具
+    def _memory_query(query: str, k: int = 3) -> str:
+        from backend.memory.vector_store import VectorMemoryStore
+        store = VectorMemoryStore()
+        results = store.search_similar(query, k=k)
+        if not results:
+            return "（無相關記憶）"
+        lines = []
+        for i, r in enumerate(results, 1):
+            lines.append(f"{i}. {r['text'][:500]}")
+        return "\n".join(lines)
+
+    tool_registry.register(
+        name="memory_query",
+        description="查詢向量記憶庫中的相關歷史經驗",
+        parameters={"query": {"type": "string", "description": "查詢內容"}, "k": {"type": "integer", "description": "回傳筆數（預設 3）"}},
+        execute=_memory_query,
+        readonly=True,
+    )
+
+
+# 模組載入時註冊內建工具
+_register_builtin_tools()

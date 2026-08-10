@@ -1,6 +1,8 @@
-/** LLM 設定彈窗：供應商預設、API Key 輸入、模型與端點配置、連線測試。 */
+/** LLM 設定彈窗：供應商預設、API Key 輸入、模型與端點配置、連線測試。
+ * 含記憶庫管理分頁。 */
 import { useCallback, useEffect, useState } from 'react';
 import { fetchConfig, saveConfig, testConfig } from '../api/client';
+import MemoryPanel from './MemoryPanel';
 
 interface SettingsModalProps {
   open: boolean;
@@ -35,6 +37,7 @@ const PROVIDERS = [
 type ProviderValue = (typeof PROVIDERS)[number]['value'];
 
 export default function SettingsModal({ open, onClose, onSaved }: SettingsModalProps) {
+  const [tab, setTab] = useState<'llm' | 'memory'>('llm');
   const [provider, setProvider] = useState<ProviderValue>('openai');
   const [apiKey, setApiKey] = useState('');
   const [apiBase, setApiBase] = useState('');
@@ -115,11 +118,30 @@ export default function SettingsModal({ open, onClose, onSaved }: SettingsModalP
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-2xl border border-gray-700 bg-gray-900 p-5 shadow-2xl"
+        className={`w-full rounded-2xl border border-gray-700 bg-gray-900 p-5 shadow-2xl ${
+          tab === 'memory' ? 'max-w-2xl' : 'max-w-md'
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-gray-100">🔑 LLM API 設定</h2>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setTab('llm')}
+              className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
+                tab === 'llm' ? 'bg-blue-600/20 text-blue-300' : 'text-gray-400 hover:bg-gray-800'
+              }`}
+            >
+              🔑 LLM 設定
+            </button>
+            <button
+              onClick={() => setTab('memory')}
+              className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
+                tab === 'memory' ? 'bg-blue-600/20 text-blue-300' : 'text-gray-400 hover:bg-gray-800'
+              }`}
+            >
+              🧠 記憶庫
+            </button>
+          </div>
           <button
             onClick={onClose}
             className="rounded-lg px-2 py-1 text-gray-400 hover:bg-gray-800"
@@ -128,6 +150,17 @@ export default function SettingsModal({ open, onClose, onSaved }: SettingsModalP
             ✕
           </button>
         </div>
+
+        {/* 記憶庫分頁 */}
+        {tab === 'memory' && (
+          <div className="h-[60vh] overflow-hidden rounded-lg border border-gray-800">
+            <MemoryPanel />
+          </div>
+        )}
+
+        {/* LLM 設定分頁 */}
+        {tab === 'llm' && (
+        <div>
 
         {/* 供應商選擇 */}
         <label className="mb-1 block text-xs text-gray-400">供應商</label>
@@ -222,6 +255,8 @@ export default function SettingsModal({ open, onClose, onSaved }: SettingsModalP
             儲存
           </button>
         </div>
+        </div>
+        )}
       </div>
     </div>
   );

@@ -9,6 +9,8 @@ interface MessageListProps {
   loading: boolean;
   /** 開啟整頁任務視圖 */
   onOpenTask?: (messageId: string) => void;
+  /** 打開執行軌跡視圖 */
+  onOpenTrace?: (taskId: string) => void;
   /** 點擊快捷建議 */
   onSuggest?: (text: string, companyMode: boolean) => void;
 }
@@ -25,6 +27,7 @@ export default function MessageList({
   sessionId,
   loading,
   onOpenTask,
+  onOpenTrace,
   onSuggest,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -47,30 +50,45 @@ export default function MessageList({
 
   return (
     <div className="flex-1 overflow-y-auto px-4 py-6">
-      <div className="mx-auto flex max-w-3xl flex-col gap-5">
+      <div className="mx-auto flex max-w-3xl flex-col gap-6">
         {messages.length === 0 && (
-          <div className="mt-14 flex flex-col items-center text-center">
+          <div className="mt-16 flex flex-col items-center text-center">
             {/* Hero */}
-            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500/20 to-indigo-600/20 text-3xl ring-1 ring-blue-500/30">
-              🔄
+            <div className="relative mb-5">
+              <div className="absolute inset-0 animate-pulse rounded-3xl bg-gradient-to-br from-blue-500/30 to-indigo-600/30 blur-xl" />
+              <div className="relative flex h-18 w-18 items-center justify-center rounded-3xl bg-gradient-to-br from-blue-500/20 via-indigo-500/20 to-purple-600/20 p-4 text-4xl shadow-2xl ring-1 ring-blue-400/30 backdrop-blur-sm">
+                🔄
+              </div>
             </div>
-            <p className="text-xl font-semibold text-gray-100">EvoLoop 自我反思助手</p>
-            <p className="mt-1.5 max-w-md text-sm text-gray-500">
+            <h1 className="bg-gradient-to-r from-blue-300 via-indigo-300 to-purple-300 bg-clip-text text-2xl font-bold text-transparent">
+              EvoLoop 自我反思助手
+            </h1>
+            <p className="mt-2 max-w-md text-sm leading-relaxed text-gray-500">
               生成 → 評估 → 反思 → 優化的閉環，複雜目標可交給多代理人公司團隊分工完成
             </p>
 
             {/* 快捷建議 */}
-            <div className="mt-6 grid w-full max-w-lg grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className="mt-8 grid w-full max-w-xl grid-cols-1 gap-3 sm:grid-cols-2">
               {SUGGESTIONS.map((s) => (
                 <button
                   key={s.text}
                   onClick={() => onSuggest?.(s.text, s.company)}
-                  className="group rounded-xl border border-gray-800 bg-gray-900/60 px-3.5 py-3 text-left text-xs text-gray-300 transition-all hover:border-blue-500/60 hover:bg-gray-800/80 hover:text-gray-100"
+                  className={`group relative overflow-hidden rounded-xl border px-4 py-3.5 text-left text-xs text-gray-300 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg ${
+                    s.company
+                      ? 'border-purple-500/20 bg-purple-500/5 hover:border-purple-500/50 hover:bg-purple-500/10 hover:shadow-purple-900/20'
+                      : 'border-blue-500/20 bg-blue-500/5 hover:border-blue-500/50 hover:bg-blue-500/10 hover:shadow-blue-900/20'
+                  }`}
                 >
-                  <span className="mb-1 flex items-center gap-1.5 text-[11px] text-gray-500 group-hover:text-blue-300">
+                  <span
+                    className={`mb-1.5 flex items-center gap-1.5 text-[11px] font-medium ${
+                      s.company
+                        ? 'text-purple-400/80 group-hover:text-purple-300'
+                        : 'text-blue-400/80 group-hover:text-blue-300'
+                    }`}
+                  >
                     {s.company ? '🏢 公司模式' : '⚙️ 標準模式'}
                   </span>
-                  {s.text}
+                  <span className="leading-relaxed">{s.text}</span>
                 </button>
               ))}
             </div>
@@ -82,6 +100,7 @@ export default function MessageList({
             message={msg}
             sessionId={sessionId}
             onOpenTask={msg.taskState ? () => onOpenTask?.(msg.id) : undefined}
+            onOpenTrace={onOpenTrace}
           />
         ))}
         <div ref={bottomRef} />

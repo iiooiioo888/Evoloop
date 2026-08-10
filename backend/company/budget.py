@@ -397,7 +397,18 @@ class BudgetManager:
         return True, "預算充足"
 
     def resolve_model_for_tier(self, tier: BudgetTier) -> str:
-        """根據當前預算壓力與層級選擇模型。"""
+        """根據當前預算壓力與層級選擇模型。
+
+        用戶顯式配置過 LLM 模型時（如 Qwen 端點），所有層級
+        動態跟隨該模型，避免使用端點不存在的預設模型
+        （如 gpt-4o-mini）。此檢查在每次調用時動態執行，
+        確保配置變更即時生效。
+        """
+        from backend.core.llm_config import get_explicit_model
+
+        configured = get_explicit_model()
+        if configured:
+            return configured
         return self._router.resolve_model(tier, self.budget_pressure)
 
     # ── 重置 ──

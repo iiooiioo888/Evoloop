@@ -98,6 +98,56 @@ def call_llm(
     raise RuntimeError(f"LLM 呼叫於 {MAX_RETRIES} 次重試後仍失敗") from last_error
 
 
+def call_llm_stream(
+    prompt: str,
+    system: str | None = None,
+    model: str | None = None,
+    **kwargs,
+):
+    """呼叫 LLM 並串流回傳回應片段（生成器）。
+
+    與 call_llm 相同的重試邏輯，但逐塊 yield 文字。
+    """
+    messages = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": prompt})
+
+    params = _llm_params()
+    if model:
+        params["model"] = model
+        if params.get("api_base"):
+            params["model"] = _ensure_provider_prefix(params["model"])
+
+    last_error: Exception | None = None
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            response = completion(
+                model=params["model"],
+                messages=messages,
+                stream=True,
+                **{k: v for k, v in params.items() if k != "model"},
+                **kwargs,
+            )
+            for chunk in response:
+                delta = chunk.choices[0].delta if chunk.choices else None
+                if delta and delta.content:
+                    yield delta.content
+            return
+        except RateLimitError as exc:
+            last_error = exc
+            wait = RETRY_BACKOFF_SECONDS * attempt
+            logger.warning(
+                "LLM 速率限制，%.1f 秒後重試（%d/%d）", wait, attempt, MAX_RETRIES
+            )
+            time.sleep(wait)
+        except APIError as exc:
+            last_error = exc
+            logger.warning("LLM 呼叫失敗：%s，重試（%d/%d）", exc, attempt, MAX_RETRIES)
+            time.sleep(RETRY_BACKOFF_SECONDS)
+    raise RuntimeError(f"LLM 呼叫於 {MAX_RETRIES} 次重試後仍失敗") from last_error
+
+
 def parse_json_response(text: str) -> dict:
     """穩健地解析 LLM 回傳的 JSON。
 

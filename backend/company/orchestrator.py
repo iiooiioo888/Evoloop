@@ -33,6 +33,9 @@ from backend.company.docker_tools import (
     can_use_docker_tool,
     execute_docker_tool,
 )
+from backend.company.tools import tool_registry
+from backend.company.react_loop import ReActExecutor
+from backend.company.role_memory import get_role_memory
 from backend.company.events import CompanyEvent, EventBus
 from backend.company.prompts import PromptConfig
 from backend.company.roles import STANDARD_ROLES, RoleType
@@ -83,6 +86,17 @@ class CompanyOrchestrator:
         )
         # Docker 管理服務（可注入，方便測試；若為 None 則自動獲取）
         self.docker = docker_manager
+        # 取消標誌：由外部（task_manager）設置，執行迴圈檢查此標誌
+        self.cancel_requested = False
+
+    def request_cancel(self) -> None:
+        """請求取消公司任務（執行迴圈會在下一個檢查點中止）。"""
+        self.cancel_requested = True
+        logger.info("公司任務已請求取消（run_id=%s）", self._run_id)
+
+    def _check_cancel(self) -> bool:
+        """檢查是否已請求取消。"""
+        return self.cancel_requested
 
     # ═══════════════════════════════════════════════════════════
     # 公開 API
@@ -160,10 +174,20 @@ class CompanyOrchestrator:
         self.events.emit(CompanyEvent.PHASE_CHANGE, {"phase": "execute_review", "work_items": len(work_items)})
         await self._execute_review_loop(goal)
 
+        # 取消檢查點：執行迴圈結束後
+        if self._check_cancel():
+            self._log("company_cancelled", {"at": "after_execute_review"}, level=logging.INFO)
+            return self._error_result("任務已被使用者取消")
+
         # ── 階段 3：Synthesizer 整合 ──
         self._log("phase", {"phase": "synthesize"})
         self.events.emit(CompanyEvent.PHASE_CHANGE, {"phase": "synthesize"})
         final_output = await self._synthesize(goal)
+
+        # 取消檢查點：整合結束後
+        if self._check_cancel():
+            self._log("company_cancelled", {"at": "after_synthesize"}, level=logging.INFO)
+            return self._error_result("任務已被使用者取消")
 
         # ── 階段 4：Manager 最終審查 ──
         self._log("phase", {"phase": "final_review"})
@@ -272,7 +296,9 @@ class CompanyOrchestrator:
                 }
                 for item in self.work_items._items.values()
             ],
-            "budget": self.budget.to_dict(),
+            # 檢查點保留 task_spent 全精度（to_dict 會 round 4 位，
+            # 恢復後與原值產生浮點誤差），其餘欄位維持序列化格式
+            "budget": {**self.budget.to_dict(), "task_spent": self.budget.task_spent},
             "run_log": self._run_log,
         }
 
@@ -351,6 +377,11 @@ class CompanyOrchestrator:
         max_rounds = self.config.max_review_rounds
 
         while self.work_items.has_work_remaining():
+            # 取消檢查點：每輪迴圈開始時
+            if self._check_cancel():
+                logger.info("執行迴圈偵測到取消請求，中止")
+                return
+
             ready_items = self.work_items.get_ready_items()
 
             if not ready_items:
@@ -363,6 +394,24 @@ class CompanyOrchestrator:
                     )
                 # 檢查是否全部完成
                 if self.work_items.is_all_done():
+                    break
+                # 死鎖檢測：無就緒項、無執行中、無審查中項目時，
+                # 剩餘工作項全部處於 blocked/rework 等無法推進狀態，
+                # 繼續等待只會無限空轉 → 直接退出迴圈
+                active_statuses = {
+                    WorkItemStatus.EXECUTING,
+                    WorkItemStatus.IN_REVIEW,
+                    WorkItemStatus.REWORK,
+                    WorkItemStatus.READY,
+                }
+                has_active = any(
+                    item.status in active_statuses
+                    for item in self.work_items.list_all()
+                )
+                if not has_active:
+                    logger.warning(
+                        "無可推進的工作項（全部阻塞或完成），退出執行迴圈"
+                    )
                     break
                 # 等待（實際場景中可能有非同步事件）
                 await asyncio.sleep(0.1)
@@ -390,6 +439,108 @@ class CompanyOrchestrator:
         """用 Semaphore 包裝 _execute_single_item，限制並行數。"""
         async with self._worker_semaphore:
             await self._execute_single_item(goal, item)
+
+    async def _execute_with_tool_loop(
+        self,
+        prompt: str,
+        system: str,
+        model: str | None,
+        role_value: str,
+        item,
+        max_tool_steps: int = 3,
+    ) -> str:
+        """執行 LLM 調用並處理工具調用閉環。
+
+        若 LLM 輸出中包含 tool_call 區塊，則執行工具並將
+        Observation 回傳給 LLM 繼續推理，直到產出最終交付物
+        或達到最大工具步數。
+
+        Args:
+            prompt: 初始提示
+            system: 系統提示
+            model: LLM 模型
+            role_value: 角色名稱（用於工具權限）
+            item: 工作項（用於事件與日誌）
+            max_tool_steps: 最大工具調用步數
+
+        Returns:
+            最終交付物文字
+        """
+        current_prompt = prompt
+        conversation_suffix: list[str] = []
+
+        for step in range(max_tool_steps + 1):
+            # 組裝當前提示（含歷史 Observation）
+            full_prompt = current_prompt
+            if conversation_suffix:
+                full_prompt = current_prompt + "\n\n" + "\n\n".join(conversation_suffix)
+
+            raw = await asyncio.to_thread(
+                call_llm, full_prompt, system=system, model=model
+            )
+
+            # 解析工具調用
+            tool_request = tool_registry.parse_tool_call(raw)
+            if tool_request is None:
+                # 無工具調用 → 這是最終交付物
+                return raw
+
+            # ── 執行工具 ──
+            self._log("tool_call", {
+                "item_id": item.id,
+                "tool": tool_request.tool,
+                "args": tool_request.args,
+                "step": step + 1,
+            }, level=logging.INFO)
+            self.events.emit(CompanyEvent.TOOL_CALL, {
+                "item_id": item.id,
+                "title": item.title,
+                "tool": tool_request.tool,
+                "args": tool_request.args,
+                "step": step + 1,
+            })
+
+            tool_result = await asyncio.to_thread(
+                tool_registry.execute, tool_request, role_value
+            )
+
+            observation = (
+                str(tool_result.result)[:3000]
+                if tool_result.success
+                else f"工具執行失敗：{tool_result.error}"
+            )
+
+            self._log("tool_result", {
+                "item_id": item.id,
+                "tool": tool_request.tool,
+                "success": tool_result.success,
+                "step": step + 1,
+            }, level=logging.INFO)
+            self.events.emit(CompanyEvent.TOOL_RESULT, {
+                "item_id": item.id,
+                "title": item.title,
+                "tool": tool_request.tool,
+                "success": tool_result.success,
+                "observation": observation[:500],
+                "step": step + 1,
+            })
+
+            # 將 LLM 輸出與 Observation 加入對話歷史
+            conversation_suffix.append(raw)
+            conversation_suffix.append(f"Observation: {observation}")
+            conversation_suffix.append(
+                "（請根據以上工具結果繼續完成任務。若還需要工具，請輸出 tool_call 區塊；"
+                "若已有足夠資訊，請直接給出最終交付物，不要再輸出 tool_call。）"
+            )
+
+        # 達到最大工具步數 → 要求 LLM 給出最終答案
+        final_prompt = (
+            current_prompt + "\n\n" + "\n\n".join(conversation_suffix)
+            + "\n\n（已達到最大工具調用次數，請根據目前所有資訊，直接給出最終交付物。）"
+        )
+        return await asyncio.to_thread(
+            call_llm, final_prompt, system=system, model=model
+        )
 
     async def _execute_single_item(self, goal: str, item) -> None:
         """根據指派角色執行單一工作項（含重試、超時、角色升級）。"""
@@ -420,10 +571,24 @@ class CompanyOrchestrator:
         if role_specific_prompt:
             prompt = prompt + "\n\n" + role_specific_prompt
 
-        # 若角色有 Docker 工具權限，附加 Docker 工具說明
-        docker_tools_text = self._get_docker_tools_for_role(role_type)
-        if docker_tools_text:
-            prompt = prompt + "\n\n" + docker_tools_text
+        # ── 角色記憶注入：檢索該角色的相關歷史經驗 ──
+        try:
+            role_memory = get_role_memory(role_type.value)
+            memory_context = await asyncio.to_thread(
+                role_memory.retrieve_formatted, item.title, 3
+            )
+            if memory_context:
+                prompt = prompt + "\n\n" + memory_context
+                self._log("role_memory_injected", {
+                    "item_id": item.id, "role": role_type.value,
+                }, level=logging.DEBUG)
+        except Exception:  # noqa: BLE001 - 記憶注入失敗不阻斷執行
+            pass
+
+        # 若角色有工具權限，附加工具說明（使用新工具註冊表）
+        tools_text = self._get_docker_tools_for_role(role_type)
+        if tools_text:
+            prompt = prompt + "\n\n" + tools_text
 
         # ── 重試迴圈（含指數退避 + 超時 + 角色升級）──
         retry_cfg = self.config.retry_config
@@ -431,22 +596,18 @@ class CompanyOrchestrator:
 
         for attempt in range(retry_cfg.max_retries + 1):
             try:
-                # 超時控制
+                # ── 工具調用閉環執行（含超時控制）──
+                system_prompt = role_def.system_prompt or self.prompt_config.developer_execute_system
                 if retry_cfg.deadline_seconds > 0:
                     raw = await asyncio.wait_for(
-                        asyncio.to_thread(
-                            call_llm,
-                            prompt,
-                            system=role_def.system_prompt or self.prompt_config.developer_execute_system,
-                            model=model,
+                        self._execute_with_tool_loop(
+                            prompt, system_prompt, model, role_type.value, item,
                         ),
                         timeout=retry_cfg.deadline_seconds,
                     )
                 else:
-                    raw = call_llm(
-                        prompt,
-                        system=role_def.system_prompt or self.prompt_config.developer_execute_system,
-                        model=model,
+                    raw = await self._execute_with_tool_loop(
+                        prompt, system_prompt, model, role_type.value, item,
                     )
 
                 cost = CostTracker.estimate_cost_rough(model, "high")
@@ -462,6 +623,20 @@ class CompanyOrchestrator:
                 self.events.emit(CompanyEvent.WORK_ITEM_DONE, {
                     "item_id": item.id, "title": item.title, "cost": round(cost, 4),
                 })
+
+                # ── 角色記憶保存：將執行經驗存入角色記憶 ──
+                try:
+                    role_memory = get_role_memory(role_type.value)
+                    await asyncio.to_thread(
+                        role_memory.save_from_work_item,
+                        item.title,
+                        raw[:1000],
+                        None,  # 審查結果稍後由 _review_item 補充
+                        True,
+                    )
+                except Exception:  # noqa: BLE001 - 記憶保存失敗不阻斷流程
+                    pass
+
                 return  # 成功，退出
 
             except asyncio.TimeoutError:
@@ -913,28 +1088,12 @@ class CompanyOrchestrator:
     # ═══════════════════════════════════════════════════════════
 
     def _get_docker_tools_for_role(self, role_type: RoleType) -> str:
-        """獲取角色可用的 Docker 工具說明文字。
+        """獲取角色可用的工具說明文字（使用新工具註冊表）。
 
-        若角色無 Docker 權限，回傳空字串。
+        包含 Docker 工具、記憶查詢等所有該角色可用的工具。
+        若角色無可用工具，回傳空字串。
         """
-        role_value = role_type.value
-        available = [
-            name for name, desc in DOCKER_TOOLS.items()
-            if can_use_docker_tool(role_value, name)
-        ]
-        if not available:
-            return ""
-
-        lines = ["【可用的 Docker 容器管理工具】"]
-        lines.append("你可以使用以下工具來查詢或控制 EvoLoop 容器化部署：")
-        for name in available:
-            lines.append(f"  - {name}: {DOCKER_TOOLS[name]}")
-        lines.append("")
-        lines.append("若需使用 Docker 工具，請在交付物中明確標註：")
-        lines.append("```docker_tool")
-        lines.append('{"tool": "<工具名>", "args": {"service": "<服務名>", "tail": 100}}')
-        lines.append("```")
-        return "\n".join(lines)
+        return tool_registry.format_tools_prompt(role_type.value)
 
     def execute_docker_request(self, tool_name: str, args: dict[str, Any] | None = None) -> str:
         """執行 Docker 工具請求（供外部調用）。

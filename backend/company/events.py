@@ -40,6 +40,10 @@ class CompanyEvent(str, Enum):
     WORK_ITEM_RETRY = "work_item_retry"      # 工作項重試中
     WORK_ITEM_ESCALATE = "work_item_escalate"  # 工作項升級到上級角色
 
+    # ── 工具調用層級（Agent 工具閉環）──
+    TOOL_CALL = "tool_call"                  # Agent 發起工具調用
+    TOOL_RESULT = "tool_result"              # 工具執行結果回傳
+
     # ── 審查層級 ──
     REVIEW_PASS = "review_pass"              # 審查通過
     REVIEW_REWORK = "review_rework"          # 審查不通過，退回修改
