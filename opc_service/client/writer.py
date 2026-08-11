@@ -1,5 +1,6 @@
 """OPC UA 写入操作 Mixin。"""
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Any
 
@@ -12,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class WriterMixin:
-    """OPC UA 标签写入 — write_node。"""
+    """OPC UA 标签写入 — write_node / write_nodes。"""
 
     if TYPE_CHECKING:
         # 由 ConnectionMixin 在 OPCClient 组合时提供
@@ -44,3 +45,25 @@ class WriterMixin:
                 "message": f"写入失败：{exc}",
                 "written_value": None,
             }
+
+    async def write_nodes(
+        self, entries: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """批量写入多个标签（并发执行）。
+        
+        Args:
+            entries: [{"tag_name": ..., "value": ...}, ...]
+            
+        Returns:
+            [{"tag_name": ..., "success": bool, "message": ...}, ...]
+            
+        使用 asyncio.gather() 并发写入所有标签，显著提升多标签写入性能。
+        每个标签独立处理，单项失败不影响其余写入。
+        """
+        if not entries:
+            return []
+        # 并发写入所有标签
+        tasks = [
+            self.write_node(entry["tag_name"], entry["value"]) for entry in entries
+        ]
+        return await asyncio.gather(*tasks)

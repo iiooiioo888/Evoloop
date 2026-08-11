@@ -23,10 +23,14 @@ async def write_tags(req: WriteRequest):
     """写入标签值，写入前通过安全护栏检查。
 
     安全检查流程：
-    1. 白名单检查 → 2. 边界检查 → 3. 执行写入 → 4. 审计记录
+    1. 白名单检查 → 2. 边界检查 → 3. 并发执行写入 → 4. 审计记录
+    
+    性能优化：使用并发批量写入，显著提升多标签写入性能。
     """
     results: list[WriteResult] = []
+    valid_entries: list[dict] = []
 
+    # 第一阶段：安全检查与过滤
     for entry in req.entries:
         # 安全护栏检查
         passed, guard_msg = write_guard.validate_write(
@@ -47,35 +51,39 @@ async def write_tags(req: WriteRequest):
                 result="blocked",
                 detail=guard_msg,
             )
-            continue
+        else:
+            valid_entries.append({"tag_name": entry.tag_name, "value": entry.value})
 
-        # 执行写入
+    # 第二阶段：并发执行所有有效写入
+    if valid_entries:
         try:
-            result = await opc_client.write_node(
-                entry.tag_name, entry.value
-            )
-            results.append(WriteResult(**result))
-            audit_logger.log_write(
-                entry.tag_name,
-                entry.value,
-                reason=req.reason,
-                result="success" if result["success"] else "failed",
-                detail=result.get("message", ""),
-            )
-        except Exception as exc:  # noqa: BLE001 - 逐项隔离：单项失败不影响其余写入，并记录审计
-            results.append(
-                WriteResult(
-                    tag_name=entry.tag_name,
-                    success=False,
-                    message=str(exc),
+            write_results = await opc_client.write_nodes(valid_entries)
+            for result in write_results:
+                results.append(WriteResult(**result))
+                audit_logger.log_write(
+                    result["tag_name"],
+                    result.get("written_value"),
+                    reason=req.reason,
+                    result="success" if result["success"] else "failed",
+                    detail=result.get("message", ""),
                 )
-            )
-            audit_logger.log_write(
-                entry.tag_name,
-                entry.value,
-                reason=req.reason,
-                result="failed",
-                detail=str(exc),
-            )
+        except Exception as exc:  # noqa: BLE001 - 逐项隔离：单项失败不影响其余写入，并记录审计
+            logger.exception("批量写入失败")
+            # 降级处理：为每个未处理的条目添加失败结果
+            for entry in valid_entries:
+                results.append(
+                    WriteResult(
+                        tag_name=entry["tag_name"],
+                        success=False,
+                        message=str(exc),
+                    )
+                )
+                audit_logger.log_write(
+                    entry["tag_name"],
+                    entry["value"],
+                    reason=req.reason,
+                    result="failed",
+                    detail=str(exc),
+                )
 
     return WriteResponse(results=results)
