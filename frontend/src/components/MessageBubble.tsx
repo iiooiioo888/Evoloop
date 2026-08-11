@@ -124,9 +124,9 @@ export default function MessageBubble({ message, sessionId, onOpenTask, onOpenTr
         {/* 時間 + 徽章列 */}
         <div className="flex flex-wrap items-center gap-2 px-1 text-xs text-gray-500">
           <span className="tabular-nums text-[11px] text-gray-600">{formatTime(message.timestamp)}</span>
-          {message.companyMode && (
+          {message.executionStrategy === 'company' && (
             <span className="inline-flex items-center gap-1 rounded-full bg-purple-500/10 px-2 py-0.5 text-[10px] font-medium text-purple-300 ring-1 ring-purple-500/25">
-              🏢 公司模式
+              🏢 公司運行時
             </span>
           )}
           {message.meta?.score != null && (

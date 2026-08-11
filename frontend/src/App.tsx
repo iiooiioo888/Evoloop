@@ -140,7 +140,7 @@ export default function App() {
         role: 'user',
         content: query,
         timestamp: Date.now(),
-        companyMode: options.companyMode,
+        executionStrategy: options.executionStrategy,
       };
       const assistantId = crypto.randomUUID();
       const placeholder: ChatMessage = {
@@ -149,7 +149,7 @@ export default function App() {
         content: '',
         timestamp: Date.now(),
         streaming: true,
-        companyMode: options.companyMode,
+        executionStrategy: options.executionStrategy,
       };
 
       updateSession(sessionId, (s) => ({
@@ -159,8 +159,8 @@ export default function App() {
         messages: [...s.messages, userMsg, placeholder],
       }));
 
-      // ── 標準模式：SSE 串流打字機效果 ──
-      if (!options.companyMode && !options.opcMode) {
+      // ── 統一模式：簡單任務走 SSE 串流打字機效果 ──
+      if (options.executionStrategy !== 'company') {
         setSending(false);
 
         // 構建對話歷史（最近 6 輪，排除當前佔位訊息）
@@ -230,13 +230,12 @@ export default function App() {
         return;
       }
 
-      // ── 公司/OPC 模式：任務 API + WebSocket ──
+      // ── 統一模式：公司運行時路徑走任務 API + WebSocket ──
       try {
         const { task_id } = await createTask(
           query,
-          options.companyMode,
+          options.executionStrategy,
           options.companyTemplate,
-          options.opcMode,
           options.taskOptions,
         );
         updateSession(sessionId, (s) => ({
@@ -265,7 +264,7 @@ export default function App() {
           }));
 
           // OPC 任务自动打开右侧面板
-          if (options.opcMode && progress.opc_state) {
+          if (progress.resolved_path === 'opc' && progress.opc_state) {
             setRightPanelTask(progress);
           }
 
@@ -284,7 +283,7 @@ export default function App() {
                   : m,
               ),
             }));
-            if (options.opcMode) {
+            if (progress.resolved_path === 'opc') {
               setRightPanelTask(progress);
             }
             wsClient?.close();
@@ -389,9 +388,8 @@ export default function App() {
   const handleRetry = useCallback(() => {
     if (lastQuery)
       void sendQuery(lastQuery, {
-        companyMode: false,
+        executionStrategy: 'auto',
         companyTemplate: 'quick_task',
-        opcMode: false,
       });
   }, [lastQuery, sendQuery]);
 
@@ -410,9 +408,8 @@ export default function App() {
   const handleSuggest = useCallback(
     (text: string, company: boolean) => {
       void sendQuery(text, {
-        companyMode: company,
+        executionStrategy: company ? 'company' : 'auto',
         companyTemplate: 'quick_task',
-        opcMode: false,
       });
     },
     [sendQuery],

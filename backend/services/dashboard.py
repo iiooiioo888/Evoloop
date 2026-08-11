@@ -97,7 +97,8 @@ def _collect_tasks() -> list[dict[str, Any]]:
         entry: dict[str, Any] = {
             "task_id": record.task_id,
             "query": record.query,
-            "mode": record.mode,
+            "strategy": record.strategy,
+            "resolved_path": record.resolved_path,
             "status": record.status,
             "phase": record.phase,
             "score": record.score,
@@ -153,7 +154,7 @@ def _collect_capabilities(
 ) -> list[dict[str, Any]]:
     cfg = get_runtime_config()
     company_count = sum(
-        1 for t in task_manager.tasks.values() if t.mode == "company"
+        1 for t in task_manager.tasks.values() if t.resolved_path == "company"
     )
     roles = sorted({
         role.value

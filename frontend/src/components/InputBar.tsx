@@ -1,13 +1,13 @@
-/** 輸入列：自動增高文字框、公司模式開關、組織模板選擇與進階控制選項。 */
+/** 輸入列：統一模式 — 系統自動判斷執行策略，支援進階控制選項。 */
 import { useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent } from 'react';
 import { COMPANY_TEMPLATES } from '../types';
 import type { CompanyTemplate, TaskOptions } from '../types';
 
 export interface SendOptions {
-  companyMode: boolean;
+  /** 統一模式執行策略：auto（自動判斷）/ simple / company */
+  executionStrategy: 'auto' | 'simple' | 'company';
   companyTemplate: CompanyTemplate;
-  opcMode: boolean;
   /** 進階控制選項 */
   taskOptions?: TaskOptions;
 }
@@ -19,8 +19,7 @@ interface InputBarProps {
 
 export default function InputBar({ disabled, onSend }: InputBarProps) {
   const [text, setText] = useState('');
-  const [companyMode, setCompanyMode] = useState(false);
-  const [opcMode, setOpcMode] = useState(false);
+  const [executionStrategy, setExecutionStrategy] = useState<'auto' | 'simple' | 'company'>('auto');
   const [companyTemplate, setCompanyTemplate] = useState<CompanyTemplate>('quick_task');
   const [showAdvanced, setShowAdvanced] = useState(false);
   // 進階控制選項
@@ -49,7 +48,7 @@ export default function InputBar({ disabled, onSend }: InputBarProps) {
     if (maxIterations) taskOptions.max_iterations = parseInt(maxIterations, 10);
     if (maxReviewRounds) taskOptions.max_review_rounds = parseInt(maxReviewRounds, 10);
     if (passThreshold) taskOptions.pass_threshold = parseFloat(passThreshold);
-    onSend(trimmed, { companyMode, companyTemplate, opcMode, taskOptions });
+    onSend(trimmed, { executionStrategy, companyTemplate, taskOptions });
     setText('');
     requestAnimationFrame(() => {
       if (textareaRef.current) textareaRef.current.style.height = 'auto';
@@ -66,48 +65,52 @@ export default function InputBar({ disabled, onSend }: InputBarProps) {
   return (
     <div className="border-t border-gray-800/60 bg-gray-900/60 px-4 py-3 backdrop-blur-md">
       <div className="mx-auto max-w-3xl">
-        {/* 公司模式控制列 */}
+        {/* 統一模式控制列 */}
         <div className="mb-2.5 flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              setOpcMode((v) => !v);
-              if (!opcMode) setCompanyMode(false);
-            }}
-            disabled={disabled}
-            className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all duration-200 disabled:opacity-50 ${
-              opcMode
-                ? 'bg-gradient-to-r from-cyan-600 to-cyan-500 text-white shadow-md shadow-cyan-900/30 ring-1 ring-cyan-400/30'
-                : 'border border-gray-700/80 bg-gray-800/80 text-gray-400 hover:border-cyan-500/50 hover:text-cyan-300'
-            }`}
-            title="OPC 模式：6 級工業閉環（感知→預處理→分析→診斷→決策→執行）"
-          >
-            🏭 OPC 模式
-            <span className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] ${opcMode ? 'bg-white/20' : 'bg-gray-700/60'}`}>
-              {opcMode ? 'ON' : 'OFF'}
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setCompanyMode((v) => !v);
-              if (!companyMode) setOpcMode(false);
-            }}
-            disabled={disabled}
-            className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all duration-200 disabled:opacity-50 ${
-              companyMode
-                ? 'bg-gradient-to-r from-purple-600 to-purple-500 text-white shadow-md shadow-purple-900/30 ring-1 ring-purple-400/30'
-                : 'border border-gray-700/80 bg-gray-800/80 text-gray-400 hover:border-purple-500/50 hover:text-purple-300'
-            }`}
-            title="公司模式：由多代理人團隊分工處理複雜目標"
-          >
-            🏢 公司模式
-            <span className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] ${companyMode ? 'bg-white/20' : 'bg-gray-700/60'}`}>
-              {companyMode ? 'ON' : 'OFF'}
-            </span>
-          </button>
+          {/* 執行策略選擇 */}
+          <div className="flex items-center gap-1 rounded-full border border-gray-700/80 bg-gray-800/80 p-0.5">
+            <button
+              type="button"
+              onClick={() => setExecutionStrategy('auto')}
+              disabled={disabled}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-all duration-200 disabled:opacity-50 ${
+                executionStrategy === 'auto'
+                  ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-sm'
+                  : 'text-gray-400 hover:text-gray-200'
+              }`}
+              title="自動判斷：系統依任務複雜度自動選擇執行路徑"
+            >
+              🤖 自動
+            </button>
+            <button
+              type="button"
+              onClick={() => setExecutionStrategy('simple')}
+              disabled={disabled}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-all duration-200 disabled:opacity-50 ${
+                executionStrategy === 'simple'
+                  ? 'bg-gradient-to-r from-green-600 to-green-500 text-white shadow-sm'
+                  : 'text-gray-400 hover:text-gray-200'
+              }`}
+              title="簡單模式：強制單次 LLM 生成"
+            >
+              ⚡ 簡單
+            </button>
+            <button
+              type="button"
+              onClick={() => setExecutionStrategy('company')}
+              disabled={disabled}
+              className={`rounded-full px-3 py-1 text-xs font-medium transition-all duration-200 disabled:opacity-50 ${
+                executionStrategy === 'company'
+                  ? 'bg-gradient-to-r from-purple-600 to-purple-500 text-white shadow-sm'
+                  : 'text-gray-400 hover:text-gray-200'
+              }`}
+              title="公司模式：強制多代理人團隊分工"
+            >
+              🏢 公司
+            </button>
+          </div>
 
-          {companyMode && (
+          {executionStrategy === 'company' && (
             <select
               value={companyTemplate}
               onChange={(e) => setCompanyTemplate(e.target.value as CompanyTemplate)}
@@ -228,20 +231,16 @@ export default function InputBar({ disabled, onSend }: InputBarProps) {
               }}
               onKeyDown={handleKeyDown}
               placeholder={
-                opcMode
-                  ? '描述工業製程檢查需求…（如：檢查製程狀態）'
-                  : companyMode
-                    ? '描述一個複雜目標，交給公司團隊處理…'
-                    : '輸入你的問題…（Enter 發送，Shift+Enter 換行）'
+                executionStrategy === 'company'
+                  ? '描述一個複雜目標，交給公司團隊處理…'
+                  : '輸入你的問題…（系統自動判斷執行策略，Enter 發送）'
               }
               rows={1}
               disabled={disabled}
               className={`max-h-40 min-h-[46px] w-full resize-none rounded-xl border bg-gray-800/80 px-4 py-3 text-sm text-gray-100 placeholder-gray-500 shadow-inner transition-all duration-200 focus:outline-none focus:ring-2 disabled:opacity-50 ${
-                opcMode
-                  ? 'border-gray-700/80 focus:border-cyan-500/60 focus:ring-cyan-500/20'
-                  : companyMode
-                    ? 'border-gray-700/80 focus:border-purple-500/60 focus:ring-purple-500/20'
-                    : 'border-gray-700/80 focus:border-blue-500/60 focus:ring-blue-500/20'
+                executionStrategy === 'company'
+                  ? 'border-gray-700/80 focus:border-purple-500/60 focus:ring-purple-500/20'
+                  : 'border-gray-700/80 focus:border-blue-500/60 focus:ring-blue-500/20'
               }`}
             />
           </div>
@@ -249,11 +248,9 @@ export default function InputBar({ disabled, onSend }: InputBarProps) {
             type="submit"
             disabled={disabled || !text.trim()}
             className={`flex h-[46px] shrink-0 items-center gap-1.5 rounded-xl px-5 text-sm font-medium text-white shadow-md transition-all duration-200 active:scale-95 disabled:cursor-not-allowed disabled:bg-gray-700/60 disabled:text-gray-500 disabled:shadow-none ${
-              opcMode
-                ? 'bg-gradient-to-r from-cyan-600 to-cyan-500 shadow-cyan-900/30 hover:from-cyan-500 hover:to-cyan-400'
-                : companyMode
-                  ? 'bg-gradient-to-r from-purple-600 to-purple-500 shadow-purple-900/30 hover:from-purple-500 hover:to-purple-400'
-                  : 'bg-gradient-to-r from-blue-600 to-blue-500 shadow-blue-900/30 hover:from-blue-500 hover:to-blue-400'
+              executionStrategy === 'company'
+                ? 'bg-gradient-to-r from-purple-600 to-purple-500 shadow-purple-900/30 hover:from-purple-500 hover:to-purple-400'
+                : 'bg-gradient-to-r from-blue-600 to-blue-500 shadow-blue-900/30 hover:from-blue-500 hover:to-blue-400'
             }`}
           >
             {disabled ? (

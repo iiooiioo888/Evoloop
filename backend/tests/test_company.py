@@ -1355,25 +1355,25 @@ class TestCompanyGraphIntegration:
     """公司模式在 EvoLoop 圖中的路由測試。"""
 
     def test_route_to_company_mode(self):
-        """company_mode=True 時路由到公司模式。"""
-        from backend.core.company_nodes import route_to_company
+        """execution_strategy='company' 時路由到公司運行時。"""
+        from backend.core.company_nodes import route_by_complexity
 
-        state = {"company_mode": True}
-        assert route_to_company(state) == "run_company"
+        state = {"execution_strategy": "company"}
+        assert route_by_complexity(state) == "run_company"
 
     def test_route_to_standard_mode(self):
-        """company_mode=False 時路由到標準模式。"""
-        from backend.core.company_nodes import route_to_company
+        """execution_strategy='simple' 時路由到單次生成。"""
+        from backend.core.company_nodes import route_by_complexity
 
-        state = {"company_mode": False}
-        assert route_to_company(state) == "generate_initial_answer"
+        state = {"execution_strategy": "simple"}
+        assert route_by_complexity(state) == "generate_initial_answer"
 
     def test_route_default_is_standard(self):
-        """未設定 company_mode 時預設為標準模式。"""
-        from backend.core.company_nodes import route_to_company
+        """未設定 execution_strategy 時預設為 auto（簡單 query 走單次生成）。"""
+        from backend.core.company_nodes import route_by_complexity
 
-        state = {}
-        assert route_to_company(state) == "generate_initial_answer"
+        state = {"query": "你好"}
+        assert route_by_complexity(state) == "generate_initial_answer"
 
     def test_run_company_with_mock(self):
         """run_company 節點（模擬 LLM 呼叫）。
@@ -1432,7 +1432,7 @@ class TestCompanyGraphIntegration:
             result = run_company(state)
 
         assert "final_answer" in result
-        assert "公司模式執行失敗" in result["final_answer"]
+        assert "公司運行時執行失敗" in result["final_answer"]
         company_result = result.get("company_result", {})
         assert company_result.get("success") is False
 
@@ -1477,7 +1477,7 @@ class TestCompanyGraphIntegration:
         ):
             result = build_graph().invoke({
                 "query": "建立一個用戶管理系統",
-                "company_mode": True,
+                "execution_strategy": "company",
                 "company_template": "quick_task",
             })
 
@@ -1521,7 +1521,7 @@ class TestCompanyGraphIntegration:
         ):
             result = build_graph().invoke({
                 "query": "建立一個用戶管理系統",
-                "company_mode": True,
+                "execution_strategy": "company",
                 "company_template": "quick_task",
             })
 
@@ -1546,11 +1546,11 @@ class TestCompanyGraphIntegration:
         ):
             result = build_graph().invoke({
                 "query": "測試",
-                "company_mode": True,
+                "execution_strategy": "company",
                 "company_template": "quick_task",
             })
 
-        assert "公司模式執行失敗" in result["final_answer"]
+        assert "公司運行時執行失敗" in result["final_answer"]
         assert result["company_result"]["success"] is False
         # 標準節點 LLM 不應被呼叫（跳過評估迭代）
         mock_nodes_llm.assert_not_called()# ═══════════════════════════════════════════════════════════════

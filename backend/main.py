@@ -80,7 +80,8 @@ app.add_middleware(
 class ChatRequest(BaseModel):
     query: str
     session_id: str | None = None
-    company_mode: bool = False
+    # 統一模式：執行策略（auto / simple / company），預設 auto 自動判斷
+    execution_strategy: str = "auto"
     company_template: str = "quick_task"
     # 多輪對話歷史：[{"role": "user"|"assistant", "content": "..."}, ...]
     history: list[dict[str, str]] = []
@@ -101,9 +102,9 @@ class LlmConfigRequest(BaseModel):
 
 class TaskRequest(BaseModel):
     query: str
-    company_mode: bool = False
+    # 統一模式：執行策略（auto / simple / company），預設 auto 自動判斷
+    execution_strategy: str = "auto"
     company_template: str = "quick_task"
-    opc_mode: bool = False
     # 控制細項（進階參數）
     options: dict[str, Any] = {}
 
@@ -146,7 +147,7 @@ async def test_config():
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
-    """执行 EvoLoop 反思闭环图（支援多輪對話歷史）。"""
+    """执行 EvoLoop 统一模式图（支援多輪對話歷史）。"""
     session_id = req.session_id or uuid.uuid4().hex[:12]
     initial_state = {
         "query": req.query,
@@ -157,7 +158,7 @@ async def chat(req: ChatRequest):
         "reflection": "",
         "memories": [],
         "history": req.history or [],
-        "company_mode": req.company_mode,
+        "execution_strategy": req.execution_strategy,
         "company_template": req.company_template,
     }
     result = await evoloop_graph.ainvoke(initial_state)
@@ -183,10 +184,14 @@ async def chat_stream(req: ChatRequest):
       event: done       → 完成 {"answer": "...", "score": n, "iteration": n}
       event: error      → 錯誤 {"error": "..."}
 
-    僅標準模式支援串流；公司模式自動降級為同步 /chat。
+    統一模式：複雜任務（公司運行時路徑）自動降級為同步 /chat。
     """
-    if req.company_mode:
-        # 公司模式流程複雜，降級為同步回傳
+    from backend.core.company_nodes import _is_complex_task
+
+    if req.execution_strategy == "company" or (
+        req.execution_strategy == "auto" and _is_complex_task(req.query)
+    ):
+        # 公司運行時路徑流程複雜，降級為同步回傳
         result = await chat(req)
         async def single():
             yield f"event: done\ndata: {json_mod.dumps({'answer': result.answer, 'score': result.score, 'iteration': result.iteration}, ensure_ascii=False)}\n\n"
@@ -276,18 +281,20 @@ async def chat_stream(req: ChatRequest):
 
 @app.post("/tasks")
 async def create_task(req: TaskRequest):
-    """建立後台任務（標準/公司模式），回傳 task_id 供輪詢。"""
+    """建立後台任務（統一模式），回傳 task_id 供輪詢。
+
+    統一模式下不再區分模式，execution_strategy 僅為可選的強制指定：
+    - "auto"（預設）: 系統自動判斷執行路徑
+    - "simple": 強制單次 LLM 生成
+    - "company": 強制公司運行時
+    """
     if not req.query.strip():
         raise HTTPException(status_code=422, detail="query 不可為空")
-    if req.opc_mode:
-        mode = "opc"
-    elif req.company_mode:
-        mode = "company"
-    else:
-        mode = "standard"
-    record = task_manager.create_task(req.query, mode, req.company_template, options=req.options)
+    record = task_manager.create_task(
+        req.query, req.execution_strategy, req.company_template, options=req.options
+    )
     task_manager.start_task(record)
-    return {"task_id": record.task_id, "mode": mode}
+    return {"task_id": record.task_id, "strategy": req.execution_strategy}
 
 
 @app.get("/tasks/{task_id}")

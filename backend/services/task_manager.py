@@ -1,8 +1,7 @@
-"""任務管理器：標準模式與公司模式統一的後台任務執行。
+"""任務管理器：統一模式的後台任務執行。
 
-所有對話任務改為後台非同步執行，透過 API 暴露即時進度
-（階段、事件流；公司模式另有看板與預算），供前端任務
-介面輪詢：
+統一模式下不再區分「標準/公司/OPC」三種模式，所有任務
+進入同一條 EvoLoop 管線，由系統自動判斷執行策略：
 
     POST /tasks          建立任務（回傳 task_id）
     GET  /tasks/{id}     查詢任務進度與結果
@@ -13,13 +12,12 @@
   會被標記為失敗（服務中斷）
 - 任務完成後寫入 JSONL 對話存檔（與 /chat 同一存檔管線）
 
-標準模式流程（即時回報每個階段）：
-  記憶檢索 → 生成 → 評估 →（反思 → 改進 → 再評估）* → 完成
-
-公司模式流程：
-  CompanyOrchestrator 完整公司流程（分解→執行→審查→整合→最終審查），
-  事件匯流排掛載監聽器收集生命週期事件；產出成功後同樣
-  進入評估/反思/改進迭代迴圈。
+統一管線流程：
+  記憶檢索 → OPC 上下文增強（自動） → 複雜度路由
+    ├─ 工業任務（OPC 可用）→ 6 級閉環（感知→預處理→分析→診斷→決策→執行）
+    ├─ 複雜任務 → 公司運行時（分解→執行→審查→整合）
+    └─ 簡單任務 → 單次 LLM 生成
+  → 評估 → 反思 → 改進（迭代迴圈） → 存檔
 """
 
 from __future__ import annotations
@@ -39,6 +37,11 @@ from backend.company.events import CompanyEvent
 from backend.company.orchestrator import CompanyOrchestrator
 from backend.company.roles import BUILTIN_TEMPLATES
 from backend.core import nodes
+from backend.core.company_nodes import (
+    _is_complex_task,
+    _needs_opc_context,
+    enhance_with_opc_context,
+)
 from backend.core.graph import MAX_ITERATIONS, PASS_THRESHOLD
 from backend.services.archiver import save_session_archive_sync
 from backend.services.task_broadcaster import task_broadcaster
@@ -70,10 +73,11 @@ TASK_TTL_SECONDS = 7 * 86400
 class TaskRecord:
     """單一任務的運行狀態記錄。"""
 
-    def __init__(self, task_id: str, query: str, mode: str, template: str):
+    def __init__(self, task_id: str, query: str, strategy: str, template: str):
         self.task_id = task_id
         self.query = query
-        self.mode = mode  # standard / company / opc
+        # 統一模式：執行策略（auto / simple / company），取代原 mode
+        self.strategy = strategy
         self.template = template
         self.status = "pending"  # pending / running / completed / failed / cancelled / interrupted
         self.phase = ""
@@ -86,12 +90,14 @@ class TaskRecord:
         self.error = ""
         # 取消標誌：任務執行迴圈檢查此標誌以中止執行
         self.cancel_requested = False
-        # 公司模式細節：分解計劃、最終審查結果、工作項統計
+        # 公司運行時細節：分解計劃、最終審查結果、工作項統計
         self.plan: dict[str, Any] | None = None
         self.review: dict[str, Any] | None = None
         self.stats: dict[str, Any] | None = None
-        # OPC 模式：6 级闭环状态数据
+        # OPC 6 級閉環狀態數據
         self.opc_state: dict[str, Any] = {}
+        # 實際採用的執行路徑（simple / company / opc，供前端展示）
+        self.resolved_path: str = ""
         # 斷點續跑：是否有可用的檢查點
         self.resumable = False
         # 控制細項（進階參數）
@@ -102,7 +108,8 @@ class TaskRecord:
         return {
             "task_id": self.task_id,
             "status": self.status,
-            "mode": self.mode,
+            "strategy": self.strategy,
+            "resolved_path": self.resolved_path,
             "query": self.query,
             "template": self.template,
             "phase": self.phase,
@@ -132,9 +139,11 @@ class TaskRecord:
 
     @classmethod
     def from_snapshot(cls, data: dict[str, Any]) -> "TaskRecord":
+        # 向後兼容：舊記錄使用 mode 欄位
+        strategy = data.get("strategy") or data.get("mode", "auto")
         record = cls(
             data["task_id"], data.get("query", ""),
-            data.get("mode", "standard"), data.get("template", "quick_task"),
+            strategy, data.get("template", "quick_task"),
         )
         record.status = data.get("status", "failed")
         record.phase = data.get("phase", "")
@@ -149,6 +158,7 @@ class TaskRecord:
         record.review = data.get("review")
         record.stats = data.get("stats")
         record.opc_state = data.get("opc_state", {})
+        record.resolved_path = data.get("resolved_path", "")
         record.cancel_requested = data.get("cancel_requested", False)
         record.resumable = data.get("resumable", False)
         record.options = data.get("options", {})
@@ -224,10 +234,10 @@ class TaskManager:
     # ── 公開 API ──
 
     def create_task(
-        self, query: str, mode: str, template: str, options: dict[str, Any] | None = None
+        self, query: str, strategy: str, template: str, options: dict[str, Any] | None = None
     ) -> TaskRecord:
         task_id = uuid.uuid4().hex[:12]
-        record = TaskRecord(task_id, query, mode, template)
+        record = TaskRecord(task_id, query, strategy, template)
         record.options = options or {}
         self.tasks[task_id] = record
         self._persist(record)
@@ -244,8 +254,7 @@ class TaskManager:
     def resume_task(self, task_id: str) -> tuple[bool, str]:
         """斷點續跑：從檢查點恢復任務執行。
 
-        僅支援公司模式任務（有 orchestrator checkpoint）。
-        標準模式任務因執行速度快，不支持斷點續跑。
+        僅支援走公司運行時路徑的任務（有 orchestrator checkpoint）。
 
         Returns:
             (success, message)
@@ -257,8 +266,8 @@ class TaskManager:
             return False, "任務正在執行中"
         if record.status == "completed":
             return False, "任務已完成，無需恢復"
-        if record.mode != "company":
-            return False, "僅公司模式任務支持斷點續跑"
+        if record.resolved_path != "company":
+            return False, "僅公司運行時路徑的任務支持斷點續跑"
 
         # 檢查是否有檢查點
         checkpoint = load_checkpoint(task_id)
@@ -289,13 +298,8 @@ class TaskManager:
         return record
 
     def start_task(self, record: TaskRecord) -> None:
-        """以背景任務方式啟動（依模式分派）。"""
-        if record.mode == "company":
-            asyncio.create_task(self._run_company_task(record))
-        elif record.mode == "opc":
-            asyncio.create_task(self._run_opc_task(record))
-        else:
-            asyncio.create_task(self._run_standard_task(record))
+        """以背景任務方式啟動（統一管線）。"""
+        asyncio.create_task(self._run_unified_task(record))
 
     def cancel_task(self, task_id: str) -> tuple[bool, str]:
         """請求取消任務。
@@ -314,7 +318,7 @@ class TaskManager:
         record.cancel_requested = True
         self._add_event(record, "cancel_requested", {})
         self._persist(record)
-        # 公司模式：傳遞取消請求到 orchestrator
+        # 公司運行時：傳遞取消請求到 orchestrator
         orchestrator = self._orchestrators.get(task_id)
         if orchestrator is not None:
             orchestrator.request_cancel()
@@ -386,7 +390,8 @@ class TaskManager:
             "retrieved_memories": [],
             "archive_metadata": {
                 "source": "task_api",
-                "mode": record.mode,
+                "strategy": record.strategy,
+                "resolved_path": record.resolved_path,
                 "template": record.template,
             },
         }
@@ -395,12 +400,59 @@ class TaskManager:
         except Exception as exc:  # noqa: BLE001
             logger.warning("任務存檔失敗（不影響結果）：%s", exc)
 
-    # ── 標準模式執行 ──
+    # ── 執行策略解析 ──
 
-    async def _run_standard_task(self, record: TaskRecord) -> None:
-        """標準反思迴圈：逐步回報階段與評分（含取消檢查點 + 思考過程記錄）。"""
+    def _resolve_path(self, record: TaskRecord) -> str:
+        """依執行策略與任務內容解析實際執行路徑。
+
+        回傳值：
+        - "opc": 工業任務且 OPC 服務可用 → 6 級閉環
+        - "company": 複雜任務 → 公司運行時
+        - "simple": 簡單任務 → 單次生成
+        """
+        strategy = record.strategy
+
+        if strategy == "simple":
+            return "simple"
+        if strategy == "company":
+            return "company"
+
+        # auto：依規則判斷
+        query = record.query
+
+        # 工業任務優先走 OPC 6 級閉環
+        if _needs_opc_context(query):
+            return "opc"
+
+        # 複雜任務走公司運行時
+        if _is_complex_task(query):
+            return "company"
+
+        return "simple"
+
+    # ── 統一管線執行 ──
+
+    async def _run_unified_task(self, record: TaskRecord) -> None:
+        """統一模式任務執行入口：解析路徑後分派到對應子流程。"""
         record.status = "running"
         self._persist(record)
+
+        path = self._resolve_path(record)
+        record.resolved_path = path
+        self._add_event(record, "path_resolved", {"path": path, "strategy": record.strategy})
+        logger.info("任務 %s 解析執行路徑：%s（策略：%s）", record.task_id, path, record.strategy)
+
+        if path == "opc":
+            await self._run_opc_task(record)
+        elif path == "company":
+            await self._run_company_task(record)
+        else:
+            await self._run_simple_task(record)
+
+    # ── 簡單任務執行（單次生成 + 反思迴圈） ──
+
+    async def _run_simple_task(self, record: TaskRecord) -> None:
+        """簡單任務：記憶檢索 → OPC 上下文增強 → 生成 → 反思迴圈。"""
         tracer = TraceLogger(record.task_id)
         state: dict[str, Any] = {
             "query": record.query,
@@ -411,12 +463,24 @@ class TaskManager:
             self._set_phase(record, "retrieve_memories")
             tracer.log_phase_change("retrieve_memories")
             state.update(await asyncio.to_thread(nodes.retrieve_memories, state))
-            # 記錄記憶檢索結果
             memories = state.get("retrieved_memories", [])
             if memories:
                 tracer.log_context_injection(
                     source="memory", items=memories,
                     phase="retrieve_memories", query=record.query,
+                )
+            if self._check_cancelled(record):
+                self._finish(record)
+                return
+
+            # OPC 上下文增強（統一管線標準步驟）
+            self._set_phase(record, "enhance_opc_context")
+            state.update(await asyncio.to_thread(enhance_with_opc_context, state))
+            opc_ctx = state.get("opc_context", {})
+            if opc_ctx.get("summary"):
+                tracer.log_context_injection(
+                    source="opc", items=[opc_ctx["summary"]],
+                    phase="enhance_opc_context", query=record.query,
                 )
             if self._check_cancelled(record):
                 self._finish(record)
@@ -434,63 +498,7 @@ class TaskManager:
                 self._finish(record)
                 return
 
-            self._set_phase(record, "evaluate")
-            tracer.log_phase_change("evaluate")
-            state.update(await asyncio.to_thread(nodes.evaluate_answer, state))
-            evaluation = state.get("evaluation", {})
-            tracer.log_evaluation(
-                score=state.get("score"),
-                feedback=evaluation.get("weaknesses", "") if isinstance(evaluation, dict) else str(evaluation),
-                iteration=0,
-                strengths=evaluation.get("strengths", "") if isinstance(evaluation, dict) else "",
-                weaknesses=evaluation.get("weaknesses", "") if isinstance(evaluation, dict) else "",
-            )
-            self._add_event(record, "evaluation", {
-                "score": state.get("score"),
-                "iteration": 0,
-            })
-            if self._check_cancelled(record):
-                self._finish(record)
-                return
-
-            while (
-                state.get("score", 0.0) < PASS_THRESHOLD
-                and state.get("iteration", 0) < MAX_ITERATIONS
-            ):
-                if self._check_cancelled(record):
-                    self._finish(record)
-                    return
-
-                self._set_phase(record, "reflect", iteration=state.get("iteration", 0))
-                tracer.log_phase_change("reflect", data={"iteration": state.get("iteration", 0)})
-                state.update(await asyncio.to_thread(nodes.reflect, state))
-                tracer.log_reflection(
-                    reflection=state.get("critique", ""),
-                    iteration=state.get("iteration", 0),
-                    current_answer_preview=state.get("current_answer", "")[:200],
-                )
-
-                self._set_phase(record, "improve", iteration=state.get("iteration", 0))
-                tracer.log_phase_change("improve", data={"iteration": state.get("iteration", 0)})
-                state.update(await asyncio.to_thread(nodes.improve_answer, state))
-                tracer.log_improvement(
-                    improved_answer=state.get("current_answer", ""),
-                    iteration=state.get("iteration", 0),
-                    based_on_reflection=state.get("critique", ""),
-                )
-
-                self._set_phase(record, "evaluate")
-                state.update(await asyncio.to_thread(nodes.evaluate_answer, state))
-                evaluation = state.get("evaluation", {})
-                tracer.log_evaluation(
-                    score=state.get("score"),
-                    feedback=evaluation.get("weaknesses", "") if isinstance(evaluation, dict) else str(evaluation),
-                    iteration=state.get("iteration", 0),
-                )
-                self._add_event(record, "evaluation", {
-                    "score": state.get("score"),
-                    "iteration": state.get("iteration", 0),
-                })
+            await self._run_reflection_loop(record, state, tracer)
 
             record.answer = state.get("current_answer", "")
             record.score = state.get("score")
@@ -499,13 +507,75 @@ class TaskManager:
             tracer.log_phase_change("done")
             self._set_phase(record, "done")
         except Exception as exc:  # noqa: BLE001
-            logger.error("標準任務 %s 執行失敗：%s", record.task_id, exc)
+            logger.error("簡單任務 %s 執行失敗：%s", record.task_id, exc)
             record.status = "failed"
             record.error = str(exc)
             tracer.log_error(str(exc), phase=record.phase, recoverable=False)
         self._finish(record)
 
-    # ── 公司模式執行 ──
+    # ── 反思迭代迴圈（三條路徑共用） ──
+
+    async def _run_reflection_loop(
+        self, record: TaskRecord, state: dict[str, Any], tracer: TraceLogger
+    ) -> None:
+        """評估 → 反思 → 改進迭代迴圈（直到達標或達最大迭代）。"""
+        self._set_phase(record, "evaluate")
+        tracer.log_phase_change("evaluate")
+        state.update(await asyncio.to_thread(nodes.evaluate_answer, state))
+        evaluation = state.get("evaluation", {})
+        tracer.log_evaluation(
+            score=state.get("score"),
+            feedback=evaluation.get("weaknesses", "") if isinstance(evaluation, dict) else str(evaluation),
+            iteration=0,
+            strengths=evaluation.get("strengths", "") if isinstance(evaluation, dict) else "",
+            weaknesses=evaluation.get("weaknesses", "") if isinstance(evaluation, dict) else "",
+        )
+        self._add_event(record, "evaluation", {
+            "score": state.get("score"),
+            "iteration": 0,
+        })
+        if self._check_cancelled(record):
+            return
+
+        while (
+            state.get("score", 0.0) < PASS_THRESHOLD
+            and state.get("iteration", 0) < MAX_ITERATIONS
+        ):
+            if self._check_cancelled(record):
+                return
+
+            self._set_phase(record, "reflect", iteration=state.get("iteration", 0))
+            tracer.log_phase_change("reflect", data={"iteration": state.get("iteration", 0)})
+            state.update(await asyncio.to_thread(nodes.reflect, state))
+            tracer.log_reflection(
+                reflection=state.get("critique", ""),
+                iteration=state.get("iteration", 0),
+                current_answer_preview=state.get("current_answer", "")[:200],
+            )
+
+            self._set_phase(record, "improve", iteration=state.get("iteration", 0))
+            tracer.log_phase_change("improve", data={"iteration": state.get("iteration", 0)})
+            state.update(await asyncio.to_thread(nodes.improve_answer, state))
+            tracer.log_improvement(
+                improved_answer=state.get("current_answer", ""),
+                iteration=state.get("iteration", 0),
+                based_on_reflection=state.get("critique", ""),
+            )
+
+            self._set_phase(record, "evaluate")
+            state.update(await asyncio.to_thread(nodes.evaluate_answer, state))
+            evaluation = state.get("evaluation", {})
+            tracer.log_evaluation(
+                score=state.get("score"),
+                feedback=evaluation.get("weaknesses", "") if isinstance(evaluation, dict) else str(evaluation),
+                iteration=state.get("iteration", 0),
+            )
+            self._add_event(record, "evaluation", {
+                "score": state.get("score"),
+                "iteration": state.get("iteration", 0),
+            })
+
+    # ── 公司運行時執行 ──
 
     def _attach_company_listener(
         self, record: TaskRecord, orchestrator: CompanyOrchestrator
@@ -552,13 +622,7 @@ class TaskManager:
             logger.warning("檢查點保存失敗（不影響執行）：%s", exc)
 
     async def _resume_company_task(self, record: TaskRecord, checkpoint: dict[str, Any]) -> None:
-        """從檢查點恢復公司任務執行。
-
-        恢復流程：
-        1. 從 checkpoint 恢復 orchestrator 狀態（工作項、預算）
-        2. 跳過已完成的階段，從中斷點繼續執行
-        3. 已完成的 work_item 不會重新執行
-        """
+        """從檢查點恢復公司運行時任務執行。"""
         record.status = "running"
         record.phase = "resuming"
         self._persist(record)
@@ -575,7 +639,6 @@ class TaskManager:
         self._orchestrators[record.task_id] = orchestrator
 
         try:
-            # 恢復執行：orchestrator.execute 會跳過已完成的 work_item
             result = await orchestrator.execute(record.query)
         except Exception as exc:  # noqa: BLE001
             logger.error("公司任務 %s 恢復執行失敗：%s", record.task_id, exc)
@@ -589,7 +652,7 @@ class TaskManager:
             self._orchestrators.pop(record.task_id, None)
 
         if not result.get("success"):
-            error_msg = result.get("error") or result.get("final_output") or "公司流程恢復執行失敗"
+            error_msg = result.get("error") or result.get("final_output") or "公司運行時恢復執行失敗"
             if record.cancel_requested or "取消" in error_msg:
                 record.status = "cancelled"
                 record.error = "任務已被使用者取消"
@@ -600,13 +663,11 @@ class TaskManager:
             self._finish(record)
             return
 
-        # 提取公司運行細節
         record.review = result.get("review")
         record.stats = result.get("stats")
         self._persist(record)
 
         # 公司產出進入評估/反思/改進迭代迴圈
-        self._set_phase(record, "evaluate")
         state: dict[str, Any] = {
             "query": record.query,
             "session_id": record.task_id,
@@ -615,19 +676,7 @@ class TaskManager:
             "score": 0.0,
         }
         try:
-            state.update(await asyncio.to_thread(nodes.evaluate_answer, state))
-            self._add_event(record, "evaluation", {"score": state.get("score"), "iteration": 0})
-            while (
-                state.get("score", 0.0) < PASS_THRESHOLD
-                and state.get("iteration", 0) < MAX_ITERATIONS
-            ):
-                state.update(await asyncio.to_thread(nodes.reflect, state))
-                state.update(await asyncio.to_thread(nodes.improve_answer, state))
-                state.update(await asyncio.to_thread(nodes.evaluate_answer, state))
-                self._add_event(record, "evaluation", {
-                    "score": state.get("score"),
-                    "iteration": state.get("iteration", 0),
-                })
+            await self._run_reflection_loop(record, state, tracer)
         except Exception as exc:  # noqa: BLE001
             logger.warning("任務 %s 評估迴圈失敗（保留公司產出）：%s", record.task_id, exc)
 
@@ -641,9 +690,7 @@ class TaskManager:
         self._finish(record)
 
     async def _run_company_task(self, record: TaskRecord) -> None:
-        record.status = "running"
-        record.phase = "starting"
-        self._persist(record)
+        """公司運行時路徑：多角色分工 → 反思迴圈。"""
         tracer = TraceLogger(record.task_id)
         tracer.log_phase_change("starting", data={"template": record.template})
 
@@ -673,7 +720,7 @@ class TaskManager:
             self._orchestrators.pop(record.task_id, None)
 
         if not result.get("success"):
-            error_msg = result.get("error") or result.get("final_output") or "公司流程執行失敗"
+            error_msg = result.get("error") or result.get("final_output") or "公司運行時執行失敗"
             # 判斷是否為使用者取消
             if record.cancel_requested or "取消" in error_msg:
                 record.status = "cancelled"
@@ -699,7 +746,6 @@ class TaskManager:
         self._persist(record)
 
         # ── 公司產出進入評估/反思/改進迭代迴圈 ──
-        self._set_phase(record, "evaluate")
         state: dict[str, Any] = {
             "query": record.query,
             "session_id": record.task_id,
@@ -708,19 +754,7 @@ class TaskManager:
             "score": 0.0,
         }
         try:
-            state.update(await asyncio.to_thread(nodes.evaluate_answer, state))
-            self._add_event(record, "evaluation", {"score": state.get("score"), "iteration": 0})
-            while (
-                state.get("score", 0.0) < PASS_THRESHOLD
-                and state.get("iteration", 0) < MAX_ITERATIONS
-            ):
-                state.update(await asyncio.to_thread(nodes.reflect, state))
-                state.update(await asyncio.to_thread(nodes.improve_answer, state))
-                state.update(await asyncio.to_thread(nodes.evaluate_answer, state))
-                self._add_event(record, "evaluation", {
-                    "score": state.get("score"),
-                    "iteration": state.get("iteration", 0),
-                })
+            await self._run_reflection_loop(record, state, tracer)
         except Exception as exc:  # noqa: BLE001
             logger.warning("任務 %s 評估迴圈失敗（保留公司產出）：%s", record.task_id, exc)
 
@@ -734,14 +768,12 @@ class TaskManager:
     # ── OPC 6 級閉環執行 ──
 
     async def _run_opc_task(self, record: TaskRecord) -> None:
-        """OPC 6 級思考閉環：感知→預處理→分析→診斷→決策→執行。
+        """OPC 6 級閉環路徑：感知→預處理→分析→診斷→決策→執行。
 
-        逐級執行 OPC 節點，每級回報階段與數據，
-        最終彙整 6 級結果供前端展示。
+        統一模式下 OPC 不再是獨立模式，而是工業任務的執行路徑。
+        6 級結果彙整為回答後，同樣進入反思迭代迴圈。
         """
-        record.status = "running"
-        self._persist(record)
-
+        tracer = TraceLogger(record.task_id)
         state: dict[str, Any] = {
             "query": record.query,
             "session_id": record.task_id,
@@ -750,6 +782,7 @@ class TaskManager:
         try:
             # ── 第 1 級：感知 (Sense) ──
             self._set_phase(record, "sense_opc")
+            tracer.log_phase_change("sense_opc")
             state.update(await sense_opc(state))
             record.opc_state["sense"] = {
                 "readings": state.get("opc_readings", {}),
@@ -762,6 +795,7 @@ class TaskManager:
 
             # ── 第 2 級：預處理 (Preprocess) ──
             self._set_phase(record, "preprocess_opc")
+            tracer.log_phase_change("preprocess_opc")
             state.update(await preprocess_opc(state))
             record.opc_state["preprocess"] = {
                 "quality_report": state.get("opc_quality_report", {}),
@@ -774,6 +808,7 @@ class TaskManager:
 
             # ── 第 3 級：分析 (Analyze) ──
             self._set_phase(record, "analyze_opc")
+            tracer.log_phase_change("analyze_opc")
             state.update(await analyze_opc(state))
             record.opc_state["analyze"] = state.get("opc_analysis", {})
             self._persist(record)
@@ -783,6 +818,7 @@ class TaskManager:
 
             # ── 第 4 級：診斷 (Diagnose) ──
             self._set_phase(record, "diagnose_opc")
+            tracer.log_phase_change("diagnose_opc")
             state.update(await asyncio.to_thread(diagnose_opc, state))
             record.opc_state["diagnose"] = state.get("opc_diagnosis", {})
             self._persist(record)
@@ -792,6 +828,7 @@ class TaskManager:
 
             # ── 第 5 級：決策 (Decide) ──
             self._set_phase(record, "decide_opc")
+            tracer.log_phase_change("decide_opc")
             state.update(await asyncio.to_thread(decide_opc, state))
             record.opc_state["decide"] = {
                 "decisions": state.get("opc_decisions", []),
@@ -804,6 +841,7 @@ class TaskManager:
 
             # ── 第 6 級：執行 (Act) ──
             self._set_phase(record, "act_opc")
+            tracer.log_phase_change("act_opc")
             state.update(await act_opc(state))
             record.opc_state["act"] = {
                 "actions": state.get("opc_actions", []),
@@ -820,7 +858,7 @@ class TaskManager:
             decisions = state.get("opc_decisions", [])
             actions = state.get("opc_actions", [])
 
-            answer_parts = ["## OPC 6 級思考閉環診斷報告\n"]
+            answer_parts = ["## OPC 6 級閉環診斷報告\n"]
 
             # 數據品質
             answer_parts.append(
@@ -861,13 +899,25 @@ class TaskManager:
                     f"**執行結果**：{success}/{len(actions)} 成功"
                 )
 
-            record.answer = "\n\n".join(answer_parts)
+            # OPC 產出進入反思迭代迴圈
+            state["current_answer"] = "\n\n".join(answer_parts)
+            state["iteration"] = 0
+            state["score"] = 0.0
+            try:
+                await self._run_reflection_loop(record, state, tracer)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("任務 %s 評估迴圈失敗（保留 OPC 產出）：%s", record.task_id, exc)
+
+            record.answer = state.get("current_answer", "")
+            record.score = state.get("score")
+            record.iteration = state.get("iteration", 0)
             record.status = "completed"
 
         except Exception as exc:  # noqa: BLE001
             logger.error("OPC 任務 %s 執行失敗：%s", record.task_id, exc)
             record.status = "failed"
             record.error = str(exc)
+            tracer.log_error(str(exc), phase=record.phase, recoverable=False)
 
         self._set_phase(record, "done")
         self._finish(record)

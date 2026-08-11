@@ -127,8 +127,8 @@ export function elapsed(ts: number): string {
 export default function TaskPanel({ task, onOpenFull, onCancel, onResume, onOpenTrace }: TaskPanelProps) {
   const [showTimeline, setShowTimeline] = useState(false);
   const [resuming, setResuming] = useState(false);
-  const isCompany = task.mode === 'company';
-  const isOPC = task.mode === 'opc';
+  const isCompany = task.resolved_path === 'company';
+  const isOPC = task.resolved_path === 'opc';
   const isCancelled = task.status === 'cancelled';
   const phases = isOPC ? OPC_PHASES : isCompany ? COMPANY_PHASES : STANDARD_PHASES;
   const running = task.status === 'running' || task.status === 'pending';

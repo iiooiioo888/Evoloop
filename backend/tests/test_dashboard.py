@@ -68,6 +68,7 @@ def test_aggregation_with_data(tmp_path, monkeypatch):
     t1.created_at = 1000.0
     t2 = TaskRecord("task-b", "查詢二", "company", "page_dev")
     t2.status = "failed"
+    t2.resolved_path = "company"  # 統一模式：實際執行路徑
     t2.budget = {"task_spent": 0.5}
     t2.created_at = 2000.0
     monkeypatch.setattr(task_manager, "tasks", {"task-a": t1, "task-b": t2})

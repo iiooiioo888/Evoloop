@@ -41,7 +41,10 @@ export interface TaskOptions {
 export interface TaskProgress {
   task_id: string;
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
-  mode: 'standard' | 'company' | 'opc';
+  /** 統一模式：執行策略（auto / simple / company） */
+  strategy: 'auto' | 'simple' | 'company';
+  /** 統一模式：實際解析的執行路徑（simple / company / opc） */
+  resolved_path: 'simple' | 'company' | 'opc' | '';
   query: string;
   template: string;
   phase: string;
@@ -58,17 +61,17 @@ export interface TaskProgress {
   resumable?: boolean;
   /** 進階控制選項 */
   options?: TaskOptions;
-  /** 公司模式：分解計劃 */
+  /** 公司運行時：分解計劃 */
   plan?: {
     subtask_count?: number;
     strategy?: string;
     execution_plan?: unknown;
   } | null;
-  /** 公司模式：Manager 最終審查結果 */
+  /** 公司運行時：Manager 最終審查結果 */
   review?: Record<string, unknown> | null;
-  /** 公司模式：工作項統計 */
+  /** 公司運行時：工作項統計 */
   stats?: Record<string, unknown> | null;
-  /** OPC 模式：6 級閉環狀態數據 */
+  /** OPC 6 級閉環狀態數據 */
   opc_state?: OPCState | null;
   /** 任務建立時間（Unix 秒） */
   created_at?: number;
@@ -154,8 +157,8 @@ export interface ChatMessage {
   streamPhase?: string;
   /** 使用者回饋：1=👎 2=👍 */
   feedback?: 1 | 2;
-  /** 是否以公司模式發送 */
-  companyMode?: boolean;
+  /** 統一模式執行策略 */
+  executionStrategy?: 'auto' | 'simple' | 'company';
   /** 後台任務 ID */
   taskId?: string;
   /** 任務即時進度 */
@@ -258,7 +261,10 @@ export interface DashboardStats {
 export interface TaskSummary {
   task_id: string;
   query: string;
-  mode: string;
+  /** 統一模式：執行策略 */
+  strategy: string;
+  /** 統一模式：實際執行路徑 */
+  resolved_path: string;
   status: string;
   phase: string;
   score: number | null;

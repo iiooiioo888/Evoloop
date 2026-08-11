@@ -34,29 +34,29 @@
 
 ## 🧠 什么是 EvoLoop？
 
-EvoLoop 不是一个普通的 AI 助手——它是一个**具备自我反思闭环的多代理人公司运行时**。
+EvoLoop 不是一个普通的 AI 助手——它是一个**具备自我反思闭环的统一模式 AI 系统**。反思闭环、公司运行时、OPC 整合三大能力融合在同一条管线中，由系统自动判断执行策略。
 
-| 模式 | 说明 |
+| 能力 | 说明 |
 |:---:|------|
-| 🔄 **标准模式** | 对每个回答自动评分（0-10），低于 8 分自动进入反思回圈，迭代改进直到达标 |
-| 🏢 **公司模式** | Manager 分解任务 → 多角色并行执行 → Reviewer 审查 → Synthesizer 整合，像一家真正的软体公司运作 |
-| 🏭 **OPC 模式** | 感知 → 预处理 → 分析 → 诊断 → 决策 → 执行，6 级工业闭环 |
+| 🔄 **反思闭环** | 对每个回答自动评分（0-10），低于 8 分自动进入反思回圈，迭代改进直到达标 |
+| 🏢 **公司运行时** | 复杂任务自动触发：Manager 分解 → 多角色并行执行 → Reviewer 审查 → Synthesizer 整合 |
+| 🏭 **OPC 整合** | 工业任务自动注入感测数据上下文，6 级闭环（感知→预处理→分析→诊断→决策→执行） |
 | ☁️ **云控制台** | 费用账单、资源监控、告警中心、实例管理——像 AWS 一样管理你的 AI 基础设施 |
 
 ```mermaid
 graph LR
-    A[使用者查询] --> B{模式路由}
-    B -->|标准| C[生成回答]
-    B -->|公司| D[Manager 分解]
-    B -->|OPC| E[6 级工业闭环]
-    C --> F[评估评分]
-    D --> G[多角色并行执行]
-    G --> H[Reviewer 审查]
-    H --> F
-    E --> F
-    F -->|分数 < 8| I[反思 → 改进]
-    I --> F
-    F -->|分数 ≥ 8| J[存入记忆库]
+    A[使用者查询] --> B[记忆检索]
+    B --> C[OPC 上下文增强]
+    C --> D{复杂度路由}
+    D -->|简单任务| E[单次 LLM 生成]
+    D -->|复杂任务| F[公司运行时]
+    D -->|工业任务| G[OPC 6 级闭环]
+    E --> H[评估评分]
+    F --> H
+    G --> H
+    H -->|分数 < 8| I[反思 → 改进]
+    I --> H
+    H -->|分数 ≥ 8| J[存入记忆库]
 ```
 
 ---
@@ -94,7 +94,7 @@ graph LR
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-### 公司模式内部流程
+### 公司运行时内部流程（复杂任务自动触发）
 
 ```
 Manager 分解目标
@@ -125,9 +125,9 @@ evoloop/
 ├── backend/                     # FastAPI 后端 + LangGraph 核心
 │   ├── main.py                  #   应用入口（/chat /tasks /dashboard /trace）
 │   ├── core/                    #   图定义、状态、LLM 调用层
-│   │   ├── graph.py             #     反思回圈图（标准/公司/OPC 路由）
-│   │   ├── nodes.py             #     标准节点（生成/评估/反思/改进）
-│   │   ├── company_nodes.py     #     公司节点（路由/执行/收集）
+│   │   ├── graph.py             #     统一模式图（复杂度路由 + 反思回圈）
+│   │   ├── nodes.py             #     核心节点（生成/评估/反思/改进）
+│   │   ├── company_nodes.py     #     公司运行时节点（复杂度路由/OPC 增强/执行）
 │   │   ├── llm.py               #     LiteLLM 统一调用层
 │   │   └── state.py             #     EvoLoopState
 │   ├── company/                 #   多代理人公司运行时
@@ -319,7 +319,7 @@ docker compose logs -f backend
 pytest backend/tests/ -q
 
 # 分类测试
-pytest backend/tests/test_company.py         # 公司模式
+pytest backend/tests/test_company.py         # 公司运行时
 pytest backend/tests/test_opc_service.py     # OPC 工业闭环
 pytest backend/tests/test_reflection_loop.py # 反思回圈
 pytest backend/tests/test_architecture.py    # 架构约束
@@ -327,7 +327,7 @@ pytest backend/tests/test_architecture.py    # 架构约束
 
 | 测试类别 | 案例数 | 涵盖范围 |
 |----------|--------|----------|
-| 公司模式 | 84 | 工作项状态机、预算管理、模型路由、任务拆分、事件系统、检查点、优先级 |
+| 公司运行时 | 84 | 工作项状态机、预算管理、模型路由、任务拆分、事件系统、检查点、优先级 |
 | Docker 管理 | 39 | 容器操作、健康检查、工具权限、API 端点、Stub 降级 |
 | OPC 服务 | 15 | 6 级闭环、安全护栏、审计日志 |
 | 反思回圈 | 4 | 高分通过、低分迭代、记忆注入 |
@@ -388,7 +388,7 @@ addopts = "-v --basetemp=.pytest_tmp"
 </details>
 
 <details>
-<summary><b>Q: OPC 模式需要真实工业设备吗？</b></summary>
+<summary><b>Q: OPC 整合需要真实工业设备吗？</b></summary>
 
 不需要。设定 `OPC_SIM_ENABLED=true` 即可使用内建模拟伺服器进行测试。
 </details>

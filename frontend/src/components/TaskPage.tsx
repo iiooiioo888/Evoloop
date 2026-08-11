@@ -133,7 +133,7 @@ function ChipIcon({ status }: { status: RoleStatus }) {
 }
 
 export default function TaskPage({ task, onBack }: TaskPageProps) {
-  const isCompany = task.mode === 'company';
+  const isCompany = task.resolved_path === 'company';
   const phases = isCompany ? COMPANY_PHASES : STANDARD_PHASES;
   const running = task.status === 'running' || task.status === 'pending';
   const failed = task.status === 'failed';

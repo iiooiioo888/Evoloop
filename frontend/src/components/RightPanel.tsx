@@ -35,7 +35,7 @@ function SectionTitle({ icon, text, extra }: { icon?: string; text: string; extr
 }
 
 export default function RightPanel({ task, onClose }: RightPanelProps) {
-  const isOPC = task?.mode === 'opc';
+  const isOPC = task?.resolved_path === 'opc';
   const running = task?.status === 'running' || task?.status === 'pending';
   const failed = task?.status === 'failed';
   const currentIdx = task ? phaseIndex(OPC_PHASES, task.phase) : -1;

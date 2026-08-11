@@ -59,9 +59,15 @@ class EvoLoopState(OPCStateFields, total=False):
     archived: bool
     archive_metadata: dict[str, Any]
 
-    # ---- 公司運行時（Phase 6+ 多代理人） ----
-    company_mode: bool
+    # ---- 統一模式：執行策略（auto / simple / company） ----
+    # auto: 由系統自動判斷複雜度
+    # simple: 強制單次 LLM 生成
+    # company: 強制多代理人公司運行時
+    execution_strategy: str
     company_template: str
     company_result: dict[str, Any]
     company_kanban: dict[str, Any]
     company_budget: dict[str, Any]
+
+    # ---- OPC 工業上下文（統一模式下自動注入） ----
+    opc_context: dict[str, Any]

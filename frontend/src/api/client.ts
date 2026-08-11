@@ -17,9 +17,9 @@ function apiUrl(path: string): string {
 }
 
 export interface ChatOptions {
-  /** 公司模式：多代理人分工處理複雜目標 */
-  companyMode?: boolean;
-  /** 公司組織模板（company_mode 為 true 時生效） */
+  /** 統一模式執行策略：auto（自動判斷）/ simple（單次生成）/ company（公司運行時） */
+  executionStrategy?: 'auto' | 'simple' | 'company';
+  /** 公司組織模板（execution_strategy 為 company 時生效） */
   companyTemplate?: string;
   /** 多輪對話歷史：[{"role": "user"|"assistant", "content": "..."}] */
   history?: Array<{ role: string; content: string }>;
@@ -44,7 +44,7 @@ export interface StreamCallbacks {
 /**
  * 送出聊天並以 SSE 串流接收回答（打字機效果）。
  *
- * 僅標準模式支援串流；公司/OPC 模式請使用 sendChat 或 createTask。
+ * 統一模式：複雜任務（公司運行時路徑）會自動降級為同步回傳。
  * 回傳 AbortController 供取消請求。
  */
 export function sendChatStream(
@@ -131,7 +131,7 @@ export function sendChatStream(
   return controller;
 }
 
-/** 送出聊天並取得完整回答（同步模式，支援公司模式）。 */
+/** 送出聊天並取得完整回答（統一模式）。 */
 export async function sendChat(
   query: string,
   sessionId: string,
@@ -145,7 +145,7 @@ export async function sendChat(
       body: JSON.stringify({
         query,
         session_id: sessionId,
-        company_mode: options.companyMode ?? false,
+        execution_strategy: options.executionStrategy ?? 'auto',
         company_template: options.companyTemplate ?? 'quick_task',
         history: options.history ?? [],
       }),
@@ -219,14 +219,13 @@ export async function testConfig(): Promise<{ ok: boolean; reply?: string; error
 
 // ==================== 任務介面 ====================
 
-/** 建立後台任務（標準/公司/OPC 模式），回傳 task_id。 */
+/** 建立後台任務（統一模式），回傳 task_id。 */
 export async function createTask(
   query: string,
-  companyMode: boolean,
-  companyTemplate: string,
-  opcMode: boolean = false,
+  executionStrategy: 'auto' | 'simple' | 'company' = 'auto',
+  companyTemplate: string = 'quick_task',
   options?: TaskOptions,
-): Promise<{ task_id: string; mode: string }> {
+): Promise<{ task_id: string; strategy: string }> {
   let resp: Response;
   try {
     resp = await fetch(apiUrl('/tasks'), {
@@ -234,9 +233,8 @@ export async function createTask(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         query,
-        company_mode: companyMode,
+        execution_strategy: executionStrategy,
         company_template: companyTemplate,
-        opc_mode: opcMode,
         options: options ?? {},
       }),
     });

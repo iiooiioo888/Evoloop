@@ -1,0 +1,12 @@
+{
+  "defaultAllow": false,
+  "denied": [],
+  "overrides": {
+    "llm-connector": {
+      "allow": [
+        { "resource": "network", "action": "read" },
+        { "resource": "llm", "action": "execute" }
+      ]
+    }
+  }
+}

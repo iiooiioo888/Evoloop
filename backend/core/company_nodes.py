@@ -1,20 +1,24 @@
-"""EvoLoop 公司運行時節點（Phase 6+ 多代理人擴展）。
+"""EvoLoop 統一模式節點（單一管線：反思閉環 + 公司運行時 + OPC 整合）。
 
-新增以下節點，讓 EvoLoop 反思迴圈可以切換到公司模式：
-- route_to_company: 判斷是否啟用公司模式
+統一模式下不再區分「標準/公司/OPC」三種模式，而是單一 EvoLoop 管線：
+
+    記憶檢索 → OPC 上下文增強（自動） → 複雜度路由
+      ├─ 簡單任務 → 單次 LLM 生成
+      └─ 複雜任務 → 公司運行時（分解→執行→審查→整合）
+    → 評估 → 反思 → 改進（迭代迴圈） → 存檔
+
+本模組提供以下節點：
+- enhance_with_opc_context: OPC 服務可用時自動注入工業數據上下文
+- route_by_complexity: 依執行策略與任務複雜度決定生成路徑
 - run_company: 執行完整公司運行流程，將產出設為 current_answer
 - should_evaluate_company: 公司執行後路由（成功→評估迭代，失敗→直接存檔）
-- collect_company_result: 將公司運行結果合併回 EvoLoop 狀態
-
-公司模式 vs 標準模式：
-- 標準模式：單一 LLM 問答，反思改進
-- 公司模式：多角色分工產出後，同樣進入評估 → 反思 → 改進迭代迴圈
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from typing import Any
 
 from backend.company.orchestrator import CompanyOrchestrator
@@ -23,23 +27,121 @@ from backend.core.state import EvoLoopState
 
 logger = logging.getLogger(__name__)
 
+# ─── 複雜度判斷規則 ───────────────────────────────────────────
 
-def route_to_company(state: EvoLoopState) -> str:
-    """條件路由：判斷是否啟用公司模式。
+# 觸發公司運行時的關鍵詞（複雜任務特徵）
+_COMPANY_KEYWORDS = re.compile(
+    r"(开发|設計|设计|构建|實現|实现|建立|打造|完整|系統|系统|專案|项目|"
+    r"多步|架構|架构|重构|遷移|迁移|deploy|develop|build|implement|design|"
+    r"create|refactor|migrate|project|system|application)",
+    re.IGNORECASE,
+)
 
-    若 state 中 company_mode=True，則走公司流程；
-    否則走標準 EvoLoop 反思迴圈。
+# 觸發 OPC 上下文注入的工業關鍵詞
+_OPC_KEYWORDS = re.compile(
+    r"(感測|传感|溫度|温度|壓力|压力|流量|閥門|阀门|閥|阀|馬達|马达|電機|电机|"
+    r"設備|设备|製程|制程|工業|工业|產線|产线|opc|sensor|temperature|pressure|"
+    r"flow|valve|motor|equipment|industrial|plc)",
+    re.IGNORECASE,
+)
+
+# 複雜任務的 query 長度門檻（字符數）
+_COMPLEX_QUERY_LENGTH = 200
+
+
+def _is_complex_task(query: str) -> bool:
+    """規則判斷任務是否複雜（需要公司運行時）。"""
+    if len(query) >= _COMPLEX_QUERY_LENGTH:
+        return True
+    return bool(_COMPANY_KEYWORDS.search(query))
+
+
+def _needs_opc_context(query: str) -> bool:
+    """判斷任務是否需要 OPC 工業上下文。"""
+    return bool(_OPC_KEYWORDS.search(query))
+
+
+# ─── OPC 上下文增強節點 ──────────────────────────────────────
+
+
+def enhance_with_opc_context(state: EvoLoopState) -> dict[str, Any]:
+    """OPC 上下文增強：query 涉及工業關鍵詞時自動注入感測數據。
+
+    統一模式下 OPC 整合不再是獨立模式，而是管線中的
+    上下文增強步驟。OPC 服務不可用時靜默降級（不中斷主流程）。
     """
-    if state.get("company_mode", False):
+    query = state.get("query", "")
+    if not _needs_opc_context(query):
+        return {"opc_context": {}}
+
+    try:
+        from opc_service.sense import sense_opc
+
+        try:
+            result = asyncio.run(sense_opc(dict(state)))
+        except RuntimeError:
+            # 已有事件迴圈（LangGraph ainvoke 場景）→ 同步降級
+            logger.debug("事件迴圈存在，跳過 OPC 非同步感知")
+            return {"opc_context": {}}
+
+        readings = result.get("opc_readings", {})
+        if not readings:
+            return {"opc_context": {}}
+
+        # 將讀數摘要注入上下文
+        summary_lines = ["【工業數據上下文（OPC 即時讀數）】"]
+        for tag, info in readings.items():
+            summary_lines.append(f"- {tag}: {info.get('value')} (品質: {info.get('quality', 'Good')})")
+
+        return {
+            "opc_context": {
+                "readings": readings,
+                "summary": "\n".join(summary_lines),
+            }
+        }
+    except Exception as exc:  # noqa: BLE001 - OPC 不可用時靜默降級
+        logger.warning("OPC 上下文增強失敗（降級跳過）：%s", exc)
+        return {"opc_context": {}}
+
+
+# ─── 複雜度路由節點 ──────────────────────────────────────────
+
+
+def route_by_complexity(state: EvoLoopState) -> str:
+    """條件路由：依執行策略與任務複雜度決定生成路徑。
+
+    執行策略（execution_strategy）：
+    - "simple": 強制單次 LLM 生成
+    - "company": 強制公司運行時
+    - "auto"（預設）: 依規則自動判斷複雜度
+
+    回傳值：
+    - "run_company": 走公司運行時
+    - "generate_initial_answer": 走單次生成
+    """
+    strategy = state.get("execution_strategy", "auto")
+
+    if strategy == "simple":
+        return "generate_initial_answer"
+    if strategy == "company":
+        return "run_company"
+
+    # auto：規則判斷
+    query = state.get("query", "")
+    if _is_complex_task(query):
+        logger.info("任務判定為複雜，啟用公司運行時")
         return "run_company"
     return "generate_initial_answer"
 
 
+# ─── 公司運行時節點 ──────────────────────────────────────────
+
+
 def run_company(state: EvoLoopState) -> dict[str, Any]:
-    """執行公司模式：多角色分工完成目標。
+    """執行公司運行時：多角色分工完成目標。
 
     成功時將公司產出設為 current_answer，交由 evaluate_answer
-    進入反思迭代迴圈（與標準模式共用同一評估/反思/改進管線）；
+    進入反思迭代迴圈（與簡單任務共用同一評估/反思/改進管線）；
     失敗時直接設定 final_answer 並跳過迭代。
 
     這是同步包裝器，內部使用 asyncio.run 呼叫非同步協調器。
@@ -78,11 +180,11 @@ def run_company(state: EvoLoopState) -> dict[str, Any]:
             "iteration": 0,
         }
 
-    except Exception as exc:  # noqa: BLE001 - 降級兜底：公司模式失敗不中斷主流程
-        logger.error("公司模式執行失敗：%s", exc)
+    except Exception as exc:  # noqa: BLE001 - 降級兜底：公司運行時失敗不中斷主流程
+        logger.error("公司運行時執行失敗：%s", exc)
         # 失敗：直接設定 final_answer，跳過評估迭代
         return {
-            "final_answer": f"公司模式執行失敗：{exc}",
+            "final_answer": f"公司運行時執行失敗：{exc}",
             "company_result": {"success": False, "error": str(exc)},
             "company_kanban": {},
             "company_budget": {},
@@ -93,9 +195,9 @@ def run_company(state: EvoLoopState) -> dict[str, Any]:
 
 
 def should_evaluate_company(state: EvoLoopState) -> str:
-    """公司模式執行後路由：成功則進入評估迭代迴圈，失敗則直接存檔。
+    """公司運行時執行後路由：成功則進入評估迭代迴圈，失敗則直接存檔。
 
-    與 should_improve 配合，構成公司模式的完整迭代路徑：
+    與 should_improve 配合，構成公司運行時的完整迭代路徑：
       run_company → should_evaluate_company
         → 成功：evaluate_answer → should_improve → reflect/improve（迴圈） → finalize
         → 失敗：archive_state → END
@@ -104,8 +206,3 @@ def should_evaluate_company(state: EvoLoopState) -> str:
     if company_result.get("success", False):
         return "evaluate_answer"
     return "archive_state"
-
-
-def collect_company_result(state: EvoLoopState) -> dict[str, Any]:
-    """將公司運行結果合併到最終狀態（讀取用，無需修改）。"""
-    return {}

@@ -48,3 +48,13 @@
 {"ts": "2026-08-10T08:42:56.658146+00:00", "operation": "restart_blocked", "service": "external_service", "reason": "不在允許列表"}
 {"ts": "2026-08-10T08:46:51.082912+00:00", "operation": "restart_success", "service": "backend", "container": "test_project-backend-1"}
 {"ts": "2026-08-10T08:46:51.095912+00:00", "operation": "restart_blocked", "service": "external_service", "reason": "不在允許列表"}
+{"ts": "2026-08-10T09:13:19.454384+00:00", "operation": "restart_success", "service": "backend", "container": "test_project-backend-1"}
+{"ts": "2026-08-10T09:13:19.470385+00:00", "operation": "restart_blocked", "service": "external_service", "reason": "不在允許列表"}
+{"ts": "2026-08-11T06:50:28.942112+00:00", "operation": "restart_success", "service": "backend", "container": "test_project-backend-1"}
+{"ts": "2026-08-11T06:50:28.971712+00:00", "operation": "restart_blocked", "service": "external_service", "reason": "不在允許列表"}
+{"ts": "2026-08-11T06:56:10.220958+00:00", "operation": "restart_success", "service": "backend", "container": "test_project-backend-1"}
+{"ts": "2026-08-11T06:56:10.234956+00:00", "operation": "restart_blocked", "service": "external_service", "reason": "不在允許列表"}
+{"ts": "2026-08-11T06:59:44.312710+00:00", "operation": "restart_success", "service": "backend", "container": "test_project-backend-1"}
+{"ts": "2026-08-11T06:59:44.357317+00:00", "operation": "restart_blocked", "service": "external_service", "reason": "不在允許列表"}
+{"ts": "2026-08-11T07:19:38.365598+00:00", "operation": "restart_success", "service": "backend", "container": "test_project-backend-1"}
+{"ts": "2026-08-11T07:19:38.389589+00:00", "operation": "restart_blocked", "service": "external_service", "reason": "不在允許列表"}

@@ -158,7 +158,7 @@ function TaskStream({ task, memories }: { task: TaskSummary; memories: string[] 
       <div className="msg">
         <div className="msg-header">
           <div className="msg-avatar agent">◈</div>
-          <span className="msg-name">{task.mode === 'company' ? '公司編排器' : '反思代理'}</span>
+          <span className="msg-name">{task.resolved_path === 'company' ? '公司編排器' : '反思代理'}</span>
           <span className="msg-label">思考中</span>
           <span className="msg-time">{fmtClock(task.created_at)}</span>
         </div>
@@ -166,8 +166,8 @@ function TaskStream({ task, memories }: { task: TaskSummary; memories: string[] 
           <div className="think">
             <div className="think-label">✦ 思維鏈</div>
             <p style={{ margin: 0 }}>
-              {task.mode === 'company'
-                ? `公司模式：Manager 分解 → 多角色並行 → Reviewer 審查 → Synthesizer 整合${
+              {task.resolved_path === 'company'
+                ? `公司運行時：Manager 分解 → 多角色並行 → Reviewer 審查 → Synthesizer 整合${
                     decompose ? ` · 子任務 ${String(decompose.data.subtask_count ?? '?')} · 策略 ${String(decompose.data.strategy ?? 'auto')}` : ''}`
                 : `反思閉環：生成 → 評估 → 反思 → 改進 · 迭代 ${task.iteration} 輪 · 評分 ${task.score ?? '-'}`}
             </p>
@@ -201,7 +201,7 @@ function TaskStream({ task, memories }: { task: TaskSummary; memories: string[] 
         <div className="msg">
           <div className="msg-header">
             <div className="msg-avatar agent">◈</div>
-            <span className="msg-name">{task.mode === 'company' ? '公司編排器' : '反思代理'}</span>
+            <span className="msg-name">{task.resolved_path === 'company' ? '公司編排器' : '反思代理'}</span>
             {task.score != null && <span className="msg-label">評分 {task.score}</span>}
             <span className="msg-time">{fmtDur(task.duration_sec ?? 0)}</span>
           </div>
@@ -329,7 +329,7 @@ function TaskRow({ task, onOpenTask }: { task: TaskSummary; onOpenTask: (t: Task
   return (
     <div className="tool-call" style={{ maxWidth: 860 }}>
       <button type="button" className="tc-head" onClick={() => setOpen((v) => !v)}>
-        <span className="tc-icon">{task.mode === 'company' ? '🏢' : '⚙️'}</span>
+        <span className="tc-icon">{task.resolved_path === 'company' ? '🏢' : '⚙️'}</span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="tc-name" style={{ fontFamily: 'var(--font)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {task.query}
@@ -503,7 +503,7 @@ export default function Dashboard({ onBack, onOpenTask, embedded }: DashboardPro
 
   // 右欄追蹤：最新任務
   const focusTask = data?.tasks[0];
-  const focusPhases = focusTask?.mode === 'company' ? COMPANY_PHASES : STANDARD_PHASES;
+  const focusPhases = focusTask?.resolved_path === 'company' ? COMPANY_PHASES : STANDARD_PHASES;
   const focusIdx = focusTask ? phaseIndex(focusPhases, focusTask.status === 'completed' ? 'done' : (focusTask.phase || '')) : -1;
   const focusChain = (focusTask?.events ?? []).filter((e) => TOOL_META[e.event]).slice(-6);
 
@@ -524,7 +524,7 @@ export default function Dashboard({ onBack, onOpenTask, embedded }: DashboardPro
     if (!text) return;
     setInput('');
     try {
-      await createTask(text, false, 'quick_task');
+      await createTask(text, 'auto', 'quick_task');
       await load();
     } catch {
       // 後端離線時靜默
@@ -612,8 +612,8 @@ export default function Dashboard({ onBack, onOpenTask, embedded }: DashboardPro
               <div className="agent-name">反思代理</div>
               <div className="agent-meta">{model} · standard</div>
             </div>
-            <span className={`agent-badge ${(data?.tasks ?? []).some((t) => t.mode === 'standard' && (t.status === 'running' || t.status === 'pending')) ? 'on' : 'off'}`}>
-              {(data?.tasks ?? []).some((t) => t.mode === 'standard' && (t.status === 'running' || t.status === 'pending')) ? '活躍' : '待命'}
+            <span className={`agent-badge ${(data?.tasks ?? []).some((t) => t.resolved_path !== 'company' && (t.status === 'running' || t.status === 'pending')) ? 'on' : 'off'}`}>
+              {(data?.tasks ?? []).some((t) => t.resolved_path !== 'company' && (t.status === 'running' || t.status === 'pending')) ? '活躍' : '待命'}
             </span>
           </div>
           <div className="agent-row">
@@ -622,8 +622,8 @@ export default function Dashboard({ onBack, onOpenTask, embedded }: DashboardPro
               <div className="agent-name">公司編排器</div>
               <div className="agent-meta">multi-agent · company</div>
             </div>
-            <span className={`agent-badge ${(data?.tasks ?? []).some((t) => t.mode === 'company' && (t.status === 'running' || t.status === 'pending')) ? 'on' : 'off'}`}>
-              {(data?.tasks ?? []).some((t) => t.mode === 'company' && (t.status === 'running' || t.status === 'pending')) ? '活躍' : '待命'}
+            <span className={`agent-badge ${(data?.tasks ?? []).some((t) => t.resolved_path === 'company' && (t.status === 'running' || t.status === 'pending')) ? 'on' : 'off'}`}>
+              {(data?.tasks ?? []).some((t) => t.resolved_path === 'company' && (t.status === 'running' || t.status === 'pending')) ? '活躍' : '待命'}
             </span>
           </div>
           <div className="agent-row">
