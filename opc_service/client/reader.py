@@ -1,5 +1,6 @@
 """OPC UA 读取操作 Mixin。"""
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
@@ -50,5 +51,12 @@ class ReaderMixin:
             }
 
     async def read_nodes(self, tag_names: list[str]) -> list[dict[str, Any]]:
-        """批量读取多个标签。"""
-        return [await self.read_node(name) for name in tag_names]
+        """批量读取多个标签（并发执行）。
+        
+        使用 asyncio.gather() 并发读取所有标签，显著提升多标签读取性能。
+        """
+        if not tag_names:
+            return []
+        # 并发读取所有标签
+        tasks = [self.read_node(name) for name in tag_names]
+        return await asyncio.gather(*tasks)
