@@ -12,6 +12,7 @@ from backend.core.llm import call_llm, parse_json_response
 from backend.core.state import EvoLoopState
 from backend.memory.vector_store import VectorMemoryStore
 from backend.prompts import templates
+from backend.prompts.templates import truncate
 from backend.services.archiver import save_session_archive, save_session_archive_sync
 
 logger = logging.getLogger(__name__)
@@ -62,9 +63,9 @@ def retrieve_memories(state: EvoLoopState) -> dict:
 def generate_initial_answer(state: EvoLoopState) -> dict:
     """節點 1：生成初始回答。"""
     prompt = templates.GENERATE_INITIAL_ANSWER.format(
-        query=state["query"],
-        history_context=_format_history(state.get("history", [])),
-        memory_context=_format_memories(state.get("retrieved_memories", [])),
+        query=truncate(state["query"], 2000),
+        history_context=truncate(_format_history(state.get("history", [])), 2000),
+        memory_context=truncate(_format_memories(state.get("retrieved_memories", [])), 2000),
     )
     answer = call_llm(prompt, system=templates.GENERATE_INITIAL_ANSWER_SYSTEM)
     return {"initial_answer": answer, "current_answer": answer, "iteration": 0}
@@ -81,9 +82,12 @@ def evaluate_answer(state: EvoLoopState) -> dict:
     query = state["query"]
     answer = state["current_answer"]
 
+    # 截斷長回答以節省評估 token（優化 #14）
+    truncated_answer = truncate(answer, 4000)
+
     # 多維度評估（內部已含規則 fallback）
     evaluator = get_evaluator()
-    eval_result = evaluator.evaluate(query, answer)
+    eval_result = evaluator.evaluate(query, truncated_answer)
 
     # 可選：交叉評估覆核
     cross_result = CrossModelEvaluator.cross_evaluate(
@@ -184,8 +188,43 @@ def improve_answer(state: EvoLoopState) -> dict:
 
 
 def decide_final_answer(state: EvoLoopState) -> dict:
-    """節點 5：決定最終回答（通過門檻的最新版本）。"""
-    return {"final_answer": state.get("current_answer", "")}
+    """節點 5：決定最終回答並執行最終質量門檢查（優化 #16）。
+
+    質量門：
+    - 回答為空 → 使用初始回答降級
+    - 回答過短（< 10 字）→ 標記警告
+    - 回答與問題完全無關 → 標記警告
+    """
+    answer = state.get("current_answer", "")
+    query = state.get("query", "")
+    warnings: list[str] = []
+
+    # 質量門 1：空回答降級
+    if not answer or not answer.strip():
+        answer = state.get("initial_answer", "")
+        if answer:
+            warnings.append("current_answer 為空，降級使用 initial_answer")
+        else:
+            warnings.append("所有回答為空")
+            answer = "抱歉，無法生成有效回答，請嘗試重新表述問題。"
+
+    # 質量門 2：過短回答
+    if len(answer.strip()) < 10:
+        warnings.append(f"回答過短（{len(answer.strip())} 字）")
+
+    # 質量門 3：相關性粗檢（查詢詞命中率）
+    if query and len(query) > 5:
+        query_chars = set(c for c in query if '\u4e00' <= c <= '\u9fff')
+        answer_chars = set(c for c in answer if '\u4e00' <= c <= '\u9fff')
+        if query_chars and answer_chars:
+            overlap = len(query_chars & answer_chars) / len(query_chars)
+            if overlap < 0.1:
+                warnings.append(f"回答與問題關聯度極低（{overlap:.0%}）")
+
+    if warnings:
+        logger.warning("質量門警告：%s", "；".join(warnings))
+
+    return {"final_answer": answer, "quality_warnings": warnings}
 
 
 def save_memory(state: EvoLoopState) -> dict:

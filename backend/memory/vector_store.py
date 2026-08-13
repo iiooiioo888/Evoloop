@@ -134,7 +134,20 @@ class VectorMemoryStore:
     def add_memory(
         self, text: str, metadata: dict | None = None, memory_id: str | None = None
     ) -> str:
-        """新增一筆記憶（文字嵌入後儲存），回傳記錄 ID。"""
+        """新增一筆記憶（文字嵌入後儲存），回傳記錄 ID。
+
+        優化 #12：新增前檢查是否已存在高度相似的記憶（去重）。
+        相似度 > 0.95 時跳過新增，避免重複記憶堆積。
+        """
+        # 去重檢查：查詢是否有高度相似的現有記憶
+        try:
+            existing = self.search_similar(text, k=1)
+            if existing and existing[0].get("distance", 999) < 0.05:
+                logger.debug("記憶去重：跳過高度相似的記憶（distance=%.4f）", existing[0]["distance"])
+                return existing[0]["metadata"].get("_id", "duplicate")
+        except Exception:
+            pass  # 去重失敗不阻斷新增
+
         meta = _sanitize_metadata(metadata)
         meta.setdefault("created_at", datetime.now(timezone.utc).isoformat())
         record_id = memory_id or uuid.uuid4().hex
@@ -284,3 +297,84 @@ class VectorMemoryStore:
         if stale_ids:
             collection.delete(ids=stale_ids)
         return len(stale_ids)
+
+    def distill(self, max_age_days: int = 7, batch_size: int = 20) -> int:
+        """記憶蒸餾（優化 #15）：將同主題的舊記憶合併為摘要。
+
+        當記憶庫累積大量相似記憶時，檢索噪音增大。
+        蒸餾通過 LLM 將多條相關記憶合併為一條高質量摘要，
+        減少數量同時保留核心知識。
+
+        Args:
+            max_age_days: 蒸餾幾天前的記憶
+            batch_size: 每批處理數量
+
+        Returns:
+            蒸餾後刪除的記憶筆數
+        """
+        from backend.core.llm import call_llm
+
+        collection = self._get_collection()
+        data = collection.get(include=["documents", "metadatas"])
+        if not data["ids"]:
+            return 0
+
+        cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
+
+        # 篩選可蒸餾的記憶（舊的、經歷過反思的）
+        candidates: list[tuple[str, str, dict]] = []
+        for record_id, text, meta in zip(data["ids"], data["documents"], data["metadatas"]):
+            meta = meta or {}
+            try:
+                created = datetime.fromisoformat(meta.get("created_at", ""))
+                if created >= cutoff:
+                    continue
+            except (TypeError, ValueError):
+                continue
+            # 只蒸餾反思類記憶（正樣本保留）
+            if meta.get("type") == "reflection":
+                candidates.append((record_id, text, meta))
+
+        if len(candidates) < 3:
+            return 0  # 太少不值得蒸餾
+
+        distilled_count = 0
+        for i in range(0, len(candidates), batch_size):
+            batch = candidates[i:i + batch_size]
+            if len(batch) < 2:
+                continue
+
+            # 將同批記憶合併為摘要
+            texts = [f"{j+1}. {t[:500]}" for j, (_, t, _) in enumerate(batch)]
+            prompt = (
+                "請將以下記憶摘要合併為一條精煉的核心知識（保留關鍵經驗，去除重複）：\n\n"
+                + "\n".join(texts)
+                + "\n\n只輸出合併後的摘要文字，不要加編號或標題："
+            )
+
+            try:
+                summary = call_llm(prompt, temperature=0.3)
+                avg_score = sum(m.get("score", 7) for _, _, m in batch) / len(batch)
+
+                # 用摘要替換原始記憶
+                self.add_memory(
+                    f"【蒸餾摘要】{summary}",
+                    metadata={
+                        "score": round(avg_score, 1),
+                        "type": "distilled",
+                        "source_count": len(batch),
+                    },
+                )
+
+                # 刪除原始記憶
+                ids_to_delete = [rid for rid, _, _ in batch]
+                collection.delete(ids=ids_to_delete)
+                distilled_count += len(ids_to_delete)
+
+                logger.info("蒸餾 %d 條記憶為 1 條摘要", len(batch))
+
+            except Exception as exc:
+                logger.warning("記憶蒸餾失敗（跳過本批）：%s", exc)
+
+        self.invalidate_cache()
+        return distilled_count
