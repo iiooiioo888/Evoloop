@@ -113,15 +113,15 @@ def reflect(state: EvoLoopState) -> dict:
     """節點 3：針對低分回答進行反思（優化 #4：分層反思）。
 
     分層策略：
-    - 低分（< 5）：深度反思，LLM 模型使用更高層級
-    - 中分（5-8）：表面修正，使用預設模型
+    - 低分（< 5）：深度反思，傳入完整多維度評估 + 強調根因分析
+    - 中分（5-8）：表面修正，傳入摘要評估 + 聚焦具體改進點
     """
     score = state.get("score", 0.0)
     multi_dim = state.get("multi_dim_evaluation", {})
 
     # 分層反思：根據分數選擇反思深度
     if score < 5.0:
-        # 深度反思：使用更詳細的提示
+        # 深度反思：傳入完整多維度評估細節
         eval_detail = json.dumps(multi_dim, ensure_ascii=False) if multi_dim else json.dumps(state.get("evaluation", {}), ensure_ascii=False)
         prompt = templates.REFLECT.format(
             query=state["query"],
@@ -130,8 +130,18 @@ def reflect(state: EvoLoopState) -> dict:
             evaluation=eval_detail,
         )
     else:
-        # 表面修正：簡化反思（節省 token）
-        eval_detail = json.dumps(multi_dim, ensure_ascii=False) if multi_dim else json.dumps(state.get("evaluation", {}), ensure_ascii=False)
+        # 表面修正：只傳入摘要，節省 token
+        if multi_dim:
+            eval_summary = {
+                "overall": multi_dim.get("overall", 0),
+                "weakest": min(
+                    [(d, multi_dim.get(d, {}).get("score", 10)) for d in ("accuracy", "completeness", "clarity", "relevance")],
+                    key=lambda x: x[1],
+                )[0],
+            }
+            eval_detail = json.dumps(eval_summary, ensure_ascii=False)
+        else:
+            eval_detail = json.dumps(state.get("evaluation", {}), ensure_ascii=False)
         prompt = templates.REFLECT.format(
             query=state["query"],
             answer=state["current_answer"],
