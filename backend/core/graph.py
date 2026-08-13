@@ -20,9 +20,12 @@
   - "company": 強制多代理人公司運行時
 """
 
+import logging
 import os
 
 from langgraph.graph import END, START, StateGraph
+
+logger = logging.getLogger(__name__)
 
 from backend.core import nodes
 from backend.core.company_nodes import (
@@ -36,15 +39,42 @@ from backend.core.state import EvoLoopState
 # 可透過環境變數調整；測試中也可 monkeypatch 此模組常數
 PASS_THRESHOLD = float(os.getenv("EVOL_PASS_THRESHOLD", "8"))
 MAX_ITERATIONS = int(os.getenv("EVOL_MAX_ITERATIONS", "3"))
+# 動態迭代：分數變化低於此值時提前終止（優化 #4）
+MIN_SCORE_IMPROVEMENT = float(os.getenv("EVOL_MIN_SCORE_IMPROVEMENT", "0.5"))
 
 
 def should_improve(state: EvoLoopState) -> str:
-    """條件路由：評分 < 門檻且迭代次數未達上限 → reflect，否則 finalize。"""
+    """條件路由（優化 #4：動態迭代策略）。
+
+    終止條件（任一滿足即 finalize）：
+    1. 分數已達門檻
+    2. 達到最大迭代次數
+    3. 分數變化率過低（最近兩輪提升 < MIN_SCORE_IMPROVEMENT）
+    """
     score = state.get("score", 0.0)
     iteration = state.get("iteration", 0)
-    if score < PASS_THRESHOLD and iteration < MAX_ITERATIONS:
-        return "reflect"
-    return "finalize"
+
+    # 條件 1：已達門檻
+    if score >= PASS_THRESHOLD:
+        return "finalize"
+
+    # 條件 2：達最大迭代
+    if iteration >= MAX_ITERATIONS:
+        return "finalize"
+
+    # 條件 3：分數變化率過低（提前終止）
+    reflections = state.get("reflections", [])
+    if len(reflections) >= 1:
+        prev_score = reflections[-1].get("score", 0.0)
+        improvement = score - prev_score
+        if improvement < MIN_SCORE_IMPROVEMENT and iteration >= 1:
+            logger.info(
+                "動態迭代終止：分數提升 %.2f < 閾值 %.2f（第 %d 輪）",
+                improvement, MIN_SCORE_IMPROVEMENT, iteration,
+            )
+            return "finalize"
+
+    return "reflect"
 
 
 def build_graph():

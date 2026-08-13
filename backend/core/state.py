@@ -11,6 +11,24 @@ from typing_extensions import TypedDict
 from opc_service.state import OPCStateFields
 
 
+class DimensionScore(TypedDict, total=False):
+    """單一維度的評分。"""
+
+    score: float  # 0-10
+    reason: str
+
+
+class MultiDimEvaluation(TypedDict, total=False):
+    """多維度評估結果。"""
+
+    accuracy: DimensionScore
+    completeness: DimensionScore
+    clarity: DimensionScore
+    relevance: DimensionScore
+    overall: float  # 加權總分 0-10
+    source: str  # "llm" | "rule_fallback" | "cross_model"
+
+
 class ReflectionRecord(TypedDict):
     """單次反思迴圈的紀錄。"""
 
@@ -43,6 +61,7 @@ class EvoLoopState(OPCStateFields, total=False):
     # ---- 評估 ----
     score: float
     evaluation: dict[str, Any]
+    multi_dim_evaluation: MultiDimEvaluation
 
     # ---- 反思 ----
     critique: str

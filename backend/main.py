@@ -240,17 +240,32 @@ async def chat_stream(req: ChatRequest):
             answer = "".join(answer_parts)
             state.update({"initial_answer": answer, "current_answer": answer, "iteration": 0})
 
-            # 階段 3：評估
+            # 階段 3：多維度評估（優化 #1 + #4）
             yield f"event: phase\ndata: {json_mod.dumps({'phase': 'evaluate'})}\n\n"
             state.update(await asyncio.to_thread(nodes.evaluate_answer, state))
-            yield f"event: evaluation\ndata: {json_mod.dumps({'score': state.get('score'), 'iteration': 0})}\n\n"
+            eval_data = {
+                'score': state.get('score'),
+                'iteration': 0,
+                'multi_dim': state.get('multi_dim_evaluation', {}),
+            }
+            yield f"event: evaluation\ndata: {json_mod.dumps(eval_data, ensure_ascii=False)}\n\n"
 
-            # 反思/改進迴圈
+            # 反思/改進迴圈（動態迭代：帶分數變化率檢測）
+            prev_score = state.get('score', 0.0)
             while (
                 state.get("score", 0.0) < PASS_THRESHOLD
                 and state.get("iteration", 0) < MAX_ITERATIONS
             ):
-                yield f"event: phase\ndata: {json_mod.dumps({'phase': 'reflect', 'iteration': state.get('iteration', 0)})}\n\n"
+                current_score = state.get('score', 0.0)
+                # 動態迭代檢查：分數變化率過低時提前終止（優化 #4）
+                if state.get('iteration', 0) >= 1:
+                    improvement = current_score - prev_score
+                    if improvement < 0.5:  # MIN_SCORE_IMPROVEMENT
+                        yield f"event: phase\ndata: {json_mod.dumps({'phase': 'early_stop', 'reason': f'分數提升不足 ({improvement:.1f})', 'iteration': state.get('iteration', 0)})}\n\n"
+                        break
+                prev_score = current_score
+
+                yield f"event: phase\ndata: {json_mod.dumps({'phase': 'reflect', 'iteration': state.get('iteration', 0), 'score': current_score})}\n\n"
                 state.update(await asyncio.to_thread(nodes.reflect, state))
 
                 yield f"event: phase\ndata: {json_mod.dumps({'phase': 'improve', 'iteration': state.get('iteration', 0)})}\n\n"
@@ -258,7 +273,12 @@ async def chat_stream(req: ChatRequest):
 
                 yield f"event: phase\ndata: {json_mod.dumps({'phase': 'evaluate'})}\n\n"
                 state.update(await asyncio.to_thread(nodes.evaluate_answer, state))
-                yield f"event: evaluation\ndata: {json_mod.dumps({'score': state.get('score'), 'iteration': state.get('iteration', 0)})}\n\n"
+                eval_data = {
+                    'score': state.get('score'),
+                    'iteration': state.get('iteration', 0),
+                    'multi_dim': state.get('multi_dim_evaluation', {}),
+                }
+                yield f"event: evaluation\ndata: {json_mod.dumps(eval_data, ensure_ascii=False)}\n\n"
 
             final_answer = state.get("current_answer", "")
             # 儲存記憶（盡力而為）

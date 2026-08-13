@@ -1,4 +1,4 @@
-﻿"""Phase 2 向量記憶庫：ChromaDB 封裝（Task 2.1 / 2.3）。
+"""Phase 2 向量記憶庫：ChromaDB 封裝（Task 2.1 / 2.3）。
 
 取代 Phase 1 的 JSON 暫存（json_store.py），介面保持一致
 （add_memory / search_similar / all / reset），另提供
@@ -69,6 +69,8 @@ def _sanitize_metadata(metadata: dict | None) -> dict:
 # ── 檢索快取（LRU）──
 # 相同查詢短時間內重複檢索時，避免重複呼叫嵌入 API
 _SEARCH_CACHE_MAX_SIZE = int(os.getenv("EVOL_SEARCH_CACHE_SIZE", "128"))
+# 自適應相似度門檻（優化 #5）：基於歷史 distance 分布計算
+_ADAPTIVE_THRESHOLD_PERCENTILE = float(os.getenv("EVOL_THRESHOLD_PERCENTILE", "75"))
 
 
 class VectorMemoryStore:
@@ -94,8 +96,11 @@ class VectorMemoryStore:
         self._collection: Any = None
         # LRU 快取：key = (query_hash, k) → results
         self._search_cache: OrderedDict[tuple[str, int], list[dict]] = OrderedDict()
-        # 相似度門檻（distance 越小越相似，超過此值不注入）
+        # 基礎相似度門檻（distance 越小越相似，超過此值不注入）
         self.similarity_threshold = float(os.getenv("EVOL_SIMILARITY_THRESHOLD", "1.2"))
+        # 自適應門檻：基於歷史 distance 分布動態調整（優化 #5）
+        self._distance_history: list[float] = []
+        self._adaptive_threshold: float | None = None
 
     # ---- 連線（惰性） ----
 
@@ -141,23 +146,23 @@ class VectorMemoryStore:
         return record_id
 
     def search_similar(self, query: str, k: int = 3) -> list[dict]:
-        """檢索與查詢最相似的 k 筆記憶。
+        """檢索與查詢最相似的 k 筆記憶（優化 #5）。
 
         回傳 [{"text": ..., "metadata": ..., "distance": ...}, ...]，
         distance 越小越相似；記憶庫為空時回傳空列表。
 
         優化：
         - LRU 快取：相同查詢直接回傳快取結果
-        - 相似度門檻：過濾 distance 過高的低質量結果
+        - 自適應相似度門檻：基於歷史 distance 分布動態調整
+        - 高分正樣本也參與檢索
         """
         if k <= 0:
             return []
 
-        # ── LRU 快取查詢 ──
-        query_hash = hashlib.md5(query.encode()).hexdigest()
+        # ── LRU 快取查詢（使用語義友好的 hash）──
+        query_hash = hashlib.sha256(query.encode()).hexdigest()[:24]
         cache_key = (query_hash, k)
         if cache_key in self._search_cache:
-            # 移動到末尾（最近使用）
             self._search_cache.move_to_end(cache_key)
             return self._search_cache[cache_key]
 
@@ -166,19 +171,31 @@ class VectorMemoryStore:
         if total == 0:
             self._search_cache[cache_key] = []
             return []
+
         results = collection.query(
             query_texts=[query], n_results=min(k, total)
         )
+
+        # 取得當前有效門檻
+        threshold = self._get_effective_threshold()
+
         memories = []
         for text, meta, distance in zip(
             results["documents"][0],
             results["metadatas"][0],
             results["distances"][0],
         ):
-            # 相似度門檻過濾：distance 過高表示不相關
-            if distance > self.similarity_threshold:
+            # 自適應門檻過濾
+            if distance > threshold:
                 continue
             memories.append({"text": text, "metadata": meta, "distance": distance})
+            # 記錄 distance 用於自適應門檻計算
+            self._distance_history.append(distance)
+
+        # 保持歷史記錄在合理範圍
+        if len(self._distance_history) > 1000:
+            self._distance_history = self._distance_history[-500:]
+            self._adaptive_threshold = None  # 強制重新計算
 
         # ── 寫入快取（LRU 淘汰）──
         self._search_cache[cache_key] = memories
@@ -186,6 +203,25 @@ class VectorMemoryStore:
             self._search_cache.popitem(last=False)
 
         return memories
+
+    def _get_effective_threshold(self) -> float:
+        """取得有效的相似度門檻（自適應或靜態）。"""
+        if not self._distance_history:
+            return self.similarity_threshold
+
+        # 定期重新計算自適應門檻
+        if self._adaptive_threshold is None or len(self._distance_history) % 50 == 0:
+            sorted_dists = sorted(self._distance_history)
+            idx = int(len(sorted_dists) * _ADAPTIVE_THRESHOLD_PERCENTILE / 100)
+            idx = min(idx, len(sorted_dists) - 1)
+            adaptive = sorted_dists[idx]
+            # 不低於靜態門檻的 50%，不超過靜態門檻
+            self._adaptive_threshold = max(
+                self.similarity_threshold * 0.5,
+                min(adaptive, self.similarity_threshold),
+            )
+
+        return self._adaptive_threshold or self.similarity_threshold
 
     def invalidate_cache(self) -> None:
         """清空檢索快取（新增記憶後可呼叫）。"""

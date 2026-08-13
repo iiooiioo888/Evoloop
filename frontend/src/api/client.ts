@@ -36,7 +36,7 @@ export interface ChatResult {
 export interface StreamCallbacks {
   onPhase?: (phase: string) => void;
   onToken?: (token: string) => void;
-  onEvaluation?: (score: number | null, iteration: number) => void;
+  onEvaluation?: (score: number | null, iteration: number, multiDim?: import('../types').MultiDimEvaluation) => void;
   onDone?: (answer: string, score: number | null, iteration: number) => void;
   onError?: (error: string) => void;
 }
@@ -106,6 +106,7 @@ export function sendChatStream(
               callbacks.onEvaluation?.(
                 (data.score as number) ?? null,
                 (data.iteration as number) ?? 0,
+                (data.multi_dim as import('../types').MultiDimEvaluation) ?? undefined,
               );
               break;
             case 'done':

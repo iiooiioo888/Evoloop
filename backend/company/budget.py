@@ -10,8 +10,12 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import os
 from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
 
 from backend.company.state import BudgetConfig, BudgetTier
 
@@ -19,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 # ── 模型每百萬 token 成本（USD） ──
 # 實際價格請以供應商為準，此處為概估
-_MODEL_COST_PER_1M_TOKENS: dict[str, tuple[float, float]] = {
+_DEFAULT_MODEL_COST: dict[str, tuple[float, float]] = {
     # (input_cost, output_cost) per 1M tokens
     "gpt-4o": (2.50, 10.00),
     "gpt-4o-mini": (0.15, 0.60),
@@ -32,6 +36,56 @@ _MODEL_COST_PER_1M_TOKENS: dict[str, tuple[float, float]] = {
 }
 
 
+def _load_model_costs() -> dict[str, tuple[float, float]]:
+    """載入模型價格配置（優化 #9：配置文件驅動）。
+
+    優先級：
+    1. 環境變數 EVOL_MODEL_COSTS_PATH 指定的 JSON 文件
+    2. backend/config/model_costs.json
+    3. 內建預設值
+    """
+    costs = dict(_DEFAULT_MODEL_COST)
+
+    # 嘗試從配置文件載入
+    config_path = os.getenv("EVOL_MODEL_COSTS_PATH")
+    if not config_path:
+        default_path = Path(__file__).resolve().parent.parent / "config" / "model_costs.json"
+        if default_path.exists():
+            config_path = str(default_path)
+
+    if config_path:
+        try:
+            with open(config_path, encoding="utf-8") as f:
+                loaded = json.load(f)
+            for model, prices in loaded.items():
+                if isinstance(prices, list) and len(prices) == 2:
+                    costs[model] = (float(prices[0]), float(prices[1]))
+            logger.info("從配置文件載入 %d 個模型價格：%s", len(loaded), config_path)
+        except Exception as exc:
+            logger.warning("載入模型價格配置失敗（使用預設值）：%s", exc)
+
+    return costs
+
+
+# 模組級價格表（啟動時載入，可透過 reload 動態更新）
+_MODEL_COST_PER_1M_TOKENS: dict[str, tuple[float, float]] | None = None
+
+
+def get_model_costs() -> dict[str, tuple[float, float]]:
+    """取得當前模型價格表（惰性載入）。"""
+    global _MODEL_COST_PER_1M_TOKENS
+    if _MODEL_COST_PER_1M_TOKENS is None:
+        _MODEL_COST_PER_1M_TOKENS = _load_model_costs()
+    return _MODEL_COST_PER_1M_TOKENS
+
+
+def reload_model_costs() -> None:
+    """重新載入模型價格配置（支援運行時熱更新）。"""
+    global _MODEL_COST_PER_1M_TOKENS
+    _MODEL_COST_PER_1M_TOKENS = _load_model_costs()
+    logger.info("模型價格配置已重新載入")
+
+
 class CostTracker:
     """估算 LLM 呼叫成本。"""
 
@@ -41,8 +95,8 @@ class CostTracker:
         input_tokens: int = 0,
         output_tokens: int = 0,
     ) -> float:
-        """根據 token 數估算成本（USD）。"""
-        costs = _MODEL_COST_PER_1M_TOKENS.get(model)
+        """根據 token 數估算成本（USD）（優化 #9：動態價格）。"""
+        costs = get_model_costs().get(model)
         if costs is None:
             # 未知模型，使用保守估計
             costs = (1.0, 4.0)

@@ -191,12 +191,12 @@ export default function App() {
               ),
             }));
           },
-          onEvaluation: (score, iteration) => {
+          onEvaluation: (score, iteration, multiDim) => {
             updateSession(sessionId, (s) => ({
               ...s,
               messages: s.messages.map((m) =>
                 m.id === assistantId
-                  ? { ...m, meta: { ...m.meta, score, iteration } }
+                  ? { ...m, meta: { ...m.meta, score, iteration, multiDim } }
                   : m,
               ),
             }));
