@@ -80,10 +80,15 @@ class CompanyOrchestrator:
         self.decomposer = decomposer or TaskDecomposer(
             self.config, self.budget, self.work_items
         )
-        # 並行工作池信號量
-        self._worker_semaphore = asyncio.Semaphore(
-            self.config.max_parallel_workers
-        )
+        # 並行工作池信號量（優化 #6：自適應並發控制）
+        self._max_parallel = self.config.max_parallel_workers
+        self._worker_semaphore = asyncio.Semaphore(self._max_parallel)
+        # 自適應並發控制狀態
+        self._concurrency_stats: dict[str, Any] = {
+            "success_times": [],  # 成功請求的響應時間
+            "rate_limit_count": 0,  # 429 錯誤計數
+            "last_adjustment": 0,  # 上次調整時間
+        }
         # Docker 管理服務（可注入，方便測試；若為 None 則自動獲取）
         self.docker = docker_manager
         # 取消標誌：由外部（task_manager）設置，執行迴圈檢查此標誌
@@ -97,6 +102,55 @@ class CompanyOrchestrator:
     def _check_cancel(self) -> bool:
         """檢查是否已請求取消。"""
         return self.cancel_requested
+
+    # ═══════════════════════════════════════════════════════════
+    # 自適應並發控制（優化 #6）
+    # ═══════════════════════════════════════════════════════════
+
+    def _adjust_concurrency(self) -> None:
+        """根據 API 響應時間和錯誤率動態調整並發數。"""
+        import time as _time
+        now = _time.monotonic()
+        # 每 30 秒最多調整一次
+        if now - self._concurrency_stats["last_adjustment"] < 30:
+            return
+        self._concurrency_stats["last_adjustment"] = now
+
+        success_times = self._concurrency_stats["success_times"]
+        rate_limit_count = self._concurrency_stats["rate_limit_count"]
+
+        old_max = self._max_parallel
+
+        # 有 429 錯誤 → 降低並發
+        if rate_limit_count > 0:
+            self._max_parallel = max(1, self._max_parallel - 1)
+            logger.info(
+                "自適應並發：檢測到 %d 次限流，並發數 %d → %d",
+                rate_limit_count, old_max, self._max_parallel,
+            )
+            self._concurrency_stats["rate_limit_count"] = 0
+
+        # 響應時間穩定且無錯誤 → 逐步提升
+        elif len(success_times) >= 5:
+            avg_time = sum(success_times[-10:]) / len(success_times[-10:])
+            if avg_time < 5.0:  # 平均響應 < 5 秒
+                self._max_parallel = min(
+                    self.config.max_parallel_workers * 2,  # 不超過配置的 2 倍
+                    self._max_parallel + 1,
+                )
+                if self._max_parallel != old_max:
+                    logger.info(
+                        "自適應並發：響應穩定（均 %.1fs），並發數 %d → %d",
+                        avg_time, old_max, self._max_parallel,
+                    )
+
+        # 更新信號量（僅在增加時重建）
+        if self._max_parallel != old_max:
+            self._worker_semaphore = asyncio.Semaphore(self._max_parallel)
+
+        # 清理舊的響應時間記錄
+        if len(success_times) > 100:
+            self._concurrency_stats["success_times"] = success_times[-50:]
 
     # ═══════════════════════════════════════════════════════════
     # 公開 API
@@ -417,10 +471,13 @@ class CompanyOrchestrator:
                 await asyncio.sleep(0.1)
                 continue
 
+            # 自適應並發調整（優化 #6）
+            self._adjust_concurrency()
+
             # 平行執行就緒工作項（Semaphore 限制並行數）
             self._log("parallel_execute", {
                 "count": len(ready_items),
-                "max_parallel": self.config.max_parallel_workers,
+                "max_parallel": self._max_parallel,
             })
             tasks = [
                 self._execute_with_semaphore(goal, item)
@@ -595,6 +652,8 @@ class CompanyOrchestrator:
         last_error = None
 
         for attempt in range(retry_cfg.max_retries + 1):
+            import time as _time
+            _start_time = _time.monotonic()
             try:
                 # ── 工具調用閉環執行（含超時控制）──
                 system_prompt = role_def.system_prompt or self.prompt_config.developer_execute_system
@@ -609,6 +668,10 @@ class CompanyOrchestrator:
                     raw = await self._execute_with_tool_loop(
                         prompt, system_prompt, model, role_type.value, item,
                     )
+
+                # 記錄成功響應時間（優化 #6）
+                elapsed = _time.monotonic() - _start_time
+                self._concurrency_stats["success_times"].append(elapsed)
 
                 cost = CostTracker.estimate_cost_rough(model, "high")
                 self.budget.record_cost(cost)

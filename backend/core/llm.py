@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 from litellm import completion
 from litellm.exceptions import APIError, RateLimitError
 
+from backend.core.llm_cache import get_llm_cache
 from backend.core.llm_config import get_runtime_config
 
 load_dotenv()
@@ -74,6 +75,12 @@ def call_llm(
         if params.get("api_base"):
             params["model"] = _ensure_provider_prefix(params["model"])
 
+    # ── 查詢快取 ──
+    cache = get_llm_cache()
+    cached = cache.get(prompt, system, params["model"])
+    if cached is not None:
+        return cached
+
     last_error: Exception | None = None
     for attempt in range(1, MAX_RETRIES + 1):
         try:
@@ -83,7 +90,10 @@ def call_llm(
                 **{k: v for k, v in params.items() if k != "model"},
                 **kwargs,
             )
-            return response.choices[0].message.content or ""
+            result = response.choices[0].message.content or ""
+            # 成功回應存入快取
+            cache.put(prompt, system, params["model"], result)
+            return result
         except RateLimitError as exc:
             last_error = exc
             wait = RETRY_BACKOFF_SECONDS * attempt

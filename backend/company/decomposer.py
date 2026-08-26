@@ -37,6 +37,14 @@ from backend.core.llm import call_llm, parse_json_response
 
 logger = logging.getLogger(__name__)
 
+# ── 拆分結果快取（優化 #13）──
+_DECOMPOSE_CACHE_SIZE = int(os.getenv("EVOL_DECOMPOSE_CACHE_SIZE", "64")) if 'os' in dir() else 64
+import hashlib
+import os
+from collections import OrderedDict as _OrderedDict
+
+_decompose_cache: _OrderedDict[str, DecompositionResult] = _OrderedDict()
+
 
 # ═══════════════════════════════════════════════════════════════
 # 拆分策略
@@ -131,7 +139,7 @@ class TaskDecomposer:
         goal: str,
         strategy: DecompositionStrategy = DecompositionStrategy.AUTO,
     ) -> DecompositionResult:
-        """將目標分解為子工作項描述。
+        """將目標分解為子工作項描述（優化 #13：拆分結果快取）。
 
         Args:
             goal: 要分解的目標描述
@@ -144,6 +152,13 @@ class TaskDecomposer:
         if strategy == DecompositionStrategy.AUTO:
             strategy = self._select_strategy(goal)
 
+        # 查詢快取（相同目標 + 策略 → 復用拆分結果）
+        cache_key = hashlib.sha256(f"{strategy.value}:{goal}".encode()).hexdigest()[:24]
+        if cache_key in _decompose_cache:
+            logger.info("任務拆分快取命中：%s", cache_key[:12])
+            _decompose_cache.move_to_end(cache_key)
+            return _decompose_cache[cache_key]
+
         logger.info("任務拆分開始：goal=%s，strategy=%s", goal[:80], strategy.value)
 
         if strategy == DecompositionStrategy.TEMPLATE:
@@ -152,6 +167,11 @@ class TaskDecomposer:
             result = self._rule_decompose(goal)
         else:
             result = await self._llm_decompose(goal)
+
+        # 存入快取
+        _decompose_cache[cache_key] = result
+        if len(_decompose_cache) > _DECOMPOSE_CACHE_SIZE:
+            _decompose_cache.popitem(last=False)
 
         logger.info(
             "任務拆分完成：%d 個子工作項，%d 個階段",

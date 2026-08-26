@@ -170,6 +170,146 @@ async def chat(req: ChatRequest):
     )
 
 
+# ==================== 公司模式 SSE 串流（優化 #11） ====================
+
+
+async def _company_stream(req: ChatRequest):
+    """公司運行時 SSE 串流：異步執行 + EventBus 事件推送。
+
+    將公司運行時的生命週期事件轉換為 SSE 事件，
+    前端可即時看到分解/執行/審查/整合各階段進度。
+    """
+    from backend.company.orchestrator import CompanyOrchestrator
+    from backend.company.roles import BUILTIN_TEMPLATES
+    from backend.company.events import CompanyEvent
+
+    session_id = req.session_id or uuid.uuid4().hex[:12]
+    query = req.query
+    template_name = req.company_template or "quick_task"
+
+    # 選擇組織模板
+    config = BUILTIN_TEMPLATES.get(template_name)
+    if config is None:
+        config = BUILTIN_TEMPLATES["quick_task"]
+
+    orchestrator = CompanyOrchestrator(config)
+
+    # 用 Queue 橋接 EventBus → SSE
+    event_queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+
+    def _on_company_event(event: CompanyEvent, data: dict[str, Any]) -> None:
+        """EventBus 監聽器：將事件推入 Queue。"""
+        try:
+            event_queue.put_nowait({"event": event.value, "data": data})
+        except Exception:
+            pass
+
+    orchestrator.events.on(_on_company_event)
+
+    # 後台執行公司任務
+    async def _run_company() -> None:
+        try:
+            result = await orchestrator.execute(query)
+            await event_queue.put({"event": "_done", "data": result})
+        except Exception as exc:
+            await event_queue.put({"event": "_error", "data": {"error": str(exc)}})
+
+    task = asyncio.create_task(_run_company())
+
+    # 階段：啟動
+    yield f"event: phase\ndata: {json_mod.dumps({'phase': 'company_start', 'template': template_name}, ensure_ascii=False)}\n\n"
+
+    # 持續從 Queue 讀取事件並推送 SSE
+    try:
+        while True:
+            try:
+                msg = await asyncio.wait_for(event_queue.get(), timeout=300)
+            except asyncio.TimeoutError:
+                yield f"event: error\ndata: {json_mod.dumps({'error': '公司運行時超時（300s）'}, ensure_ascii=False)}\n\n"
+                break
+
+            if msg is None:
+                break
+
+            evt = msg["event"]
+            data = msg["data"]
+
+            if evt == "_done":
+                # 公司執行完成 → 進入反思迴圈
+                final_output = data.get("final_output", "")
+                company_result = data
+
+                yield f"event: phase\ndata: {json_mod.dumps({'phase': 'company_done', 'success': data.get('success', False)}, ensure_ascii=False)}\n\n"
+
+                # 將公司產出交給反思閉環評估
+                eval_state = {
+                    "query": query,
+                    "current_answer": final_output,
+                    "session_id": session_id,
+                    "company_result": company_result,
+                }
+
+                yield f"event: phase\ndata: {json_mod.dumps({'phase': 'evaluate'})}\n\n"
+                eval_state.update(await asyncio.to_thread(nodes.evaluate_answer, eval_state))
+                eval_data = {
+                    'score': eval_state.get('score'),
+                    'iteration': 0,
+                    'multi_dim': eval_state.get('multi_dim_evaluation', {}),
+                }
+                yield f"event: evaluation\ndata: {json_mod.dumps(eval_data, ensure_ascii=False)}\n\n"
+
+                # 反思迴圈
+                prev_score = eval_state.get('score', 0.0)
+                while (
+                    eval_state.get('score', 0.0) < PASS_THRESHOLD
+                    and eval_state.get('iteration', 0) < MAX_ITERATIONS
+                ):
+                    cur = eval_state.get('score', 0.0)
+                    if eval_state.get('iteration', 0) >= 1:
+                        if cur - prev_score < 0.5:
+                            yield f"event: phase\ndata: {json_mod.dumps({'phase': 'early_stop', 'reason': '分數提升不足'}, ensure_ascii=False)}\n\n"
+                            break
+                    prev_score = cur
+
+                    yield f"event: phase\ndata: {json_mod.dumps({'phase': 'reflect', 'iteration': eval_state.get('iteration', 0)})}\n\n"
+                    eval_state.update(await asyncio.to_thread(nodes.reflect, eval_state))
+
+                    yield f"event: phase\ndata: {json_mod.dumps({'phase': 'improve', 'iteration': eval_state.get('iteration', 0)})}\n\n"
+                    eval_state.update(await asyncio.to_thread(nodes.improve_answer, eval_state))
+
+                    yield f"event: phase\ndata: {json_mod.dumps({'phase': 'evaluate'})}\n\n"
+                    eval_state.update(await asyncio.to_thread(nodes.evaluate_answer, eval_state))
+                    eval_data = {
+                        'score': eval_state.get('score'),
+                        'iteration': eval_state.get('iteration', 0),
+                        'multi_dim': eval_state.get('multi_dim_evaluation', {}),
+                    }
+                    yield f"event: evaluation\ndata: {json_mod.dumps(eval_data, ensure_ascii=False)}\n\n"
+
+                final_answer = eval_state.get('current_answer', final_output)
+                eval_state['final_answer'] = final_answer
+
+                # 存入記憶
+                try:
+                    await asyncio.to_thread(nodes.save_memory, eval_state)
+                except Exception:
+                    pass
+
+                yield f"event: done\ndata: {json_mod.dumps({'answer': final_answer, 'score': eval_state.get('score'), 'iteration': eval_state.get('iteration', 0), 'company': company_result.get('stats', {})}, ensure_ascii=False)}\n\n"
+                break
+
+            elif evt == "_error":
+                yield f"event: error\ndata: {json_mod.dumps({'error': data.get('error', '未知錯誤')}, ensure_ascii=False)}\n\n"
+                break
+
+            else:
+                # 公司生命週期事件 → 推送給前端
+                yield f"event: company\ndata: {json_mod.dumps({'event': evt, **data}, ensure_ascii=False)}\n\n"
+
+    finally:
+        task.cancel()
+
+
 # ==================== 串流聊天 API（SSE 打字機效果） ====================
 
 
@@ -191,11 +331,12 @@ async def chat_stream(req: ChatRequest):
     if req.execution_strategy == "company" or (
         req.execution_strategy == "auto" and _is_complex_task(req.query)
     ):
-        # 公司運行時路徑流程複雜，降級為同步回傳
-        result = await chat(req)
-        async def single():
-            yield f"event: done\ndata: {json_mod.dumps({'answer': result.answer, 'score': result.score, 'iteration': result.iteration}, ensure_ascii=False)}\n\n"
-        return StreamingResponse(single(), media_type="text/event-stream")
+        # 公司運行時：SSE 串流進度（優化 #11）
+        return StreamingResponse(
+            _company_stream(req),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     session_id = req.session_id or uuid.uuid4().hex[:12]
 
@@ -240,17 +381,32 @@ async def chat_stream(req: ChatRequest):
             answer = "".join(answer_parts)
             state.update({"initial_answer": answer, "current_answer": answer, "iteration": 0})
 
-            # 階段 3：評估
+            # 階段 3：多維度評估（優化 #1 + #4）
             yield f"event: phase\ndata: {json_mod.dumps({'phase': 'evaluate'})}\n\n"
             state.update(await asyncio.to_thread(nodes.evaluate_answer, state))
-            yield f"event: evaluation\ndata: {json_mod.dumps({'score': state.get('score'), 'iteration': 0})}\n\n"
+            eval_data = {
+                'score': state.get('score'),
+                'iteration': 0,
+                'multi_dim': state.get('multi_dim_evaluation', {}),
+            }
+            yield f"event: evaluation\ndata: {json_mod.dumps(eval_data, ensure_ascii=False)}\n\n"
 
-            # 反思/改進迴圈
+            # 反思/改進迴圈（動態迭代：帶分數變化率檢測）
+            prev_score = state.get('score', 0.0)
             while (
                 state.get("score", 0.0) < PASS_THRESHOLD
                 and state.get("iteration", 0) < MAX_ITERATIONS
             ):
-                yield f"event: phase\ndata: {json_mod.dumps({'phase': 'reflect', 'iteration': state.get('iteration', 0)})}\n\n"
+                current_score = state.get('score', 0.0)
+                # 動態迭代檢查：分數變化率過低時提前終止（優化 #4）
+                if state.get('iteration', 0) >= 1:
+                    improvement = current_score - prev_score
+                    if improvement < 0.5:  # MIN_SCORE_IMPROVEMENT
+                        yield f"event: phase\ndata: {json_mod.dumps({'phase': 'early_stop', 'reason': f'分數提升不足 ({improvement:.1f})', 'iteration': state.get('iteration', 0)})}\n\n"
+                        break
+                prev_score = current_score
+
+                yield f"event: phase\ndata: {json_mod.dumps({'phase': 'reflect', 'iteration': state.get('iteration', 0), 'score': current_score})}\n\n"
                 state.update(await asyncio.to_thread(nodes.reflect, state))
 
                 yield f"event: phase\ndata: {json_mod.dumps({'phase': 'improve', 'iteration': state.get('iteration', 0)})}\n\n"
@@ -258,7 +414,12 @@ async def chat_stream(req: ChatRequest):
 
                 yield f"event: phase\ndata: {json_mod.dumps({'phase': 'evaluate'})}\n\n"
                 state.update(await asyncio.to_thread(nodes.evaluate_answer, state))
-                yield f"event: evaluation\ndata: {json_mod.dumps({'score': state.get('score'), 'iteration': state.get('iteration', 0)})}\n\n"
+                eval_data = {
+                    'score': state.get('score'),
+                    'iteration': state.get('iteration', 0),
+                    'multi_dim': state.get('multi_dim_evaluation', {}),
+                }
+                yield f"event: evaluation\ndata: {json_mod.dumps(eval_data, ensure_ascii=False)}\n\n"
 
             final_answer = state.get("current_answer", "")
             # 儲存記憶（盡力而為）

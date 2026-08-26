@@ -1,3 +1,18 @@
+/** 多維度評估（優化 #1） */
+export interface DimensionScore {
+  score: number;
+  reason: string;
+}
+
+export interface MultiDimEvaluation {
+  accuracy: DimensionScore;
+  completeness: DimensionScore;
+  clarity: DimensionScore;
+  relevance: DimensionScore;
+  overall: number;
+  source: 'llm' | 'rule_fallback' | 'cross_model';
+}
+
 /** 任務進度事件 */
 export interface TaskEvent {
   ts: number;
@@ -167,6 +182,8 @@ export interface ChatMessage {
   meta?: {
     score?: number | null;
     iteration?: number;
+    /** 多維度評估結果（優化 #1） */
+    multiDim?: MultiDimEvaluation;
   };
 }
 

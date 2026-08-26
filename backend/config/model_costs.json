@@ -1,0 +1,13 @@
+{
+  "gpt-4o": [2.50, 10.00],
+  "gpt-4o-mini": [0.15, 0.60],
+  "gpt-4-turbo": [10.00, 30.00],
+  "gpt-3.5-turbo": [0.50, 1.50],
+  "claude-3-5-sonnet": [3.00, 15.00],
+  "claude-3-haiku": [0.25, 1.25],
+  "deepseek-chat": [0.14, 0.28],
+  "deepseek-reasoner": [0.55, 2.19],
+  "qwen-turbo": [0.05, 0.10],
+  "qwen-plus": [0.25, 1.00],
+  "qwen-max": [0.60, 2.40]
+}

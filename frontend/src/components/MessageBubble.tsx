@@ -131,12 +131,17 @@ export default function MessageBubble({ message, sessionId, onOpenTask, onOpenTr
           )}
           {message.meta?.score != null && (
             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-300 ring-1 ring-emerald-500/25">
-              ⭐ 評分 {message.meta.score}
+              ⭐ 評分 {message.meta.score.toFixed(1)}
             </span>
           )}
           {!!message.meta?.iteration && (
             <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/10 px-2 py-0.5 text-[10px] font-medium text-sky-300 ring-1 ring-sky-500/25">
               🔁 迭代 {message.meta.iteration}
+            </span>
+          )}
+          {message.meta?.multiDim && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-300 ring-1 ring-amber-500/25">
+              📊 準確{message.meta.multiDim.accuracy.score.toFixed(1)} 完整{message.meta.multiDim.completeness.score.toFixed(1)} 清晰{message.meta.multiDim.clarity.score.toFixed(1)} 相關{message.meta.multiDim.relevance.score.toFixed(1)}
             </span>
           )}
         </div>

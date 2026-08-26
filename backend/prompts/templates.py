@@ -3,6 +3,23 @@
 四組核心模板：生成初始回答、自動評估、反思與建議、優化回答。
 皆以 str.format 參數化，占位符以 {欄位名} 表示。
 """
+import os
+
+# 上下文截斷上限（字符數），可透過環境變數調整（優化 #14）
+_MAX_CONTEXT_CHARS = int(os.getenv("EVOL_MAX_CONTEXT_CHARS", "6000"))
+_MAX_ANSWER_CHARS = int(os.getenv("EVOL_MAX_ANSWER_CHARS", "4000"))
+
+
+def truncate(text: str, max_chars: int | None = None) -> str:
+    """截斷長文本，超過上限時保留頭尾並插入省略標記（優化 #14）。
+
+    用於 prompt 注入前壓縮上下文，節省 token。
+    """
+    limit = max_chars or _MAX_CONTEXT_CHARS
+    if len(text) <= limit:
+        return text
+    half = limit // 2
+    return text[:half] + f"\n...（省略 {len(text) - limit} 字）...\n" + text[-half:]
 
 GENERATE_INITIAL_ANSWER_SYSTEM = (
     "你是一位專業、有同理心的客服與領域專家助手，"

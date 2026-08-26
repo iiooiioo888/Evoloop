@@ -195,14 +195,29 @@ def run_company(state: EvoLoopState) -> dict[str, Any]:
 
 
 def should_evaluate_company(state: EvoLoopState) -> str:
-    """公司運行時執行後路由：成功則進入評估迭代迴圈，失敗則直接存檔。
+    """公司運行時執行後路由（優化 #2：錯誤回退策略）。
 
-    與 should_improve 配合，構成公司運行時的完整迭代路徑：
-      run_company → should_evaluate_company
-        → 成功：evaluate_answer → should_improve → reflect/improve（迴圈） → finalize
-        → 失敗：archive_state → END
+    路由邏輯：
+    - 成功 → evaluate_answer（進入評估迭代迴圈）
+    - 失敗但有部分產出 → evaluate_answer（嘗試用反思閉環修復）
+    - 失敗且無產出 → archive_state → END
+
+    與 should_improve 配合，構成公司運行時的完整迭代路徑。
     """
     company_result = state.get("company_result", {})
     if company_result.get("success", False):
         return "evaluate_answer"
+
+    # 優化 #2：失敗時嘗試回退到簡單模式
+    # 如果公司運行時產出了部分結果（final_output 非空），
+    # 將其交給反思閉環繼續優化，而非直接丟棄
+    final_output = state.get("final_answer", "") or state.get("current_answer", "")
+    if final_output and len(final_output.strip()) > 50:
+        logger.info(
+            "公司運行時失敗但有部分產出（%d 字），回退到反思閉環優化",
+            len(final_output),
+        )
+        # 將部分產出設為 current_answer，進入評估迭代
+        return "evaluate_answer"
+
     return "archive_state"
