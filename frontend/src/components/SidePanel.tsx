@@ -197,8 +197,14 @@ function AgentRoster({
       .filter((g) => g.agents.length > 0);
   }, [agents]);
 
+  const customCount = agents.filter((a) => a.is_custom).length;
+
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+      <p className="px-2 pb-2 pt-2 text-[10px] font-semibold uppercase tracking-wider text-gray-600">
+        {agents.length} 位角色 Agent
+        {customCount > 0 ? ` · ${customCount} 自定義` : ''}
+      </p>
       {grouped.map((group) => (
         <div key={group.level} className="mb-2">
           <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-600">
@@ -292,9 +298,6 @@ function MonitorNav({
           })}
         </div>
       </div>
-      <p className="px-3 pt-2 text-[10px] font-semibold uppercase tracking-wider text-gray-600">
-        17 位角色 Agent
-      </p>
       <AgentRoster
         focusAgentId={monitorTab === 'agents' ? focusAgentId : null}
         onPick={(id) => {
