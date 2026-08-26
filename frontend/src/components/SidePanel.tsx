@@ -3,13 +3,14 @@
  *
  * 根据 activeView 显示不同内容：
  * - Chat → 会话列表
- * - Monitor → 角色 Agent 名冊 + 其他監控分頁
+ * - Monitor → 當前分頁標籤 + 角色 Agent 名冊（分頁切換見 MonitorView 頂欄）
  * - Hub / Traces → 說明
  */
 import { useEffect, useMemo, useState } from 'react';
 import { fetchAgentMonitor } from '../api/client';
 import { AGENT_STATUS_META, agentOpenCount } from '../lib/agentUi';
 import { AGENT_FALLBACK_ROSTER } from '../lib/monitorFallbacks';
+import { monitorTabLabel, MONITOR_TABS } from '../lib/monitorTabs';
 import type { ChatSession, RoleAgent } from '../types';
 import type { MonitorTab, ViewKey } from './AppShell';
 
@@ -116,17 +117,42 @@ function SessionList({
   );
 }
 
-/** 监控面板子导航 */
-const MONITOR_NAV: { key: MonitorTab; icon: string; label: string }[] = [
-  { key: 'overview', icon: '▣', label: '總覽' },
-  { key: 'dashboard', icon: '📊', label: '控制面版' },
-  { key: 'opc', icon: '🏭', label: 'OPC' },
-  { key: 'hub', icon: '🛰️', label: 'AI Hub' },
-  { key: 'llm', icon: '⚙', label: 'LLM 運維' },
-  { key: 'cloud', icon: '☁️', label: '雲控制台' },
-  { key: 'memory', icon: '🧠', label: '記憶庫' },
-  { key: 'checkpoints', icon: '💾', label: '檢查點' },
-];
+/** 監控側欄：僅顯示當前分頁與角色名冊（分頁切換由 MonitorView 頂部導航負責） */
+function MonitorSidebar({
+  monitorTab,
+  onClose,
+  focusAgentId,
+  onFocusAgent,
+  onMonitorTabChange,
+}: {
+  monitorTab: MonitorTab;
+  onClose: () => void;
+  focusAgentId: string | null;
+  onFocusAgent: (id: string | null) => void;
+  onMonitorTabChange: (tab: MonitorTab) => void;
+}) {
+  const current = MONITOR_TABS.find((item) => item.key === monitorTab);
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="border-b border-gray-800 p-3">
+        <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">监控中心</p>
+        <p className="mt-1 text-sm text-gray-200">
+          {current ? `${current.icon} ${current.label}` : monitorTabLabel(monitorTab)}
+        </p>
+        <p className="mt-1 text-[10px] text-gray-600">分頁切換請使用主區域頂部導航</p>
+      </div>
+      <AgentRoster
+        focusAgentId={monitorTab === 'agents' ? focusAgentId : null}
+        onPick={(id) => {
+          onFocusAgent(id);
+          onMonitorTabChange('agents');
+          onClose();
+        }}
+      />
+    </div>
+  );
+}
 
 function AgentRoster({
   focusAgentId,
@@ -215,72 +241,6 @@ function AgentRoster({
   );
 }
 
-function MonitorNav({
-  monitorTab,
-  onMonitorTabChange,
-  onClose,
-  focusAgentId,
-  onFocusAgent,
-}: {
-  monitorTab: MonitorTab;
-  onMonitorTabChange: (tab: MonitorTab) => void;
-  onClose: () => void;
-  focusAgentId: string | null;
-  onFocusAgent: (id: string | null) => void;
-}) {
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="border-b border-gray-800 p-3">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">监控中心</p>
-        <div className="flex flex-wrap gap-1">
-          <button
-            type="button"
-            onClick={() => {
-              onMonitorTabChange('agents');
-              onClose();
-            }}
-            className={`rounded-md border px-2 py-1 text-[11px] ${
-              monitorTab === 'agents'
-                ? 'border-blue-500/40 bg-blue-500/10 text-blue-300'
-                : 'border-white/5 bg-gray-800/40 text-gray-400'
-            }`}
-          >
-            ◈ 角色 Agent
-          </button>
-          {MONITOR_NAV.map((item) => {
-            const active = monitorTab === item.key;
-            return (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => {
-                  onMonitorTabChange(item.key);
-                  onClose();
-                }}
-                className={`rounded-md border px-2 py-1 text-[11px] ${
-                  active
-                    ? 'border-blue-500/40 bg-blue-500/10 text-blue-300'
-                    : 'border-white/5 bg-gray-800/40 text-gray-400 hover:text-gray-200'
-                }`}
-              >
-                {item.icon} {item.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-      <AgentRoster
-        focusAgentId={monitorTab === 'agents' ? focusAgentId : null}
-        onPick={(id) => {
-          onFocusAgent(id);
-          onMonitorTabChange('agents');
-          onClose();
-        }}
-      />
-    </div>
-  );
-}
-
 export default function SidePanel({
   activeView,
   sessions,
@@ -331,7 +291,7 @@ export default function SidePanel({
           />
         )}
         {activeView === 'monitor' && (
-          <MonitorNav
+          <MonitorSidebar
             monitorTab={monitorTab}
             onMonitorTabChange={onMonitorTabChange}
             onClose={onClose}

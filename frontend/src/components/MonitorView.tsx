@@ -13,19 +13,8 @@ import HubPanel from './HubPanel';
 import LlmOpsPanel from './LlmOpsPanel';
 import MemoryPanel from './MemoryPanel';
 import MonitorOverview from './MonitorOverview';
+import { MONITOR_TABS } from '../lib/monitorTabs';
 import OpcMonitorPanel from './OpcMonitorPanel';
-
-const TABS: { key: MonitorTab; icon: string; label: string }[] = [
-  { key: 'agents', icon: '◈', label: '角色 Agent' },
-  { key: 'overview', icon: '▣', label: '總覽' },
-  { key: 'dashboard', icon: '📊', label: '控制面版' },
-  { key: 'opc', icon: '🏭', label: 'OPC 監控' },
-  { key: 'hub', icon: '🛰️', label: 'AI Hub' },
-  { key: 'llm', icon: '⚙', label: 'LLM 運維' },
-  { key: 'cloud', icon: '☁️', label: '雲控制台' },
-  { key: 'memory', icon: '🧠', label: '記憶庫' },
-  { key: 'checkpoints', icon: '💾', label: '檢查點' },
-];
 
 interface MonitorViewProps {
   onOpenTask: (task: TaskProgress) => void;
@@ -52,7 +41,7 @@ export default function MonitorView({
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-[#010102]">
       <nav className="flex shrink-0 items-center overflow-x-auto border-b border-[#23252a] bg-[#0f1011] px-2">
-        {TABS.map((tab) => {
+        {MONITOR_TABS.map((tab) => {
           const active = activeTab === tab.key;
           return (
             <button
