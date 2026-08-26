@@ -9,7 +9,7 @@ import type { MonitorTab } from './AppShell';
 import CheckpointsPanel from './CheckpointsPanel';
 import CloudConsoleView from './CloudConsoleView';
 import Dashboard from './Dashboard';
-import HubMonitorPanel from './HubMonitorPanel';
+import HubPanel from './HubPanel';
 import LlmOpsPanel from './LlmOpsPanel';
 import MemoryPanel from './MemoryPanel';
 import MonitorOverview from './MonitorOverview';
@@ -85,7 +85,7 @@ export default function MonitorView({
           />
         )}
         {activeTab === 'opc' && <OpcMonitorPanel />}
-        {activeTab === 'hub' && <HubMonitorPanel />}
+        {activeTab === 'hub' && <HubPanel />}
         {activeTab === 'llm' && <LlmOpsPanel />}
         {activeTab === 'cloud' && <CloudConsoleView />}
         {activeTab === 'memory' && (

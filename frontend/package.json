@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "python ../backend/scripts/export_monitor_fallback.py",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview"

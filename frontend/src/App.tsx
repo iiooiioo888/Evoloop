@@ -19,7 +19,6 @@ import AppShell from './components/AppShell';
 import type { MonitorTab, ViewKey } from './components/AppShell';
 import ChatView from './components/ChatView';
 import type { SendOptions } from './components/InputBar';
-import HubView from './components/HubView';
 import MonitorView from './components/MonitorView';
 import SettingsModal from './components/SettingsModal';
 import TraceView from './components/TraceView';
@@ -488,7 +487,7 @@ export default function App() {
             onSuggest={handleSuggest}
           />
         )}
-        {activeView === 'hub' && <HubView />}
+
         {activeView === 'monitor' && (
           <MonitorView
             onOpenTask={handleDashboardOpenTask}

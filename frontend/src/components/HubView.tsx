@@ -37,7 +37,7 @@ const TOOL_OPTIONS = [
   { id: 'PysdnOPC_read', label: 'PysdnOPC 讀取' },
 ] as const;
 
-export default function HubView() {
+export default function HubView({ embedded = false }: { embedded?: boolean }) {
   const [catalog, setCatalog] = useState<HubCatalog | null>(null);
   const [mode, setMode] = useState<'chat' | 'agent'>('chat');
   const [strategy, setStrategy] = useState('quality_first');
@@ -122,13 +122,15 @@ export default function HubView() {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#010102] text-[#f7f8f8]">
-      <div className="border-b border-[#23252a] px-5 py-3">
-        <h1 className="text-sm font-semibold tracking-tight">AI Hub 多模型編排</h1>
-        <p className="mt-0.5 text-[11px] text-[#8a8f98]">
-          {catalog?.pool_lock?.lock_message
-            || '旗艦 GPT-5.6 Sol · 多模態 Gemini 3.1 Pro · 不含 Anthropic / Claude'}
-        </p>
-      </div>
+      {!embedded && (
+        <div className="border-b border-[#23252a] px-5 py-3">
+          <h1 className="text-sm font-semibold tracking-tight">AI Hub 多模型編排</h1>
+          <p className="mt-0.5 text-[11px] text-[#8a8f98]">
+            {catalog?.pool_lock?.lock_message
+              || '旗艦 GPT-5.6 Sol · 多模態 Gemini 3.1 Pro · 不含 Anthropic / Claude'}
+          </p>
+        </div>
+      )}
 
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-0 lg:grid-cols-[minmax(280px,360px)_1fr]">
         <section className="overflow-y-auto border-b border-[#23252a] p-4 lg:border-b-0 lg:border-r">

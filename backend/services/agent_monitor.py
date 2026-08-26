@@ -202,6 +202,11 @@ def _blank_agent(snapshot: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def build_idle_roster() -> list[dict[str, Any]]:
+    """匯出／降級用：內建 + 自定義角色，全部以 idle 工作台快照呈現。"""
+    return [_blank_agent(snapshot) for snapshot in list_role_snapshots()]
+
+
 def _event_payload(event: Any) -> dict[str, Any]:
     if isinstance(event, dict):
         data = event.get("data")

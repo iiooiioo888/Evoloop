@@ -116,35 +116,6 @@ function SessionList({
   );
 }
 
-/** AI Hub 側欄說明 */
-function HubNav() {
-  return (
-    <div className="p-3">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">AI Hub</p>
-      <div className="space-y-2">
-        <div className="rounded-lg border border-[#5e6ad2]/30 bg-[#5e6ad2]/10 px-3 py-2">
-          <p className="text-xs font-medium text-[#828fff]">🛰️ 多方編排</p>
-          <p className="mt-0.5 text-[11px] text-gray-500">
-            GPT-5.6 Sol 旗艦 · Gemini 3.1 Pro 多模態 · 零 Claude
-          </p>
-        </div>
-        <div className="rounded-lg border border-white/5 bg-gray-800/40 px-3 py-2">
-          <p className="text-xs font-medium text-gray-300">故障轉移</p>
-          <p className="mt-0.5 text-[11px] text-gray-500">
-            Sol → Gemini → DeepSeek → GLM-5.2
-          </p>
-        </div>
-        <div className="rounded-lg border border-white/5 bg-gray-800/40 px-3 py-2">
-          <p className="text-xs font-medium text-gray-300">屬地合規</p>
-          <p className="mt-0.5 text-[11px] text-gray-500">
-            CN 強制 DeepSeek / Qwen / MiMo
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /** 监控面板子导航 */
 const MONITOR_NAV: { key: MonitorTab; icon: string; label: string }[] = [
   { key: 'overview', icon: '▣', label: '總覽' },
@@ -368,7 +339,7 @@ export default function SidePanel({
             onFocusAgent={onFocusAgent}
           />
         )}
-        {activeView === 'hub' && <HubNav />}
+
         {activeView === 'traces' && (
           <div className="p-3">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">

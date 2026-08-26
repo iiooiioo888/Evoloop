@@ -13,7 +13,7 @@ import SidePanel from './SidePanel';
 import StatusBar from './StatusBar';
 import TopBar from './TopBar';
 
-export type ViewKey = 'chat' | 'monitor' | 'traces' | 'hub';
+export type ViewKey = 'chat' | 'monitor' | 'traces';
 export type MonitorTab =
   | 'overview'
   | 'agents'
