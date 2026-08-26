@@ -335,6 +335,14 @@ function RoleDeepMonitor({ agent }: { agent: RoleAgent }) {
         <Kpi label="語言" value={agent.language || 'zh-TW'} hint={agent.always_require_review ? '一律審查' : '審查可選'} />
         <Kpi label="故障轉移" value={String(agent.failover_models?.length ?? 0)} hint={(agent.failover_models ?? []).slice(0, 2).join(' → ') || '未設'} />
         <Kpi label="允許工具" value={String(agent.tools_allowed?.length ?? 0)} hint={(agent.tools_allowed ?? []).slice(0, 2).join(' · ') || '未限'} />
+        <Kpi label="週／月預算" value={`${fmtUsd(agent.weekly_budget_usd ?? 0)} / ${fmtUsd(agent.monthly_budget_usd ?? 0)}`} />
+        <Kpi label="P95 延遲" value={`${Math.round(m.p95_latency_ms ?? 0)} ms`} hint={`failover ${m.failovers ?? 0}`} />
+        <Kpi label="快取命中" value={String(m.cache_hits ?? 0)} hint={agent.cache_enabled === false ? '快取關' : '快取開'} />
+        <Kpi label="人工升級" value={String(m.human_escalations ?? 0)} hint={agent.require_human_approval ? '需核准' : '自動'} />
+        <Kpi label="值班" value={agent.on_call ? 'On-call' : '否'} hint={agent.quiet_hours || '無安靜時段'} />
+        <Kpi label="合規" value={agent.mainland_only ? '僅國內' : '全球'} hint={agent.pii_redact === false ? 'PII 關' : 'PII 開'} />
+        <Kpi label="日工作上限" value={agent.max_daily_items ? String(agent.max_daily_items) : '不限'} hint={`心跳 ${agent.heartbeat_sec ?? 0}s`} />
+        <Kpi label="標籤" value={String(agent.tags?.length ?? 0)} hint={(agent.tags ?? []).slice(0, 3).join(' · ') || '無'} />
       </div>
       {(agent.alerts?.length ?? 0) > 0 && (
         <div className="space-y-1 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2">
@@ -393,6 +401,8 @@ function AgentDeskCard({
             <span className={`block text-[10px] ${meta.text}`}>
               {meta.label}
               {agent.is_custom ? ' · 自定' : ''}
+              {agent.on_call ? ' · 值班' : ''}
+              {agent.require_human_approval ? ' · 需核准' : ''}
               {open > 0 ? ` · ${open} 項開放` : ''}
             </span>
           </span>
@@ -469,7 +479,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
   const [boardMode, setBoardMode] = useState<'list' | 'kanban'>('list');
   const [deskTab, setDeskTab] = useState<'tasks' | 'monitor' | 'settings' | 'org'>('tasks');
   const [query, setQuery] = useState('');
-  const [rosterFilter, setRosterFilter] = useState<'all' | 'custom' | 'disabled'>('all');
+  const [rosterFilter, setRosterFilter] = useState<'all' | 'custom' | 'disabled' | 'oncall'>('all');
   const [creating, setCreating] = useState(false);
   const [cloneFrom, setCloneFrom] = useState<RoleAgent | null>(null);
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -477,6 +487,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
   const [saveError, setSaveError] = useState<string | null>(null);
   const [didAutoOpen, setDidAutoOpen] = useState(false);
   const [appliedDefaultTab, setAppliedDefaultTab] = useState(false);
+  const [appliedDefaultLayout, setAppliedDefaultLayout] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -523,6 +534,15 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
     }
   }, [appliedDefaultTab, data?.monitor_prefs?.default_desk_tab]);
 
+  useEffect(() => {
+    if (appliedDefaultLayout || focusAgentId) return;
+    const next = data?.monitor_prefs?.default_layout;
+    if (next === 'catalog' || next === 'desk' || next === 'floor') {
+      setLayout(next);
+      setAppliedDefaultLayout(true);
+    }
+  }, [appliedDefaultLayout, data?.monitor_prefs?.default_layout, focusAgentId]);
+
   const agents = data?.agents?.length ? data.agents : AGENT_FALLBACK_ROSTER;
   const summary = data?.summary;
   const selected = agents.find((a) => a.id === selectedId) ?? agents[0] ?? null;
@@ -533,6 +553,11 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
       if (categoryFilter !== 'all' && a.category !== categoryFilter) return false;
       if (rosterFilter === 'custom' && !a.is_custom) return false;
       if (rosterFilter === 'disabled' && a.enabled !== false) return false;
+      if (rosterFilter === 'oncall' && !a.on_call) return false;
+      if (data?.monitor_prefs?.show_on_call_only && !a.on_call) return false;
+      const minLv = data?.monitor_prefs?.filter_min_level ?? 0;
+      const maxLv = data?.monitor_prefs?.filter_max_level ?? 4;
+      if (a.level < minLv || a.level > maxLv) return false;
       if (data?.monitor_prefs?.show_disabled === false && a.enabled === false) return false;
       if (data?.monitor_prefs?.show_idle === false && a.status === 'idle') return false;
       if (data?.monitor_prefs?.show_custom_only && !a.is_custom) return false;
@@ -553,6 +578,14 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
         }
         if (key === 'cost') return (b.cost_usd || 0) - (a.cost_usd || 0);
         if (key === 'queue') return agentOpenCount(b) - agentOpenCount(a);
+        const pins = data?.monitor_prefs?.pin_role_ids ?? [];
+        const pinA = pins.indexOf(a.id);
+        const pinB = pins.indexOf(b.id);
+        if (pinA >= 0 || pinB >= 0) {
+          if (pinA < 0) return 1;
+          if (pinB < 0) return -1;
+          return pinA - pinB;
+        }
         return a.id.localeCompare(b.id);
       });
     };

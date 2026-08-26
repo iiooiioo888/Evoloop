@@ -25,7 +25,7 @@
 
 ### 🚀 部署
 
-- [部署指南](deployment/guide.md) — Docker Compose、GitHub Pages、生產環境
+- [部署指南](deployment/guide.md) — Docker Compose、GitHub Pages（https://iiooiioo888.github.io/Evoloop/）、生產環境
 
 ---
 

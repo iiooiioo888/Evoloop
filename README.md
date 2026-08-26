@@ -12,6 +12,9 @@
 [![React](https://img.shields.io/badge/React-18-61dafb?logo=react&logoColor=white)](https://react.dev/)
 [![Tests](https://img.shields.io/badge/Tests-185%20passed-success?logo=pytest&logoColor=white)](backend/tests/)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
+[![GitHub Pages](https://img.shields.io/badge/Demo-GitHub%20Pages-222?logo=githubpages&logoColor=white)](https://iiooiioo888.github.io/Evoloop/)
+
+**線上預覽：** [https://iiooiioo888.github.io/Evoloop/](https://iiooiioo888.github.io/Evoloop/)（靜態 UI，聊天與寫入需本地或 Docker 啟動完整服務）
 
 </div>
 

@@ -37,6 +37,11 @@ export function blankMetrics() {
     last_model: '',
     sla_breaches: 0,
     retries: 0,
+    failovers: 0,
+    cache_hits: 0,
+    human_escalations: 0,
+    p95_latency_ms: 0,
+    weekly_spent_usd: 0,
   };
 }
 
@@ -71,6 +76,7 @@ export const CATEGORY_LABEL: Record<string, string> = {
   platform: '平台／GitHub',
   hub: 'AI Hub',
   memory: '記憶／知識庫',
+  growth: '成長／客戶成功',
 };
 
 export function agentOpenCount(agent: Pick<RoleAgent, 'queue' | 'executing' | 'inbox' | 'blocked'>): number {

@@ -632,6 +632,17 @@ class TaskDecomposer:
             (["部署", "deploy", "ci/cd", "docker", "k8s", "維運"], "devops"),
             (["分析", "analyst", "研究", "research", "報告", "report"], "analyst"),
             (["審查", "review", "檢查"], "reviewer"),
+            (["量化", "估值", "pe", "股票", "行情"], "quant_analyst"),
+            (["opc", "工業", "產線", "標籤"], "opc_engineer"),
+            (["爬蟲", "crawl", "採集"], "crawler"),
+            (["故事", "情節", "對白", "story"], "story_writer"),
+            (["rag", "檢索增強", "切片"], "rag_engineer"),
+            (["評測", "eval", "基準"], "eval_engineer"),
+            (["機器學習", "ml", "訓練"], "ml_engineer"),
+            (["負載", "壓測", "吞吐"], "load_tester"),
+            (["滲透", "弱點", "攻擊面"], "pen_tester"),
+            (["plc", "連鎖"], "plc_engineer"),
+            (["路由", "failover", "熔斷"], "router_eng"),
         ]
 
         for keywords, role in role_keywords:

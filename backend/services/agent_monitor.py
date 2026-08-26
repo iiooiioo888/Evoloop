@@ -72,6 +72,14 @@ PHASE_ROLE: dict[str, str] = {
 }
 
 
+def _p95(values: list[float]) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    idx = min(len(ordered) - 1, max(0, int(round(0.95 * (len(ordered) - 1)))))
+    return round(ordered[idx], 1)
+
+
 def _run_log_dir() -> Path:
     return Path(os.getenv("EVOL_COMPANY_RUN_LOG_DIR", str(DEFAULT_RUN_LOG_DIR)))
 
@@ -135,6 +143,22 @@ def _blank_agent(snapshot: dict[str, Any]) -> dict[str, Any]:
         "always_require_review": bool(snapshot.get("always_require_review", False)),
         "priority": int(snapshot.get("priority") or 3),
         "description": snapshot.get("description") or "",
+        "weekly_budget_usd": float(snapshot.get("weekly_budget_usd") or 0),
+        "monthly_budget_usd": float(snapshot.get("monthly_budget_usd") or 0),
+        "max_daily_items": int(snapshot.get("max_daily_items") or 0),
+        "require_human_approval": bool(snapshot.get("require_human_approval", False)),
+        "stream_enabled": bool(snapshot.get("stream_enabled", True)),
+        "cache_enabled": bool(snapshot.get("cache_enabled", True)),
+        "pii_redact": bool(snapshot.get("pii_redact", True)),
+        "mainland_only": bool(snapshot.get("mainland_only", False)),
+        "heartbeat_sec": int(snapshot.get("heartbeat_sec") or 0),
+        "on_call": bool(snapshot.get("on_call", False)),
+        "tags": list(snapshot.get("tags") or []),
+        "notify_channel": snapshot.get("notify_channel") or "",
+        "quiet_hours": snapshot.get("quiet_hours") or "",
+        "context_window": int(snapshot.get("context_window") or 0),
+        "allow_tool_use": bool(snapshot.get("allow_tool_use", True)),
+        "auto_escalate": bool(snapshot.get("auto_escalate", True)),
         "templates": list(snapshot.get("templates") or []),
         "status": "idle" if snapshot.get("enabled", True) else "disabled",
         "inbox": _empty_inbox(),
@@ -168,6 +192,11 @@ def _blank_agent(snapshot: dict[str, Any]) -> dict[str, Any]:
             "last_model": "",
             "sla_breaches": 0,
             "retries": 0,
+            "failovers": 0,
+            "cache_hits": 0,
+            "human_escalations": 0,
+            "p95_latency_ms": 0.0,
+            "weekly_spent_usd": 0.0,
         },
         "alerts": [],
     }
@@ -632,6 +661,11 @@ def _finalize_agent(agent: dict[str, Any]) -> dict[str, Any]:
         or str(agent.get("preferred_model") or ""),
         "sla_breaches": sla_breaches,
         "retries": sum(1 for e in events if e.get("event") in {"retry", "work_item_retry"}),
+        "failovers": sum(1 for e in events if e.get("event") in {"failover", "budget_degrade"}),
+        "cache_hits": sum(1 for e in events if e.get("event") in {"cache_hit", "semantic_cache_hit"}),
+        "human_escalations": sum(1 for e in events if e.get("event") in {"human_approval", "escalation"}),
+        "p95_latency_ms": _p95([float(e.get("duration_ms") or 0) for e in events if e.get("duration_ms")]),
+        "weekly_spent_usd": daily_spent,
     }
     alerts: list[dict[str, str]] = []
     if not agent.get("enabled", True):
@@ -649,6 +683,20 @@ def _finalize_agent(agent: dict[str, Any]) -> dict[str, Any]:
         alerts.append({"level": "warning", "message": f"並行容量已用 {cap_pct:.0f}%"})
     if agent.get("always_require_review"):
         alerts.append({"level": "info", "message": "此角色產出一律送審查"})
+    if agent.get("require_human_approval"):
+        alerts.append({"level": "info", "message": "執行前需人工核准"})
+    if agent.get("on_call"):
+        alerts.append({"level": "info", "message": "目前值班中"})
+    if agent.get("mainland_only"):
+        alerts.append({"level": "info", "message": "僅國內模型（避免資料出境）"})
+    if not agent.get("allow_tool_use", True):
+        alerts.append({"level": "warning", "message": "已關閉工具呼叫"})
+    weekly = float(agent.get("weekly_budget_usd") or 0)
+    if weekly > 0 and daily_spent > weekly and agent.get("alert_on_budget", True):
+        alerts.append({"level": "critical", "message": "已超過週預算"})
+    max_items = int(agent.get("max_daily_items") or 0)
+    if max_items > 0 and items_total >= max_items:
+        alerts.append({"level": "warning", "message": f"今日工作項已達上限 {max_items}"})
     agent["alerts"] = alerts
     seen_tasks: dict[str, dict[str, Any]] = {}
     for item in agent["work_items"]:
@@ -722,6 +770,9 @@ def collect_agent_monitor() -> dict[str, Any]:
             "company_tasks": company_tasks,
             "running_company_tasks": running_company,
             "total_cost_usd": round(sum(float(a.get("cost_usd") or 0) for a in finalized), 4),
+            "roles_on_call": sum(1 for a in finalized if a.get("on_call")),
+            "roles_need_approval": sum(1 for a in finalized if a.get("require_human_approval")),
+            "roles_mainland_only": sum(1 for a in finalized if a.get("mainland_only")),
         },
         "levels": [
             {"level": level, "label": label}

@@ -34,6 +34,22 @@ export interface RoleSettingsDraft {
   always_require_review: boolean;
   priority: number;
   description: string;
+  weekly_budget_usd: number;
+  monthly_budget_usd: number;
+  max_daily_items: number;
+  require_human_approval: boolean;
+  stream_enabled: boolean;
+  cache_enabled: boolean;
+  pii_redact: boolean;
+  mainland_only: boolean;
+  heartbeat_sec: number;
+  on_call: boolean;
+  tagsText: string;
+  notify_channel: string;
+  quiet_hours: string;
+  context_window: number;
+  allow_tool_use: boolean;
+  auto_escalate: boolean;
 }
 
 export function draftFromAgent(agent: RoleAgent): RoleSettingsDraft {
@@ -66,6 +82,22 @@ export function draftFromAgent(agent: RoleAgent): RoleSettingsDraft {
     always_require_review: agent.always_require_review === true,
     priority: agent.priority ?? 3,
     description: agent.description ?? '',
+    weekly_budget_usd: agent.weekly_budget_usd ?? 0,
+    monthly_budget_usd: agent.monthly_budget_usd ?? 0,
+    max_daily_items: agent.max_daily_items ?? 0,
+    require_human_approval: agent.require_human_approval === true,
+    stream_enabled: agent.stream_enabled !== false,
+    cache_enabled: agent.cache_enabled !== false,
+    pii_redact: agent.pii_redact !== false,
+    mainland_only: agent.mainland_only === true,
+    heartbeat_sec: agent.heartbeat_sec ?? 0,
+    on_call: agent.on_call === true,
+    tagsText: (agent.tags ?? []).join(', '),
+    notify_channel: agent.notify_channel ?? '',
+    quiet_hours: agent.quiet_hours ?? '',
+    context_window: agent.context_window ?? 0,
+    allow_tool_use: agent.allow_tool_use !== false,
+    auto_escalate: agent.auto_escalate !== false,
   };
 }
 
@@ -99,6 +131,22 @@ export function draftToPayload(draft: RoleSettingsDraft): Record<string, unknown
     always_require_review: draft.always_require_review,
     priority: draft.priority,
     description: draft.description,
+    weekly_budget_usd: draft.weekly_budget_usd,
+    monthly_budget_usd: draft.monthly_budget_usd,
+    max_daily_items: draft.max_daily_items,
+    require_human_approval: draft.require_human_approval,
+    stream_enabled: draft.stream_enabled,
+    cache_enabled: draft.cache_enabled,
+    pii_redact: draft.pii_redact,
+    mainland_only: draft.mainland_only,
+    heartbeat_sec: draft.heartbeat_sec,
+    on_call: draft.on_call,
+    tags: draft.tagsText.split(',').map((s) => s.trim()).filter(Boolean),
+    notify_channel: draft.notify_channel,
+    quiet_hours: draft.quiet_hours,
+    context_window: draft.context_window,
+    allow_tool_use: draft.allow_tool_use,
+    auto_escalate: draft.auto_escalate,
   };
 }
 
@@ -147,7 +195,7 @@ export default function RoleSettingsPanel({
   onClone,
 }: RoleSettingsPanelProps) {
   const [draft, setDraft] = useState<RoleSettingsDraft>(() => draftFromAgent(agent));
-  const [section, setSection] = useState<'identity' | 'model' | 'prompt' | 'alerts'>('identity');
+  const [section, setSection] = useState<'identity' | 'model' | 'prompt' | 'alerts' | 'runtime'>('identity');
 
   useEffect(() => {
     setDraft(draftFromAgent(agent));
@@ -215,6 +263,7 @@ export default function RoleSettingsPanel({
             ['identity', '身分／組織'],
             ['model', '模型／路由'],
             ['prompt', '角色設定'],
+            ['runtime', '執行／合規'],
             ['alerts', '預算／告警／監控'],
           ] as const
         ).map(([key, label]) => (
@@ -469,6 +518,50 @@ export default function RoleSettingsPanel({
         </div>
       )}
 
+      {section === 'runtime' && (
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+          <Field label="標籤" hint="逗號分隔">
+            <input className={inputCls} value={draft.tagsText} onChange={(e) => setDraft({ ...draft, tagsText: e.target.value })} />
+          </Field>
+          <Field label="通知頻道">
+            <input className={inputCls} placeholder="slack:#ops / email" value={draft.notify_channel} onChange={(e) => setDraft({ ...draft, notify_channel: e.target.value })} />
+          </Field>
+          <Field label="安靜時段" hint="例 22:00-08:00">
+            <input className={inputCls} value={draft.quiet_hours} onChange={(e) => setDraft({ ...draft, quiet_hours: e.target.value })} />
+          </Field>
+          <Field label="心跳秒數" hint="0=關閉">
+            <input type="number" min={0} className={inputCls} value={draft.heartbeat_sec} onChange={(e) => setDraft({ ...draft, heartbeat_sec: Number(e.target.value) || 0 })} />
+          </Field>
+          <Field label="上下文視窗" hint="0=模型預設">
+            <input type="number" min={0} className={inputCls} value={draft.context_window} onChange={(e) => setDraft({ ...draft, context_window: Number(e.target.value) || 0 })} />
+          </Field>
+          <Field label="每日工作項上限" hint="0=不限">
+            <input type="number" min={0} className={inputCls} value={draft.max_daily_items} onChange={(e) => setDraft({ ...draft, max_daily_items: Number(e.target.value) || 0 })} />
+          </Field>
+          <div className="flex flex-wrap gap-3 md:col-span-2">
+            {[
+              ['on_call', '值班中', draft.on_call],
+              ['require_human_approval', '人工核准後才執行', draft.require_human_approval],
+              ['stream_enabled', '允許串流', draft.stream_enabled],
+              ['cache_enabled', '語義快取', draft.cache_enabled],
+              ['pii_redact', '個資遮蔽', draft.pii_redact],
+              ['mainland_only', '僅國內模型', draft.mainland_only],
+              ['allow_tool_use', '允許工具', draft.allow_tool_use],
+              ['auto_escalate', '失敗自動升級', draft.auto_escalate],
+            ].map(([key, label, checked]) => (
+              <label key={String(key)} className="flex items-center gap-2 text-[12px] text-[#d0d6e0]">
+                <input
+                  type="checkbox"
+                  checked={Boolean(checked)}
+                  onChange={(e) => setDraft({ ...draft, [key as string]: e.target.checked })}
+                />
+                {label as string}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
       {section === 'alerts' && (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           <Field label="每日預算 USD" hint="0=不限">
@@ -479,6 +572,26 @@ export default function RoleSettingsPanel({
               className={inputCls}
               value={draft.daily_budget_usd}
               onChange={(e) => setDraft({ ...draft, daily_budget_usd: Number(e.target.value) || 0 })}
+            />
+          </Field>
+          <Field label="週預算 USD" hint="0=不限">
+            <input
+              type="number"
+              min={0}
+              step={0.1}
+              className={inputCls}
+              value={draft.weekly_budget_usd}
+              onChange={(e) => setDraft({ ...draft, weekly_budget_usd: Number(e.target.value) || 0 })}
+            />
+          </Field>
+          <Field label="月預算 USD" hint="0=不限">
+            <input
+              type="number"
+              min={0}
+              step={0.1}
+              className={inputCls}
+              value={draft.monthly_budget_usd}
+              onChange={(e) => setDraft({ ...draft, monthly_budget_usd: Number(e.target.value) || 0 })}
             />
           </Field>
           <Field label="SLA 延遲 ms" hint="0=不檢查">

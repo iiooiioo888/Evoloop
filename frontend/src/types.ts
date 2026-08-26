@@ -698,6 +698,11 @@ export interface AgentMetrics {
   last_model?: string;
   sla_breaches?: number;
   retries?: number;
+  failovers?: number;
+  cache_hits?: number;
+  human_escalations?: number;
+  p95_latency_ms?: number;
+  weekly_spent_usd?: number;
 }
 
 export interface AgentAlert {
@@ -775,6 +780,14 @@ export interface AgentMonitorPrefs {
   show_prompt_preview?: boolean;
   highlight_alerts?: boolean;
   auto_open_busy?: boolean;
+  default_layout?: 'catalog' | 'desk' | 'floor' | string;
+  sound_on_alert?: boolean;
+  show_cost_in_cards?: boolean;
+  pin_role_ids?: string[];
+  filter_min_level?: number;
+  filter_max_level?: number;
+  timezone?: string;
+  show_on_call_only?: boolean;
 }
 
 export interface RoleAgent {
@@ -811,6 +824,22 @@ export interface RoleAgent {
   always_require_review?: boolean;
   priority?: number;
   description?: string;
+  weekly_budget_usd?: number;
+  monthly_budget_usd?: number;
+  max_daily_items?: number;
+  require_human_approval?: boolean;
+  stream_enabled?: boolean;
+  cache_enabled?: boolean;
+  pii_redact?: boolean;
+  mainland_only?: boolean;
+  heartbeat_sec?: number;
+  on_call?: boolean;
+  tags?: string[];
+  notify_channel?: string;
+  quiet_hours?: string;
+  context_window?: number;
+  allow_tool_use?: boolean;
+  auto_escalate?: boolean;
   templates: string[];
   alerts?: AgentAlert[];
   status: 'idle' | 'busy' | 'waiting' | 'error' | 'disabled' | string;
@@ -848,6 +877,9 @@ export interface AgentMonitorData {
     company_tasks: number;
     running_company_tasks: number;
     total_cost_usd?: number;
+    roles_on_call?: number;
+    roles_need_approval?: number;
+    roles_mainland_only?: number;
   };
   levels: Array<{ level: number; label: string }>;
   catalog_meta?: AgentCatalogMeta;

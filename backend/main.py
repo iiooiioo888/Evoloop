@@ -733,6 +733,22 @@ class RoleSettingsBody(BaseModel):
     always_require_review: bool | None = None
     priority: int | None = None
     description: str | None = None
+    weekly_budget_usd: float | None = None
+    monthly_budget_usd: float | None = None
+    max_daily_items: int | None = None
+    require_human_approval: bool | None = None
+    stream_enabled: bool | None = None
+    cache_enabled: bool | None = None
+    pii_redact: bool | None = None
+    mainland_only: bool | None = None
+    heartbeat_sec: int | None = None
+    on_call: bool | None = None
+    tags: list[str] | None = None
+    notify_channel: str | None = None
+    quiet_hours: str | None = None
+    context_window: int | None = None
+    allow_tool_use: bool | None = None
+    auto_escalate: bool | None = None
 
 
 class CustomRoleBody(BaseModel):
@@ -766,6 +782,22 @@ class CustomRoleBody(BaseModel):
     always_require_review: bool = False
     priority: int = 3
     description: str = ""
+    weekly_budget_usd: float = 0
+    monthly_budget_usd: float = 0
+    max_daily_items: int = 0
+    require_human_approval: bool = False
+    stream_enabled: bool = True
+    cache_enabled: bool = True
+    pii_redact: bool = True
+    mainland_only: bool = False
+    heartbeat_sec: int = 0
+    on_call: bool = False
+    tags: list[str] = []
+    notify_channel: str = ""
+    quiet_hours: str = ""
+    context_window: int = 0
+    allow_tool_use: bool = True
+    auto_escalate: bool = True
 
 
 class MonitorPrefsBody(BaseModel):
@@ -781,6 +813,14 @@ class MonitorPrefsBody(BaseModel):
     show_prompt_preview: bool | None = None
     highlight_alerts: bool | None = None
     auto_open_busy: bool | None = None
+    default_layout: str | None = None
+    sound_on_alert: bool | None = None
+    show_cost_in_cards: bool | None = None
+    pin_role_ids: list[str] | None = None
+    filter_min_level: int | None = None
+    filter_max_level: int | None = None
+    timezone: str | None = None
+    show_on_call_only: bool | None = None
 
 
 @app.get("/monitor/agents")

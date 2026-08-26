@@ -65,6 +65,7 @@ CATEGORY_LABELS: dict[str, str] = {
     "platform": "平台／GitHub",
     "hub": "AI Hub",
     "memory": "記憶／知識庫",
+    "growth": "成長／客戶成功",
 }
 
 TIER_VALUES = {t.value for t in BudgetTier}
@@ -74,6 +75,8 @@ ROUTING_STRATEGIES = {"cost_first", "speed_first", "quality_first", "manual"}
 DEFAULT_RUNTIME: dict[str, Any] = {
     "preferred_model": "",
     "daily_budget_usd": 0.0,
+    "weekly_budget_usd": 0.0,
+    "monthly_budget_usd": 0.0,
     "tools_allowed": [],
     "notes": "",
     "enabled": True,
@@ -91,6 +94,20 @@ DEFAULT_RUNTIME: dict[str, Any] = {
     "always_require_review": False,
     "priority": 3,
     "description": "",
+    "max_daily_items": 0,
+    "require_human_approval": False,
+    "stream_enabled": True,
+    "cache_enabled": True,
+    "pii_redact": True,
+    "mainland_only": False,
+    "heartbeat_sec": 0,
+    "on_call": False,
+    "tags": [],
+    "notify_channel": "",
+    "quiet_hours": "",
+    "context_window": 0,
+    "allow_tool_use": True,
+    "auto_escalate": True,
 }
 
 DEFAULT_MONITOR_PREFS: dict[str, Any] = {
@@ -106,6 +123,14 @@ DEFAULT_MONITOR_PREFS: dict[str, Any] = {
     "show_prompt_preview": True,
     "highlight_alerts": True,
     "auto_open_busy": False,
+    "default_layout": "catalog",
+    "sound_on_alert": False,
+    "show_cost_in_cards": True,
+    "pin_role_ids": [],
+    "filter_min_level": 0,
+    "filter_max_level": 4,
+    "timezone": "Asia/Taipei",
+    "show_on_call_only": False,
 }
 
 _lock = threading.RLock()
@@ -302,6 +327,34 @@ def _merge_runtime(target: dict[str, Any], source: dict[str, Any] | None) -> dic
         target["priority"] = _clamp_int(source.get("priority"), 3, 1, 5)
     if source.get("description") is not None:
         target["description"] = str(source.get("description") or "")[:240]
+    if source.get("weekly_budget_usd") is not None:
+        target["weekly_budget_usd"] = max(0.0, float(source["weekly_budget_usd"] or 0))
+    if source.get("monthly_budget_usd") is not None:
+        target["monthly_budget_usd"] = max(0.0, float(source["monthly_budget_usd"] or 0))
+    if source.get("max_daily_items") is not None:
+        target["max_daily_items"] = _clamp_int(source.get("max_daily_items"), 0, 0, 500)
+    for flag in (
+        "require_human_approval",
+        "stream_enabled",
+        "cache_enabled",
+        "pii_redact",
+        "mainland_only",
+        "on_call",
+        "allow_tool_use",
+        "auto_escalate",
+    ):
+        if flag in source:
+            target[flag] = bool(source[flag])
+    if source.get("heartbeat_sec") is not None:
+        target["heartbeat_sec"] = _clamp_int(source.get("heartbeat_sec"), 0, 0, 3600)
+    if source.get("tags") is not None:
+        target["tags"] = _as_str_list(source.get("tags"))[:16]
+    if source.get("notify_channel") is not None:
+        target["notify_channel"] = str(source.get("notify_channel") or "")[:64]
+    if source.get("quiet_hours") is not None:
+        target["quiet_hours"] = str(source.get("quiet_hours") or "")[:32]
+    if source.get("context_window") is not None:
+        target["context_window"] = _clamp_int(source.get("context_window"), 0, 0, 2_000_000)
     return target
 
 
@@ -478,6 +531,24 @@ def update_monitor_prefs(patch: dict[str, Any]) -> dict[str, Any]:
             current["sort_by"] = sort_by if sort_by in {"level", "name", "status", "cost", "queue"} else "level"
         if "capacity_warn_pct" in patch:
             current["capacity_warn_pct"] = _clamp_int(patch.get("capacity_warn_pct"), 80, 10, 100)
+        if "default_layout" in patch:
+            layout = str(patch.get("default_layout") or "catalog").strip().lower()
+            current["default_layout"] = layout if layout in {"catalog", "desk", "floor"} else "catalog"
+        if "sound_on_alert" in patch:
+            current["sound_on_alert"] = bool(patch["sound_on_alert"])
+        if "show_cost_in_cards" in patch:
+            current["show_cost_in_cards"] = bool(patch["show_cost_in_cards"])
+        if "show_on_call_only" in patch:
+            current["show_on_call_only"] = bool(patch["show_on_call_only"])
+        if "pin_role_ids" in patch:
+            current["pin_role_ids"] = _as_str_list(patch.get("pin_role_ids"))[:32]
+        if "filter_min_level" in patch:
+            current["filter_min_level"] = _clamp_int(patch.get("filter_min_level"), 0, 0, 4)
+        if "filter_max_level" in patch:
+            current["filter_max_level"] = _clamp_int(patch.get("filter_max_level"), 4, 0, 4)
+        if "timezone" in patch:
+            tz = str(patch.get("timezone") or "Asia/Taipei").strip() or "Asia/Taipei"
+            current["timezone"] = tz[:64]
         store["monitor"] = current
         _save_store(store)
         return current
@@ -538,6 +609,34 @@ def _settings_payload(data: dict[str, Any]) -> dict[str, Any]:
         payload["priority"] = _clamp_int(data.get("priority"), 3, 1, 5)
     if "description" in data:
         payload["description"] = str(data.get("description") or "")[:240]
+    if "weekly_budget_usd" in data:
+        payload["weekly_budget_usd"] = max(0.0, float(data.get("weekly_budget_usd") or 0))
+    if "monthly_budget_usd" in data:
+        payload["monthly_budget_usd"] = max(0.0, float(data.get("monthly_budget_usd") or 0))
+    if "max_daily_items" in data:
+        payload["max_daily_items"] = _clamp_int(data.get("max_daily_items"), 0, 0, 500)
+    for flag in (
+        "require_human_approval",
+        "stream_enabled",
+        "cache_enabled",
+        "pii_redact",
+        "mainland_only",
+        "on_call",
+        "allow_tool_use",
+        "auto_escalate",
+    ):
+        if flag in data:
+            payload[flag] = bool(data[flag])
+    if "heartbeat_sec" in data:
+        payload["heartbeat_sec"] = _clamp_int(data.get("heartbeat_sec"), 0, 0, 3600)
+    if "tags" in data:
+        payload["tags"] = _as_str_list(data.get("tags"))[:16]
+    if "notify_channel" in data:
+        payload["notify_channel"] = str(data.get("notify_channel") or "")[:64]
+    if "quiet_hours" in data:
+        payload["quiet_hours"] = str(data.get("quiet_hours") or "")[:32]
+    if "context_window" in data:
+        payload["context_window"] = _clamp_int(data.get("context_window"), 0, 0, 2_000_000)
     if "level" in data:
         payload["level"] = _normalize_level(data.get("level"), 3)
     if "category" in data:
@@ -623,6 +722,22 @@ def create_custom_role(data: dict[str, Any]) -> dict[str, Any]:
             "always_require_review": src.get("always_require_review"),
             "priority": src.get("priority"),
             "description": src.get("description"),
+            "weekly_budget_usd": src.get("weekly_budget_usd"),
+            "monthly_budget_usd": src.get("monthly_budget_usd"),
+            "max_daily_items": src.get("max_daily_items"),
+            "require_human_approval": src.get("require_human_approval"),
+            "stream_enabled": src.get("stream_enabled"),
+            "cache_enabled": src.get("cache_enabled"),
+            "pii_redact": src.get("pii_redact"),
+            "mainland_only": src.get("mainland_only"),
+            "heartbeat_sec": src.get("heartbeat_sec"),
+            "on_call": src.get("on_call"),
+            "tags": src.get("tags"),
+            "notify_channel": src.get("notify_channel"),
+            "quiet_hours": src.get("quiet_hours"),
+            "context_window": src.get("context_window"),
+            "allow_tool_use": src.get("allow_tool_use"),
+            "auto_escalate": src.get("auto_escalate"),
             "templates": src.get("templates"),
         }
         data = {**cloned, **{k: v for k, v in data.items() if v not in (None, "", [])}}
@@ -747,6 +862,15 @@ def _role_presets() -> list[dict[str, Any]]:
         RoleType.MEMORY_CURATOR,
         RoleType.RISK_ANALYST,
         RoleType.API_ENGINEER,
+        RoleType.ML_ENGINEER,
+        RoleType.RAG_ENGINEER,
+        RoleType.EVAL_ENGINEER,
+        RoleType.QA_AUTOMATION,
+        RoleType.PEN_TESTER,
+        RoleType.PLC_ENGINEER,
+        RoleType.PORTFOLIO_MGR,
+        RoleType.ROUTER_ENG,
+        RoleType.CUSTOMER_SUCCESS,
     ):
         snap = _builtin_snapshot(role)
         presets.append(
@@ -839,6 +963,50 @@ def _role_presets() -> list[dict[str, Any]]:
             "responsibilities": ["去重", "過期策略", "敏感過濾"],
             "default_tier": "summary",
             "hint": "自定義記憶庫席",
+        },
+        {
+            "id": "desk_night_risk",
+            "name": "夜盤風控",
+            "level": 3,
+            "category": "finance",
+            "reporting_to": "finance_lead",
+            "system_prompt": "你是夜盤風控，檢查隔夜敞口、缺口與強制減倉條件。",
+            "responsibilities": ["隔夜敞口", "缺口檢查", "減倉條件"],
+            "default_tier": "reasoning",
+            "hint": "量化桌夜盤風控席",
+        },
+        {
+            "id": "opc_historian",
+            "name": "製程歷史員",
+            "level": 3,
+            "category": "industrial",
+            "reporting_to": "industrial_lead",
+            "system_prompt": "你整理 OPC 歷史曲線與越界事件，標明時間窗與品質碼。",
+            "responsibilities": ["歷史曲線", "越界事件", "品質碼"],
+            "default_tier": "routine",
+            "hint": "PysdnOPC 歷史席",
+        },
+        {
+            "id": "rag_librarian",
+            "name": "RAG 館員",
+            "level": 3,
+            "category": "ai",
+            "reporting_to": "ai_lead",
+            "system_prompt": "你維護切片、引用與未命中降級，禁止把機密寫進索引。",
+            "responsibilities": ["切片品質", "引用檢查", "未命中降級"],
+            "default_tier": "reasoning",
+            "hint": "自定義 RAG 席",
+        },
+        {
+            "id": "growth_onboard",
+            "name": "啟用教練",
+            "level": 3,
+            "category": "growth",
+            "reporting_to": "growth_lead",
+            "system_prompt": "你設計新用戶啟用路徑與卡點，把流失轉成可指派缺陷。",
+            "responsibilities": ["啟用路徑", "卡點分析", "流失轉缺陷"],
+            "default_tier": "routine",
+            "hint": "成長漏斗席",
         },
     ]
     presets.extend(extras)
