@@ -190,7 +190,7 @@ export default function MonitorOverview({ onOpenTab }: MonitorOverviewProps) {
         <Kpi
           label="角色 Agent"
           value={`${(agents?.summary.roles_busy ?? 0) + (agents?.summary.roles_waiting ?? 0)}/${roster.length}`}
-          hint={`開放 ${agents?.summary.work_items_open ?? 0} · 完成 ${agents?.summary.work_items_done ?? 0}`}
+          hint={`自定 ${agents?.summary.roles_custom ?? 0} · 值班 ${agents?.summary.roles_on_call ?? 0} · 告警 ${agents?.summary.alerts_open ?? 0}`}
           onClick={() => onOpenTab('agents')}
         />
         <Kpi
@@ -246,7 +246,7 @@ export default function MonitorOverview({ onOpenTab }: MonitorOverviewProps) {
       <div className="mb-4">
         <Section title="角色 Agent 工作台" action="打開目錄" onAction={() => onOpenTab('agents')}>
           <p className="mb-2 text-[11px] text-[#8a8f98]">
-            共 {roster.length} 個角色（含自定義 {agents?.summary.roles_custom ?? 0}，告警 {agents?.summary.alerts_open ?? 0}）· 忙碌優先列出全部
+            共 {roster.length} 個角色（含自定義 {agents?.summary.roles_custom ?? 0}，值班 {agents?.summary.roles_on_call ?? 0}，需核准 {agents?.summary.roles_need_approval ?? 0}，告警 {agents?.summary.alerts_open ?? 0}）· 忙碌優先列出全部
           </p>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 3xl:grid-cols-5">
             {overviewRoster.map((agent) => {
@@ -277,7 +277,11 @@ export default function MonitorOverview({ onOpenTab }: MonitorOverviewProps) {
                   className="rounded-md border border-[#23252a] px-2.5 py-2 text-left hover:border-[#34343a]"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-[12px] text-[#d0d6e0]">{agent.name} Agent</span>
+                    <span className="truncate text-[12px] text-[#d0d6e0]">
+                      {agent.name} Agent
+                      {agent.is_custom ? ' ·自定' : ''}
+                      {agent.on_call ? ' ·值班' : ''}
+                    </span>
                     <span className={`shrink-0 font-mono text-[10px] ${tone}`}>
                       {open > 0 ? `${open} 項` : agent.status === 'idle' ? '待命' : agent.status}
                     </span>

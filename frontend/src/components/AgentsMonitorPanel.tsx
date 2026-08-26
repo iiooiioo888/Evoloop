@@ -290,6 +290,33 @@ function RoleMonitorExtras({ agent }: { agent: RoleAgent }) {
       </div>
     );
   }
+  if (agent.category === 'ai' || agent.id.includes('rag') || agent.id.includes('eval') || agent.id.includes('ml')) {
+    return (
+      <div className="grid grid-cols-3 gap-2">
+        <Kpi label="評測／實驗" value={String(agent.work_items.length)} />
+        <Kpi label="快取命中" value={String(m.cache_hits ?? 0)} />
+        <Kpi label="故障轉移" value={String(m.failovers ?? 0)} />
+      </div>
+    );
+  }
+  if (agent.category === 'growth' || agent.id.includes('customer')) {
+    return (
+      <div className="grid grid-cols-3 gap-2">
+        <Kpi label="漏斗項" value={String(agent.work_items.length)} />
+        <Kpi label="完成" value={String(agent.done)} />
+        <Kpi label="升級" value={String(m.human_escalations ?? 0)} />
+      </div>
+    );
+  }
+  if (agent.category === 'security' || agent.id.includes('pen') || agent.id.includes('privacy')) {
+    return (
+      <div className="grid grid-cols-3 gap-2">
+        <Kpi label="審查項" value={String(agent.work_items.length)} />
+        <Kpi label="錯誤" value={String(m.errors)} />
+        <Kpi label="PII" value={agent.pii_redact === false ? '關' : '開'} />
+      </div>
+    );
+  }
   return (
     <div className="grid grid-cols-3 gap-2">
       <Kpi label="工具呼叫" value={String(m.tool_calls)} />
@@ -368,10 +395,12 @@ function AgentDeskCard({
   agent,
   onOpen,
   showPrompt,
+  showCost,
 }: {
   agent: RoleAgent;
   onOpen: () => void;
   showPrompt?: boolean;
+  showCost?: boolean;
 }) {
   const meta = AGENT_STATUS_META[agent.status] ?? AGENT_STATUS_META.idle;
   const open = agentOpenCount(agent);
@@ -407,7 +436,9 @@ function AgentDeskCard({
             </span>
           </span>
         </div>
-        <span className="shrink-0 font-mono text-[10px] text-[#62666d]">{fmtUsd(agent.cost_usd)}</span>
+        {showCost !== false && (
+          <span className="shrink-0 font-mono text-[10px] text-[#62666d]">{fmtUsd(agent.cost_usd)}</span>
+        )}
       </div>
 
       {showPrompt && (agent.description || agent.system_prompt) && (
@@ -739,11 +770,12 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
         </div>
       )}
 
-      <div className="grid shrink-0 grid-cols-2 gap-2 px-4 py-3 lg:grid-cols-7">
+      <div className="grid shrink-0 grid-cols-2 gap-2 px-4 py-3 lg:grid-cols-8">
         <Kpi label="角色" value={String(summary?.roles_total ?? agents.length)} hint={`啟用 ${summary?.roles_enabled ?? agents.length}`} />
         <Kpi label="執行中" value={String(summary?.roles_busy ?? 0)} hint="busy Agent" />
         <Kpi label="等待" value={String(summary?.roles_waiting ?? 0)} hint="佇列 / 審查" />
         <Kpi label="自定義" value={String(summary?.roles_custom ?? 0)} hint={`停用 ${summary?.roles_disabled ?? 0}`} />
+        <Kpi label="值班" value={String(summary?.roles_on_call ?? 0)} hint={`需核准 ${summary?.roles_need_approval ?? 0}`} />
         <Kpi label="告警" value={String(summary?.alerts_open ?? 0)} hint="角色告警數" />
         <Kpi label="開放工作項" value={String(summary?.work_items_open ?? 0)} hint="未完成" />
         <Kpi
@@ -766,6 +798,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                     key={agent.id}
                     agent={agent}
                     showPrompt={data?.monitor_prefs?.show_prompt_preview !== false}
+                    showCost={data?.monitor_prefs?.show_cost_in_cards !== false}
                     onOpen={() => openDesk(agent.id)}
                   />
                 ))}
@@ -790,7 +823,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                 </option>
               ))}
             </select>
-            {(['all', 'custom', 'disabled'] as const).map((key) => (
+            {(['all', 'custom', 'disabled', 'oncall'] as const).map((key) => (
               <button
                 key={key}
                 type="button"
@@ -799,7 +832,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                   rosterFilter === key ? 'bg-[#5e6ad2]/20 text-[#828fff]' : 'text-[#8a8f98]'
                 }`}
               >
-                {key === 'all' ? '全部' : key === 'custom' ? '自定義' : '停用'}
+                {key === 'all' ? '全部' : key === 'custom' ? '自定義' : key === 'disabled' ? '停用' : '值班'}
               </button>
             ))}
             <select
@@ -839,6 +872,9 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                           {agent.name}
                           {agent.is_custom ? <span className="text-[10px] text-[#828fff]">自定</span> : null}
                           {agent.enabled === false ? <span className="text-[10px] text-red-300">停用</span> : null}
+                          {agent.on_call ? <span className="text-[10px] text-amber-200">值班</span> : null}
+                          {agent.require_human_approval ? <span className="text-[10px] text-[#8a8f98]">需核准</span> : null}
+                          {agent.mainland_only ? <span className="text-[10px] text-[#8a8f98]">僅國內</span> : null}
                         </p>
                         <p className="mt-0.5 line-clamp-2 text-[11px] text-[#8a8f98]">
                           {agent.description || agent.responsibilities[0] || agent.system_prompt || '尚無角色設定摘要'}
@@ -876,6 +912,19 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                         <button
                           type="button"
                           className="rounded border border-[#23252a] px-2 py-1 text-[10px] text-[#8a8f98]"
+                          onClick={() => {
+                            const pins = data?.monitor_prefs?.pin_role_ids ?? [];
+                            const next = pins.includes(agent.id)
+                              ? pins.filter((id) => id !== agent.id)
+                              : [...pins, agent.id];
+                            void updateAgentMonitorPrefs({ pin_role_ids: next }).then(() => refresh());
+                          }}
+                        >
+                          {(data?.monitor_prefs?.pin_role_ids ?? []).includes(agent.id) ? '取消釘選' : '釘選'}
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded border border-[#23252a] px-2 py-1 text-[10px] text-[#8a8f98]"
                           onClick={() => void updateAgentSettings(agent.id, { enabled: agent.enabled === false }).then(() => refresh())}
                         >
                           {agent.enabled === false ? '啟用' : '停用'}
@@ -901,7 +950,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                 className="w-full rounded-md border border-[#23252a] bg-[#0f1011] px-2 py-1 text-[11px] text-[#f7f8f8]"
               />
               <div className="flex flex-wrap gap-1">
-                {(['all', 'custom', 'disabled'] as const).map((key) => (
+                {(['all', 'custom', 'disabled', 'oncall'] as const).map((key) => (
                   <button
                     key={key}
                     type="button"
@@ -910,7 +959,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                       rosterFilter === key ? 'bg-[#5e6ad2]/20 text-[#828fff]' : 'text-[#8a8f98]'
                     }`}
                   >
-                    {key === 'all' ? '全部' : key === 'custom' ? '自定義' : '停用'}
+                    {key === 'all' ? '全部' : key === 'custom' ? '自定義' : key === 'disabled' ? '停用' : '值班'}
                   </button>
                 ))}
               </div>
@@ -991,6 +1040,9 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                     L{selected.level} {selected.level_label}
                     {selected.is_custom ? ' · 自定義' : ' · 內建'}
                     {selected.enabled === false ? ' · 停用' : ''}
+                    {selected.on_call ? ' · 值班' : ''}
+                    {selected.require_human_approval ? ' · 需核准' : ''}
+                    {selected.mainland_only ? ' · 僅國內模型' : ''}
                     {selected.reporting_to ? ` · 匯報 ${roleLabel(selected.reporting_to)}` : ' · 無上級'}
                     {reports.length > 0 ? ` · 直屬 ${reports.length}` : ''}
                     {' · '}並行 {selected.capacity_used ?? selected.executing}/{selected.max_parallel_work}
@@ -1005,6 +1057,11 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                           className="rounded border border-[#23252a] px-1.5 py-0.5 text-[10px] text-[#8a8f98]"
                         >
                           {tpl}
+                        </span>
+                      ))}
+                      {(selected.tags ?? []).map((tag) => (
+                        <span key={tag} className="rounded border border-[#5e6ad2]/30 px-1.5 py-0.5 text-[10px] text-[#828fff]">
+                          {tag}
                         </span>
                       ))}
                     </div>
@@ -1250,6 +1307,15 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                       <option value="queue">排序：佇列</option>
                     </select>
                     <select
+                      value={data?.monitor_prefs?.default_layout || 'catalog'}
+                      onChange={(e) => void updateAgentMonitorPrefs({ default_layout: e.target.value }).then(() => refresh())}
+                      className="rounded border border-[#23252a] bg-[#0f1011] px-2 py-1 text-[11px] text-[#d0d6e0]"
+                    >
+                      <option value="catalog">預設視圖：目錄</option>
+                      <option value="desk">預設視圖：工作台</option>
+                      <option value="floor">預設視圖：樓層</option>
+                    </select>
+                    <select
                       value={data?.monitor_prefs?.default_desk_tab || 'tasks'}
                       onChange={(e) => void updateAgentMonitorPrefs({ default_desk_tab: e.target.value }).then(() => refresh())}
                       className="rounded border border-[#23252a] bg-[#0f1011] px-2 py-1 text-[11px] text-[#d0d6e0]"
@@ -1258,6 +1324,61 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                       <option value="monitor">預設分頁：監控</option>
                       <option value="settings">預設分頁：角色設定</option>
                       <option value="org">預設分頁：組織</option>
+                    </select>
+                    <button
+                      type="button"
+                      className="rounded border border-[#23252a] px-2 py-1 text-[11px] text-[#8a8f98]"
+                      onClick={() =>
+                        void updateAgentMonitorPrefs({
+                          show_on_call_only: !(data?.monitor_prefs?.show_on_call_only ?? false),
+                        }).then(() => refresh())
+                      }
+                    >
+                      {data?.monitor_prefs?.show_on_call_only ? '顯示全部席位' : '僅值班席'}
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded border border-[#23252a] px-2 py-1 text-[11px] text-[#8a8f98]"
+                      onClick={() =>
+                        void updateAgentMonitorPrefs({
+                          sound_on_alert: !(data?.monitor_prefs?.sound_on_alert ?? false),
+                        }).then(() => refresh())
+                      }
+                    >
+                      {data?.monitor_prefs?.sound_on_alert ? '關閉告警音' : '開啟告警音'}
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded border border-[#23252a] px-2 py-1 text-[11px] text-[#8a8f98]"
+                      onClick={() =>
+                        void updateAgentMonitorPrefs({
+                          show_cost_in_cards: !(data?.monitor_prefs?.show_cost_in_cards ?? true),
+                        }).then(() => refresh())
+                      }
+                    >
+                      {data?.monitor_prefs?.show_cost_in_cards === false ? '卡片顯示花費' : '卡片隱藏花費'}
+                    </button>
+                    <select
+                      value={String(data?.monitor_prefs?.filter_min_level ?? 0)}
+                      onChange={(e) => void updateAgentMonitorPrefs({ filter_min_level: Number(e.target.value) }).then(() => refresh())}
+                      className="rounded border border-[#23252a] bg-[#0f1011] px-2 py-1 text-[11px] text-[#d0d6e0]"
+                    >
+                      <option value="0">最低層 L0</option>
+                      <option value="1">最低層 L1</option>
+                      <option value="2">最低層 L2</option>
+                      <option value="3">最低層 L3</option>
+                      <option value="4">最低層 L4</option>
+                    </select>
+                    <select
+                      value={String(data?.monitor_prefs?.filter_max_level ?? 4)}
+                      onChange={(e) => void updateAgentMonitorPrefs({ filter_max_level: Number(e.target.value) }).then(() => refresh())}
+                      className="rounded border border-[#23252a] bg-[#0f1011] px-2 py-1 text-[11px] text-[#d0d6e0]"
+                    >
+                      <option value="0">最高層 L0</option>
+                      <option value="1">最高層 L1</option>
+                      <option value="2">最高層 L2</option>
+                      <option value="3">最高層 L3</option>
+                      <option value="4">最高層 L4</option>
                     </select>
                   </div>
                 </div>

@@ -44,6 +44,7 @@ def test_high_score_finalizes_without_reflection():
     fake = FakeLLM(["這是初始回答。", _evaluation(9)])
     with (
         patch("backend.core.nodes.call_llm", side_effect=fake),
+        patch("backend.core.evaluation.call_llm", side_effect=fake),
         patch("backend.core.nodes._memory_store") as mock_store,
     ):
         mock_store.search_similar.return_value = []
@@ -52,7 +53,8 @@ def test_high_score_finalizes_without_reflection():
     assert result["final_answer"] == "這是初始回答。"
     assert result["score"] == 9.0
     assert not result.get("reflections")
-    assert result["memory_saved"] is False
+    # 優化 #5：一次通過的高分回答也存為正樣本
+    assert result["memory_saved"] is True
     # 只應有「生成 + 評估」兩次 LLM 呼叫
     assert len(fake.prompts) == 2
     # 應呼叫了記憶檢索
@@ -73,6 +75,7 @@ def test_low_score_triggers_reflection_loop():
     store.search_similar.return_value = []
     with (
         patch("backend.core.nodes.call_llm", side_effect=fake),
+        patch("backend.core.evaluation.call_llm", side_effect=fake),
         patch("backend.core.nodes._memory_store", store),
     ):
         result = build_graph().invoke({"query": "測試問題"})
@@ -86,22 +89,27 @@ def test_low_score_triggers_reflection_loop():
 
 
 def test_loop_stops_at_max_iterations():
-    # 評分永遠低分：generate + 4 次評估 + 3 輪（反思 + 改進）
-    responses = ["初始回答"]
+    # 評分緩慢上升但仍低於門檻，避免動態迭代提前終止，直到 max_iterations
+    responses = ["這是足夠長度的初始回答內容"]
     for i in range(3):
-        responses += [_evaluation(3, "很差"), _reflection(), f"改進回答{i + 1}"]
-    responses.append(_evaluation(3, "很差"))
+        responses += [
+            _evaluation(3 + i, "很差"),
+            _reflection(),
+            f"這是第 {i + 1} 輪改進後的完整回答",
+        ]
+    responses.append(_evaluation(6, "很差"))
     fake = FakeLLM(responses)
     store = MagicMock()
     store.search_similar.return_value = []
     with (
         patch("backend.core.nodes.call_llm", side_effect=fake),
+        patch("backend.core.evaluation.call_llm", side_effect=fake),
         patch("backend.core.nodes._memory_store", store),
     ):
         result = build_graph().invoke({"query": "測試問題"})
 
     # 達最大迭代後強制收尾，最終回答為最後一次改進版本
-    assert result["final_answer"] == "改進回答3"
+    assert result["final_answer"] == "這是第 3 輪改進後的完整回答"
     assert result["iteration"] == 3
     assert len(result["reflections"]) == 3
     assert len(fake.prompts) == 11
@@ -112,6 +120,7 @@ def test_memory_retrieval_injects_similar_experiences():
     fake = FakeLLM(["基於經驗的回答。", _evaluation(9)])
     with (
         patch("backend.core.nodes.call_llm", side_effect=fake),
+        patch("backend.core.evaluation.call_llm", side_effect=fake),
         patch("backend.core.nodes._memory_store") as mock_store,
     ):
         mock_store.search_similar.return_value = [

@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from backend.company.budget import CostTracker, _MODEL_COST_PER_1M_TOKENS
+from backend.company.budget import CostTracker, get_model_costs
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DESIGN_DOC = PROJECT_ROOT / "docs" / "AI_HUB_DETAILED_DESIGN.md"
@@ -42,23 +42,27 @@ LEGACY_RUNTIME_MODELS: frozenset[str] = frozenset(
         "gpt-3.5-turbo",
         "deepseek-chat",
         "deepseek-reasoner",
+        "qwen-turbo",
+        "qwen-plus",
+        "qwen-max",
     }
 )
 
 
 class TestHubCatalogExcludesClaude:
     def test_hub_catalog_excludes_claude(self) -> None:
+        costs = get_model_costs()
         joined = " ".join(HUB_CATALOG).lower()
         for needle in FORBIDDEN_SUBSTR:
             assert needle not in joined, f"Hub 目錄不得包含 {needle!r}"
 
-        for key in _MODEL_COST_PER_1M_TOKENS:
+        for key in costs:
             lowered = key.lower()
             for needle in FORBIDDEN_SUBSTR:
                 assert needle not in lowered, f"價目表鍵 {key!r} 含禁止子串 {needle!r}"
 
     def test_budget_table_contains_all_hub_models(self) -> None:
-        keys = set(_MODEL_COST_PER_1M_TOKENS)
+        keys = set(get_model_costs())
         missing = HUB_CATALOG - keys
         assert not missing, f"budget.py 缺少 Hub 模型：{sorted(missing)}"
         extra = keys - HUB_CATALOG - LEGACY_RUNTIME_MODELS

@@ -153,6 +153,18 @@ class MultiDimensionalEvaluator:
             getattr(result, dim).score * weight
             for dim, weight in DIMENSION_WEIGHTS.items()
         )
+        # 向後相容：舊版 {"score": 9, "strengths": "..."} 沒有四維欄位
+        if result.overall == 0:
+            legacy = data.get("overall", data.get("score"))
+            try:
+                score = max(0.0, min(10.0, float(legacy))) if legacy is not None else 0.0
+            except (TypeError, ValueError):
+                score = 0.0
+            if score > 0:
+                reason = str(data.get("strengths") or data.get("weaknesses") or "legacy")
+                for dim in DIMENSION_NAMES:
+                    setattr(result, dim, DimensionResult(score=score, reason=reason))
+                result.overall = score
         return result
 
 

@@ -1473,6 +1473,7 @@ class TestCompanyGraphIntegration:
             patch.object(TaskDecomposer, "decompose", AsyncMock(return_value=FAKE_LOW_RESULT)),
             patch("backend.company.orchestrator.call_llm", side_effect=company_responses),
             patch("backend.core.nodes.call_llm", side_effect=[eval_high]),
+            patch("backend.core.evaluation.call_llm", side_effect=[eval_high]),
             patch("backend.core.nodes._memory_store", store),
         ):
             result = build_graph().invoke({
@@ -1516,7 +1517,8 @@ class TestCompanyGraphIntegration:
         with (
             patch.object(TaskDecomposer, "decompose", AsyncMock(return_value=FAKE_LOW_RESULT)),
             patch("backend.company.orchestrator.call_llm", side_effect=company_responses),
-            patch("backend.core.nodes.call_llm", side_effect=[eval_low, reflection, "改進後的公司產出", eval_high]),
+            patch("backend.core.nodes.call_llm", side_effect=[reflection, "改進後的公司產出"]),
+            patch("backend.core.evaluation.call_llm", side_effect=[eval_low, eval_high]),
             patch("backend.core.nodes._memory_store", store),
         ):
             result = build_graph().invoke({

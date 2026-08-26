@@ -337,6 +337,15 @@ def test_agent_monitor_includes_extended_roles_and_settings(tmp_path, monkeypatc
         "memory_curator",
         "risk_analyst",
         "api_engineer",
+        "ai_lead",
+        "growth_lead",
+        "ml_engineer",
+        "rag_engineer",
+        "qa_automation",
+        "plc_engineer",
+        "portfolio_mgr",
+        "router_eng",
+        "customer_success",
     ):
         assert expected in ids
     manager = next(a for a in data["agents"] if a["id"] == "manager")
@@ -347,6 +356,10 @@ def test_agent_monitor_includes_extended_roles_and_settings(tmp_path, monkeypatc
     assert "avg_latency_ms" in manager["metrics"]
     assert manager["routing_strategy"] == "quality_first"
     assert isinstance(manager["alerts"], list)
+    assert "p95_latency_ms" in manager["metrics"]
+    assert "require_human_approval" in manager
+    assert "mainland_only" in manager
+    assert "on_call" in manager
     assert data["catalog_meta"]["levels"]
     assert data["catalog_meta"]["role_presets"]
     assert any(p["id"] == "quant_analyst" for p in data["catalog_meta"]["role_presets"])
@@ -409,7 +422,21 @@ def test_custom_role_crud_and_settings_overlay(tmp_path, monkeypatch):
     assert cloned["id"] == "custom_desk_b"
     assert "StocksX" in cloned["system_prompt"]
     assert cloned["timeout_ms"] == 90000
-    assert cloned["routing_strategy"] == "cost_first" 
+    assert cloned["routing_strategy"] == "cost_first"
+
+    overlayed = update_role_settings(
+        "custom_desk_b",
+        {
+            "on_call": True,
+            "mainland_only": True,
+            "weekly_budget_usd": 4.0,
+            "tags": ["quant", "b-desk"],
+        },
+    )
+    assert overlayed["on_call"] is True
+    assert overlayed["mainland_only"] is True
+    assert overlayed["weekly_budget_usd"] == 4.0
+    assert "quant" in overlayed["tags"] 
 
 
 def test_monitor_agents_custom_role_http(tmp_path, monkeypatch):
@@ -440,19 +467,33 @@ def test_monitor_agents_custom_role_http(tmp_path, monkeypatch):
 
         patched = client.put(
             "/monitor/agents/custom_opc_specialist/settings",
-            json={"daily_budget_usd": 2, "alert_on_error": False},
+            json={"daily_budget_usd": 2, "alert_on_error": False, "on_call": True, "mainland_only": True},
         )
         assert patched.status_code == 200
         assert patched.json()["daily_budget_usd"] == 2
+        assert patched.json()["on_call"] is True
+        assert patched.json()["mainland_only"] is True
 
         prefs = client.put("/monitor/agents/prefs", json={"poll_interval_ms": 8000})
         assert prefs.status_code == 200
         assert prefs.json()["poll_interval_ms"] == 8000
 
+        prefs2 = client.put(
+            "/monitor/agents/prefs",
+            json={"default_layout": "floor", "show_on_call_only": True, "filter_min_level": 1},
+        )
+        assert prefs2.status_code == 200
+        assert prefs2.json()["default_layout"] == "floor"
+        assert prefs2.json()["show_on_call_only"] is True
+        assert prefs2.json()["filter_min_level"] == 1
+
         listed = client.get("/monitor/agents")
         ids = {a["id"] for a in listed.json()["agents"]}
         assert "custom_opc_specialist" in ids
         assert "security_eng" in ids
+        assert "ai_lead" in ids
+        assert "ml_engineer" in ids
+        assert "router_eng" in ids
 
         deleted = client.delete("/monitor/agents/custom_opc_specialist")
         assert deleted.status_code == 200

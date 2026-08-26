@@ -99,6 +99,7 @@ def test_full_graph_archives_session(tmp_path, monkeypatch):
 
     with (
         patch("backend.core.nodes.call_llm", side_effect=fake_call_llm),
+        patch("backend.core.evaluation.call_llm", side_effect=fake_call_llm),
         patch("backend.core.nodes._memory_store", MagicMock()),
     ):
         result = build_graph().invoke(

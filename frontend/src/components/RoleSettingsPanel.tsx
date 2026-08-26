@@ -669,6 +669,10 @@ export function CreateRoleModal({ catalog, agents, cloneFrom, onClose, onCreate 
   const [language, setLanguage] = useState(cloneFrom?.language || 'zh-TW');
   const [priority, setPriority] = useState(cloneFrom?.priority ?? 3);
   const [requireReview, setRequireReview] = useState(cloneFrom?.always_require_review === true);
+  const [onCall, setOnCall] = useState(cloneFrom?.on_call === true);
+  const [mainlandOnly, setMainlandOnly] = useState(cloneFrom?.mainland_only === true);
+  const [humanApproval, setHumanApproval] = useState(cloneFrom?.require_human_approval === true);
+  const [tags, setTags] = useState((cloneFrom?.tags ?? []).join(', '));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [presetId, setPresetId] = useState(cloneFrom?.id ?? '');
@@ -828,7 +832,20 @@ export function CreateRoleModal({ catalog, agents, cloneFrom, onClose, onCreate 
               <input type="checkbox" checked={requireReview} onChange={(e) => setRequireReview(e.target.checked)} />
               一律送審查
             </label>
+            <label className="flex items-center gap-2 text-[11px] text-[#d0d6e0]">
+              <input type="checkbox" checked={onCall} onChange={(e) => setOnCall(e.target.checked)} />
+              值班
+            </label>
+            <label className="flex items-center gap-2 text-[11px] text-[#d0d6e0]">
+              <input type="checkbox" checked={humanApproval} onChange={(e) => setHumanApproval(e.target.checked)} />
+              需人工核准
+            </label>
+            <label className="flex items-center gap-2 text-[11px] text-[#d0d6e0]">
+              <input type="checkbox" checked={mainlandOnly} onChange={(e) => setMainlandOnly(e.target.checked)} />
+              僅國內模型
+            </label>
           </div>
+          <input className={inputCls} placeholder="標籤，逗號分隔" value={tags} onChange={(e) => setTags(e.target.value)} />
         </div>
         <div className="mt-3 flex justify-end gap-2">
           <button type="button" className="rounded border border-[#23252a] px-3 py-1.5 text-[12px] text-[#8a8f98]" onClick={onClose}>
@@ -860,6 +877,10 @@ export function CreateRoleModal({ catalog, agents, cloneFrom, onClose, onCreate 
                   language,
                   priority,
                   always_require_review: requireReview,
+                  on_call: onCall,
+                  require_human_approval: humanApproval,
+                  mainland_only: mainlandOnly,
+                  tags: tags.split(',').map((s) => s.trim()).filter(Boolean),
                 });
                 onClose();
               } catch (err) {

@@ -43,6 +43,24 @@ def _chat(client: TestClient, body: dict, extra_headers: dict | None = None):
     return client.post("/api/v1/chat/completions", json=body, headers=headers)
 
 
+def _collect_paths(app) -> set[str]:
+    """FastAPI 新版把 include_router 包成 _IncludedRouter，path 在 original_router。"""
+    paths: set[str] = set()
+    stack: list = list(getattr(app, "routes", []) or [])
+    while stack:
+        route = stack.pop()
+        path = getattr(route, "path", None)
+        if path:
+            paths.add(path)
+        nested = getattr(route, "routes", None)
+        if nested:
+            stack.extend(nested)
+        original = getattr(route, "original_router", None)
+        if original is not None:
+            stack.extend(getattr(original, "routes", []) or [])
+    return paths
+
+
 class TestHubAcceptance:
     def test_hub_r1_cn_manual_sol_forbidden(self, client: TestClient) -> None:
         resp = _chat(
@@ -281,7 +299,7 @@ class TestHubAcceptance:
     def test_existing_chat_path_untouched(self) -> None:
         from backend.main import app
 
-        paths = {getattr(r, "path", None) for r in app.routes}
+        paths = _collect_paths(app)
         assert "/chat" in paths
         assert "/api/v1/chat/completions" in paths
         assert "/tasks" in paths
