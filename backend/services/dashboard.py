@@ -126,6 +126,11 @@ def _collect_archives() -> list[dict[str, Any]]:
     return _sorted_jsonl(files, MAX_ARCHIVES)
 
 
+def collect_opc_audit() -> dict[str, Any]:
+    """公開：OPC 審計匯總（監控中心與控制面版共用）。"""
+    return _collect_audit()
+
+
 def _collect_audit() -> dict[str, Any]:
     directory = _audit_dir()
     try:

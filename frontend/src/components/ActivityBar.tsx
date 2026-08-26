@@ -13,6 +13,7 @@ interface ActivityBarProps {
 
 const ITEMS: { key: ViewKey; icon: string; label: string }[] = [
   { key: 'chat', icon: '💬', label: '对话' },
+  { key: 'hub', icon: '🛰️', label: 'AI Hub' },
   { key: 'monitor', icon: '📊', label: '监控' },
   { key: 'traces', icon: '📜', label: '执行轨迹' },
 ];

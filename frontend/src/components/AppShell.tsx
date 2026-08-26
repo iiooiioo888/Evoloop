@@ -13,7 +13,17 @@ import SidePanel from './SidePanel';
 import StatusBar from './StatusBar';
 import TopBar from './TopBar';
 
-export type ViewKey = 'chat' | 'monitor' | 'traces';
+export type ViewKey = 'chat' | 'monitor' | 'traces' | 'hub';
+export type MonitorTab =
+  | 'overview'
+  | 'agents'
+  | 'dashboard'
+  | 'opc'
+  | 'hub'
+  | 'llm'
+  | 'cloud'
+  | 'memory'
+  | 'checkpoints';
 
 export interface AppShellProps {
   /** 当前活跃视图 */
@@ -37,6 +47,12 @@ export interface AppShellProps {
   /** 打开设置 */
   onOpenSettings: () => void;
 
+  /** 监控中心子分頁 */
+  monitorTab: MonitorTab;
+  onMonitorTabChange: (tab: MonitorTab) => void;
+  focusAgentId: string | null;
+  onFocusAgent: (id: string | null) => void;
+
   /** 状态栏信息 */
   statusInfo: {
     taskCount: number;
@@ -59,6 +75,10 @@ export default function AppShell({
   onDeleteSession,
   llmConfigured,
   onOpenSettings,
+  monitorTab,
+  onMonitorTabChange,
+  focusAgentId,
+  onFocusAgent,
   statusInfo,
   children,
 }: AppShellProps) {
@@ -104,6 +124,10 @@ export default function AppShell({
           onNewSession={onNewSession}
           onDeleteSession={onDeleteSession}
           onClose={() => setSidebarOpen(false)}
+          monitorTab={monitorTab}
+          onMonitorTabChange={onMonitorTabChange}
+          focusAgentId={focusAgentId}
+          onFocusAgent={onFocusAgent}
         />
 
         {/* 主内容区 */}

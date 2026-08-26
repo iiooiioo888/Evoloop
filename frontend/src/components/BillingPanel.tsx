@@ -128,12 +128,21 @@ export default function BillingPanel() {
         </div>
       )}
 
-      {/* 無數據提示 */}
+      {/* 無數據提示：仍顯示費率卡，避免整頁空白 */}
       {billing && billing.per_service.length === 0 && (
-        <div className="flex flex-col items-center py-12 text-center">
-          <span className="mb-2 text-4xl">📊</span>
-          <p className="text-sm text-gray-500">暫無容器運行</p>
-          <p className="text-xs text-gray-600">啟動 EvoLoop 容器後開始計費</p>
+        <div className="rounded-lg border border-gray-800 bg-gray-900/80 p-4">
+          <p className="text-sm text-gray-300">暫無容器運行</p>
+          <p className="mt-1 text-xs text-gray-500">
+            啟動 EvoLoop Compose 後開始按時計費。預設費率見實例管理頁。
+          </p>
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {['backend', 'frontend', 'opc', 'redis', 'chroma'].map((svc) => (
+              <div key={svc} className="rounded-md border border-gray-800 bg-gray-950/50 px-3 py-2">
+                <p className="text-xs text-gray-300">{svc}</p>
+                <p className="text-[11px] text-gray-500">待命 · $0.000</p>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

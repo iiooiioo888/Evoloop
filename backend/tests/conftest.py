@@ -26,3 +26,25 @@ def _isolate_company_run_log_dir(tmp_path, monkeypatch):
     """所有測試共用：將公司執行軌跡 sink 寫入暫存目錄。"""
     monkeypatch.setenv("EVOL_COMPANY_RUN_LOG_DIR", str(tmp_path / "company_runs"))
     yield
+
+@pytest.fixture(autouse=True)
+def _isolate_role_catalog(tmp_path, monkeypatch):
+    """所有測試共用：角色目錄寫入暫存，避免污染真實 data/。"""
+    monkeypatch.setenv("EVOL_ROLE_CATALOG_PATH", str(tmp_path / "role_catalog.json"))
+    from backend.company.role_catalog import reset_catalog_cache
+
+    reset_catalog_cache()
+    yield
+    reset_catalog_cache()
+
+
+@pytest.fixture(autouse=True)
+def _isolate_llm_config_and_ops(tmp_path, monkeypatch):
+    """隔離 LLM 配置檔，並關閉模型目錄背景迴圈。"""
+    monkeypatch.setenv("EVOL_CONFIG_DIR", str(tmp_path / "llm_cfg"))
+    monkeypatch.setenv("EVOL_LLM_OPS_ENABLED", "false")
+    from backend.core.llm_config import reset_runtime_config
+
+    reset_runtime_config()
+    yield
+    reset_runtime_config()

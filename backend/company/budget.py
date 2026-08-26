@@ -25,14 +25,23 @@ logger = logging.getLogger(__name__)
 # 實際價格請以供應商為準，此處為概估
 _DEFAULT_MODEL_COST: dict[str, tuple[float, float]] = {
     # (input_cost, output_cost) per 1M tokens
+    # LangGraph 公司運行時現用模型
     "gpt-4o": (2.50, 10.00),
     "gpt-4o-mini": (0.15, 0.60),
     "gpt-4-turbo": (10.00, 30.00),
     "gpt-3.5-turbo": (0.50, 1.50),
-    "claude-3-5-sonnet": (3.00, 15.00),
-    "claude-3-haiku": (0.25, 1.25),
     "deepseek-chat": (0.14, 0.28),
     "deepseek-reasoner": (0.55, 2.19),
+    # AI Hub 九模型目錄（與 docs/AI_HUB_DETAILED_DESIGN.md §1.6 對齊）
+    "gpt-5.6-sol": (3.00, 30.00),
+    "gemini-3.1-pro": (1.25, 12.00),
+    "mimo-v2.5-pro": (0.21, 0.83),
+    "deepseek-v4-flash": (0.028, 0.157),
+    "qwen3.5-max": (0.30, 1.20),
+    "mercury-2": (0.50, 2.00),
+    "nemotron-3.5-lightning": (0.00, 0.00),
+    "glm-5.2": (0.10, 0.40),
+    "kimi-k3": (0.40, 1.50),
 }
 
 
@@ -459,11 +468,12 @@ class BudgetManager:
         確保配置變更即時生效。
         """
         from backend.core.llm_config import get_explicit_model
+        from backend.core.provider_pool import clamp_model
 
         configured = get_explicit_model()
         if configured:
-            return configured
-        return self._router.resolve_model(tier, self.budget_pressure)
+            return clamp_model(configured)
+        return clamp_model(self._router.resolve_model(tier, self.budget_pressure))
 
     # ── 重置 ──
 

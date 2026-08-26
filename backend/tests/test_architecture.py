@@ -212,6 +212,32 @@ class TestLLMArchitectureConstraint:
                             f"应通过 backend.core.llm.call_llm 调用"
                         )
 
+    def test_hub_modules_no_vendor_sdk_or_litellm(self):
+        """backend/hub/ 不得直连厂商 SDK 或 litellm，只经 call_llm。"""
+        hub_dir = PROJECT_ROOT / "backend" / "hub"
+        assert hub_dir.exists(), "backend/hub/ 目录不存在"
+        py_files = _collect_python_files(hub_dir)
+        assert py_files, "backend/hub/ 没有 Python 文件"
+        for py_file in py_files:
+            tree = _parse_file(py_file)
+            violations = _iter_forbidden_imports(tree)
+            assert not violations, (
+                f"{py_file.relative_to(PROJECT_ROOT)} 包含禁止的供应商 SDK 导入："
+                + ", ".join(violations)
+            )
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        if alias.name.startswith("litellm"):
+                            raise AssertionError(
+                                f"{py_file.relative_to(PROJECT_ROOT)} 直接 import litellm"
+                            )
+                elif isinstance(node, ast.ImportFrom):
+                    if node.module and node.module.startswith("litellm"):
+                        raise AssertionError(
+                            f"{py_file.relative_to(PROJECT_ROOT)} 直接 from litellm import"
+                        )
+
 
 # ═══════════════════════════════════════════════════════════════
 # 约束 2：evoloop_graph 由 build_graph() 产生，不可直接修改

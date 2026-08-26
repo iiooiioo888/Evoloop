@@ -6,7 +6,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ChatMessage, ChatSession, TaskProgress } from './types';
-import { createTask, fetchConfig, fetchTask, sendChatStream, TaskWebSocket } from './api/client';
+import { createTask, fetchConfig, fetchMemories, fetchTask, sendChatStream, TaskWebSocket } from './api/client';
 import type { TaskWsMessage } from './api/client';
 import {
   loadActiveSessionId,
@@ -16,9 +16,10 @@ import {
   saveSessions,
 } from './lib/storage';
 import AppShell from './components/AppShell';
-import type { ViewKey } from './components/AppShell';
+import type { MonitorTab, ViewKey } from './components/AppShell';
 import ChatView from './components/ChatView';
 import type { SendOptions } from './components/InputBar';
+import HubView from './components/HubView';
 import MonitorView from './components/MonitorView';
 import SettingsModal from './components/SettingsModal';
 import TraceView from './components/TraceView';
@@ -53,9 +54,14 @@ export default function App() {
   const [lastQuery, setLastQuery] = useState<string | null>(null);
 
   // ── IDE 布局状态 ──
-  const [activeView, setActiveView] = useState<ViewKey>('chat');
+  const [activeView, setActiveView] = useState<ViewKey>(
+    import.meta.env.VITE_GITHUB_PAGES === 'true' ? 'monitor' : 'chat',
+  );
+  const [monitorTab, setMonitorTab] = useState<MonitorTab>('agents');
+  const [focusAgentId, setFocusAgentId] = useState<string | null>('manager');
   const [rightPanelTask, setRightPanelTask] = useState<TaskProgress | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [memoryCount, setMemoryCount] = useState(0);
 
   // ── LLM 配置 ──
   const [llmConfigured, setLlmConfigured] = useState<boolean | null>(null);
@@ -69,6 +75,18 @@ export default function App() {
   useEffect(() => {
     refreshConfigStatus();
   }, [refreshConfigStatus]);
+
+  useEffect(() => {
+    fetchMemories(1, 0)
+      .then((data) => setMemoryCount(data.total ?? 0))
+      .catch(() => setMemoryCount(0));
+    const timer = setInterval(() => {
+      fetchMemories(1, 0)
+        .then((data) => setMemoryCount(data.total ?? 0))
+        .catch(() => {});
+    }, 30000);
+    return () => clearInterval(timer);
+  }, []);
 
   // 初次加载时若无有效 activeId，使用第一个会话
   useEffect(() => {
@@ -429,9 +447,9 @@ export default function App() {
   const statusInfo = useMemo(
     () => ({
       taskCount: sessions.reduce((sum, s) => sum + s.messages.filter((m) => m.taskId).length, 0),
-      memoryCount: 0, // 后续可从 dashboard API 获取
+      memoryCount,
     }),
-    [sessions],
+    [sessions, memoryCount],
   );
 
   return (
@@ -448,6 +466,10 @@ export default function App() {
         onDeleteSession={handleDeleteSession}
         llmConfigured={llmConfigured}
         onOpenSettings={() => setSettingsOpen(true)}
+        monitorTab={monitorTab}
+        onMonitorTabChange={setMonitorTab}
+        focusAgentId={focusAgentId}
+        onFocusAgent={setFocusAgentId}
         statusInfo={statusInfo}
       >
         {activeView === 'chat' && (
@@ -466,8 +488,15 @@ export default function App() {
             onSuggest={handleSuggest}
           />
         )}
+        {activeView === 'hub' && <HubView />}
         {activeView === 'monitor' && (
-          <MonitorView onOpenTask={handleDashboardOpenTask} />
+          <MonitorView
+            onOpenTask={handleDashboardOpenTask}
+            activeTab={monitorTab}
+            onTabChange={setMonitorTab}
+            focusAgentId={focusAgentId}
+            onFocusAgent={setFocusAgentId}
+          />
         )}
         {activeView === 'traces' && <TraceView />}
       </AppShell>

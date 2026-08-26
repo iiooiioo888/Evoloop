@@ -204,6 +204,9 @@ export const COMPANY_TEMPLATES = [
   { value: 'fullstack_app', label: '全端開發' },
   { value: 'research_report', label: '研究報告' },
   { value: 'full_company', label: '完整公司' },
+  { value: 'quant_desk', label: '量化研究桌' },
+  { value: 'industrial_ops', label: '工業運維' },
+  { value: 'story_studio', label: '故事工作室' },
 ] as const;
 
 export type CompanyTemplate = (typeof COMPANY_TEMPLATES)[number]['value'];
@@ -513,4 +516,341 @@ export interface CloudEvent {
 /** GET /cloud/events 回傳 */
 export interface CloudEventsData {
   events: CloudEvent[];
+}
+
+// ==================== 監控中心（GET /monitor/opc · /monitor/hub · /monitor/agents） ====================
+
+export interface OpcTagCatalog {
+  name: string;
+  unit: string;
+  desc: string;
+  range: number[];
+  writable: boolean;
+}
+
+export interface OpcLiveReading {
+  tag_name: string;
+  value: unknown;
+  data_type?: string;
+  quality?: string;
+  source_timestamp?: string | null;
+}
+
+export interface OpcMonitorData {
+  guard: {
+    write_whitelist: string[];
+    write_bounds: Record<string, { min: number; max: number }>;
+    require_approval: boolean;
+    sim_enabled: boolean;
+    opc_server: string;
+  };
+  catalog: OpcTagCatalog[];
+  audit: { recent: AuditRecord[]; summary: Record<string, number> };
+  live: {
+    reachable: boolean;
+    health: { status?: string; opc_connected?: boolean; opc_server?: string } | null;
+    browse_tags: Array<Record<string, unknown>>;
+    readings: OpcLiveReading[];
+    error: string | null;
+  };
+  recent_tasks: TaskProgress[];
+  service_url: string;
+}
+
+export interface HubMonitorModel {
+  id: string;
+  provider: string;
+  intelligence: number;
+  latency_ewma_ms: number | null;
+  ttfb_ms: number | null;
+  price_in_per_1m: number | null;
+  price_out_per_1m: number | null;
+  consecutive_fail: number;
+  ts?: number;
+  available_in_pool?: boolean;
+  mapped_model?: string;
+  circuit: {
+    state: string;
+    fail_ratio?: number;
+    window_calls?: number;
+    open_cycles?: number;
+    disabled?: boolean;
+  };
+}
+
+export interface HubCallLog {
+  id?: string;
+  user_id?: string;
+  session_id?: string;
+  provider?: string;
+  model_name?: string;
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  cost_usd?: number;
+  status?: string;
+  latency_ms?: number;
+  error_code?: string;
+  create_time?: string;
+  trace_id?: string;
+}
+
+export interface HubMonitorData {
+  cache: {
+    hits: number;
+    misses: number;
+    hit_rate: number;
+    target_hit_rate: number;
+  };
+  upstream_calls: number;
+  call_log_count: number;
+  call_logs: HubCallLog[];
+  models: HubMonitorModel[];
+  circuits: Record<string, HubMonitorModel['circuit']>;
+  budgets: Array<{
+    name: string;
+    spent_today_usd: number;
+    daily_limit_usd: number;
+    monthly_limit_usd: number;
+    remaining_today_usd: number;
+  }>;
+  agent_tasks: Array<{
+    task_id: string;
+    status: string;
+    input: string;
+    tools: string[];
+    cost_usd: number;
+    chosen_provider: string;
+    latency_ms: number;
+    progress_pct: number;
+    error_code: string;
+    trace_id: string;
+    created_at: string | null;
+  }>;
+  routing: {
+    default_chain: string[];
+    cn_chain: string[];
+    race_pair: string[];
+    forbidden_vendor: string;
+    pool_lock?: {
+      provider_kind: string;
+      provider_label: string;
+      lock_message: string;
+      allowed_models: string[];
+    };
+  };
+}
+
+export interface AgentWorkItem {
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  kind: 'assigned' | 'review' | 'coordinate' | 'synthesize' | string;
+  assignee: string | null;
+  task_id: string;
+  task_query: string;
+  task_status: string;
+  phase: string;
+  cost_usd: number;
+  estimated_cost?: number;
+  output_preview: string;
+  updated_at: string | null;
+  source: 'live' | 'run_log' | string;
+  depends_on?: string[];
+  tier?: string;
+  feedback?: unknown[];
+}
+
+export interface AgentEvent {
+  ts: string | null;
+  event: string;
+  item_id?: string | null;
+  title: string;
+  assignee: string | null;
+  task_id: string | null;
+  cost_usd: number;
+  score?: number | null;
+  degraded?: boolean;
+}
+
+export interface AgentCompanyTask {
+  task_id: string;
+  query: string;
+  status: string;
+  phase: string;
+}
+
+export interface AgentMetrics {
+  review_pass: number;
+  review_rework: number;
+  review_force: number;
+  errors: number;
+  tool_calls: number;
+  budget_alerts: number;
+  items_total?: number;
+  success_rate?: number;
+  avg_cost_usd?: number;
+  capacity_pct?: number;
+  daily_spent_usd?: number;
+  avg_latency_ms?: number;
+  tokens_in?: number;
+  tokens_out?: number;
+  last_model?: string;
+  sla_breaches?: number;
+  retries?: number;
+}
+
+export interface AgentAlert {
+  level: 'info' | 'warning' | 'critical' | string;
+  message: string;
+}
+
+export interface RolePreset {
+  id: string;
+  name: string;
+  level: number;
+  category: string;
+  reporting_to?: string | null;
+  system_prompt: string;
+  responsibilities: string[];
+  default_tier: string;
+  hint?: string;
+}
+
+export interface LlmCatalogModel {
+  id: string;
+  name: string;
+  owned_by: string;
+}
+
+export interface LlmOpsData {
+  provider_kind: string;
+  provider_label: string;
+  single_vendor: boolean;
+  lock_message: string;
+  model: string;
+  api_base: string;
+  configured: boolean;
+  allowed_models: string[];
+  catalog: LlmCatalogModel[];
+  catalog_source: string;
+  catalog_url: string;
+  catalog_fetched_at: string;
+  catalog_error: string;
+  ops: {
+    refresh_interval_sec: number;
+    last_ok_at: string;
+    last_error: string;
+    last_latency_ms: number;
+    last_reason: string;
+    consecutive_fail: number;
+    stale: boolean;
+    enabled: boolean;
+    next_check_at?: string;
+  };
+}
+
+export interface AgentCatalogMeta {
+  categories: Array<{ id: string; label: string }>;
+  tiers: Array<{ id: string; label: string }>;
+  levels: Array<{ level: number; label: string }>;
+  tool_names: string[];
+  builtin_ids: string[];
+  allowed_models?: string[];
+  routing_strategies?: Array<{ id: string; label: string }>;
+  role_presets?: RolePreset[];
+  org_templates?: Array<{ id: string; name: string; description: string; role_count: number }>;
+}
+
+export interface AgentMonitorPrefs {
+  poll_interval_ms: number;
+  show_disabled: boolean;
+  show_idle: boolean;
+  show_custom_only: boolean;
+  group_by?: 'level' | 'category' | string;
+  compact_cards?: boolean;
+  default_desk_tab?: 'tasks' | 'monitor' | 'settings' | 'org' | string;
+  sort_by?: 'level' | 'name' | 'status' | 'cost' | 'queue' | string;
+  capacity_warn_pct?: number;
+  show_prompt_preview?: boolean;
+  highlight_alerts?: boolean;
+  auto_open_busy?: boolean;
+}
+
+export interface RoleAgent {
+  id: string;
+  name: string;
+  level: number;
+  level_label: string;
+  category: string;
+  reporting_to: string | null;
+  can_delegate_to: string[];
+  direct_reports: string[];
+  responsibilities: string[];
+  system_prompt?: string;
+  max_parallel_work: number;
+  default_tier: string;
+  preferred_model?: string;
+  daily_budget_usd?: number;
+  tools_allowed?: string[];
+  notes?: string;
+  enabled?: boolean;
+  is_custom?: boolean;
+  is_builtin?: boolean;
+  alert_on_error?: boolean;
+  alert_on_budget?: boolean;
+  alert_on_sla?: boolean;
+  temperature?: number;
+  max_output_tokens?: number;
+  timeout_ms?: number;
+  routing_strategy?: string;
+  failover_models?: string[];
+  sla_latency_ms?: number;
+  max_retries?: number;
+  language?: string;
+  always_require_review?: boolean;
+  priority?: number;
+  description?: string;
+  templates: string[];
+  alerts?: AgentAlert[];
+  status: 'idle' | 'busy' | 'waiting' | 'error' | 'disabled' | string;
+  inbox: Record<string, number>;
+  queue: number;
+  executing: number;
+  done: number;
+  blocked: number;
+  cost_usd: number;
+  last_activity_at: string | null;
+  work_items: AgentWorkItem[];
+  events: AgentEvent[];
+  active_task_ids: string[];
+  current_item: AgentWorkItem | null;
+  company_tasks: AgentCompanyTask[];
+  capacity_used: number;
+  budget_remaining_usd?: number | null;
+  budget_over?: boolean;
+  metrics: AgentMetrics;
+}
+
+export interface AgentMonitorData {
+  generated_at: string;
+  summary: {
+    roles_total: number;
+    roles_busy: number;
+    roles_waiting: number;
+    roles_idle: number;
+    roles_custom?: number;
+    roles_disabled?: number;
+    roles_enabled?: number;
+    alerts_open?: number;
+    work_items_open: number;
+    work_items_done: number;
+    company_tasks: number;
+    running_company_tasks: number;
+    total_cost_usd?: number;
+  };
+  levels: Array<{ level: number; label: string }>;
+  catalog_meta?: AgentCatalogMeta;
+  monitor_prefs?: AgentMonitorPrefs;
+  agents: RoleAgent[];
 }

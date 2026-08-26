@@ -9,8 +9,9 @@
  * 前端层面做二次确认，后端由 DockerManager 安全护栏兜底。
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { DockerContainer, DockerContainerStats, DockerHealth, DockerStatus } from '../types';
+import type { DockerBudget, DockerContainer, DockerContainerStats, DockerHealth, DockerStatus } from '../types';
 import {
+  fetchDockerBudget,
   fetchDockerLogs,
   fetchDockerStats,
   fetchDockerStatus,
@@ -375,6 +376,7 @@ function LogModal({
 export default function DockerView() {
   const [status, setStatus] = useState<DockerStatus | null>(null);
   const [stats, setStats] = useState<Record<string, DockerContainerStats> | null>(null);
+  const [budget, setBudget] = useState<DockerBudget | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyService, setBusyService] = useState<string | null>(null);
@@ -389,12 +391,14 @@ export default function DockerView() {
   // ── 数据加载 ──
   const refresh = useCallback(async () => {
     try {
-      const [statusData, statsData] = await Promise.all([
+      const [statusData, statsData, budgetData] = await Promise.all([
         fetchDockerStatus(),
         fetchDockerStats().catch(() => ({ stats: {} })),
+        fetchDockerBudget().catch(() => null),
       ]);
       setStatus(statusData);
       setStats(statsData.stats);
+      setBudget(budgetData);
       setError(null);
     } catch (err) {
       setError((err as Error).message);
@@ -580,6 +584,47 @@ export default function DockerView() {
           </div>
         )}
 
+        {/* 公司預算與優化建議 */}
+        {budget?.company_budget && (
+          <div className="rounded-lg border border-[#23252a] bg-[#0f1011] p-3">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+                公司預算
+              </p>
+              <span className="font-mono text-xs text-amber-300">
+                Docker {formatCost(budget.total_docker_cost)} · 合計{' '}
+                {formatCost(budget.company_budget.total_spent)} · 壓力{' '}
+                {Math.round((budget.company_budget.budget_pressure ?? 0) * 100)}%
+              </span>
+            </div>
+            {(budget.company_budget.optimization_suggestions?.length ?? 0) === 0 ? (
+              <p className="text-[11px] text-gray-500">目前無需自動優化。</p>
+            ) : (
+              <div className="space-y-1">
+                {budget.company_budget.optimization_suggestions.map((s) => (
+                  <div
+                    key={`${s.service}-${s.action}`}
+                    className="flex items-center justify-between rounded-md bg-gray-950/50 px-2 py-1.5 text-[11px]"
+                  >
+                    <span className="text-gray-300">
+                      {s.priority} · {s.service} {s.action}
+                    </span>
+                    <span className="text-gray-500">{s.reason}</span>
+                    <span className="font-mono text-green-300">
+                      -{formatCost(s.estimated_saving_per_hour)}/h
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {(budget.company_budget.auto_optimized?.stopped?.length ?? 0) > 0 && (
+              <p className="mt-2 text-[11px] text-amber-300">
+                已自動停止：{budget.company_budget.auto_optimized.stopped.join(', ')}
+              </p>
+            )}
+          </div>
+        )}
+
         {/* 容器卡片网格 */}
         <div className="grid gap-3 sm:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
           {sortedContainers.map((c) => (
@@ -598,12 +643,19 @@ export default function DockerView() {
         </div>
 
         {sortedContainers.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <span className="mb-3 text-5xl">🐳</span>
-            <p className="text-sm text-gray-500">未发现 EvoLoop 容器</p>
-            <p className="mt-1 text-xs text-gray-600">
-              请确认 Docker Compose 项目已启动且后端已挂载 docker.sock
+          <div className="rounded-lg border border-gray-800 bg-gray-900/60 p-4">
+            <p className="text-sm text-gray-300">未發現 EvoLoop 容器</p>
+            <p className="mt-1 text-xs text-gray-500">
+              請確認 Docker Compose 已啟動且後端已掛載 docker.sock
             </p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {['backend', 'frontend', 'opc', 'redis', 'chroma'].map((svc) => (
+                <div key={svc} className="rounded-md border border-dashed border-gray-700 px-3 py-3">
+                  <p className="text-xs font-medium text-gray-400">{svc}</p>
+                  <p className="mt-1 text-[11px] text-gray-600">待命</p>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

@@ -25,6 +25,11 @@ services:
       - EVOL_CONFIG_DIR=/app/data
       # Docker Compose 项目名（供公司编排器识别）
       - DOCKER_COMPOSE_PROJECT=evoloop
+      # 監控中心即時標籤經 opc_service REST，禁止直連 UA
+      - OPC_SERVICE_URL=http://opc_service:8001
+      # LLM 模型池定時爬取（OpenRouter / 通用端點 /models）
+      - EVOL_LLM_OPS_ENABLED=true
+      - EVOL_LLM_OPS_INTERVAL_SEC=300
     depends_on:
       redis:
         condition: service_healthy

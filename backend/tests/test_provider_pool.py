@@ -1,0 +1,200 @@
+"""單一廠商鎖定 + 通用端點爬取模型目錄。"""
+
+from __future__ import annotations
+
+from backend.core.llm_config import reset_runtime_config, save_runtime_config
+from backend.core.provider_pool import (
+    classify_provider,
+    clamp_model,
+    models_endpoint,
+    parse_models_payload,
+    refresh_model_catalog,
+)
+from backend.services.task_manager import task_manager
+
+
+def test_classify_deepseek_and_openrouter():
+    assert classify_provider("https://api.deepseek.com", "gpt-4o") == "deepseek"
+    assert classify_provider("https://openrouter.ai/api/v1", "") == "openrouter"
+    assert classify_provider("https://dashscope.aliyuncs.com/compatible-mode/v1", "") == "qwen"
+    assert classify_provider("http://127.0.0.1:11434/v1", "") == "ollama"
+    assert classify_provider("https://vllm.internal/v1", "") == "generic"
+    assert classify_provider(
+        "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+        "qwen3.8-max",
+    ) == "generic"
+
+
+def test_parse_models_skips_claude():
+    rows = parse_models_payload(
+        {
+            "data": [
+                {"id": "deepseek/deepseek-chat", "name": "DeepSeek"},
+                {"id": "anthropic/claude-opus-5", "name": "Claude"},
+                {"id": "google/gemini-3.1-pro"},
+            ]
+        }
+    )
+    ids = {r["id"] for r in rows}
+    assert "deepseek/deepseek-chat" in ids
+    assert "google/gemini-3.1-pro" in ids
+    assert not any("claude" in i.lower() for i in ids)
+
+
+def test_clamp_locks_agents_to_deepseek(monkeypatch):
+    save_runtime_config(
+        api_key="sk-ds-test",
+        api_base="https://api.deepseek.com",
+        model="gpt-4o",
+    )
+    monkeypatch.setattr(
+        "backend.core.provider_pool._http_get_json",
+        lambda url, key, timeout=15.0: (_ for _ in ()).throw(RuntimeError("offline")),
+    )
+    refresh_model_catalog(reason="test")
+    assert clamp_model("gpt-4o") == "deepseek-chat"
+    assert clamp_model("gpt-5.6-sol") == "deepseek-chat"
+    assert clamp_model("deepseek-reasoner") == "deepseek-reasoner"
+
+
+def test_openrouter_crawl_writes_catalog(monkeypatch):
+    save_runtime_config(
+        api_key="sk-or-test",
+        api_base="https://openrouter.ai/api/v1",
+        model="openai/gpt-4o",
+    )
+
+    def fake_get(url, key, timeout=15.0):
+        assert "openrouter.ai" in url
+        assert url.endswith("/models")
+        return {
+            "data": [
+                {"id": "deepseek/deepseek-chat"},
+                {"id": "qwen/qwen3.5-max"},
+                {"id": "anthropic/claude-sonnet"},
+            ]
+        }
+
+    monkeypatch.setattr("backend.core.provider_pool._http_get_json", fake_get)
+    pool = refresh_model_catalog(reason="test")
+    assert pool["provider_kind"] == "openrouter"
+    assert pool["catalog_source"] == "crawl"
+    assert "deepseek/deepseek-chat" in pool["allowed_models"]
+    assert "qwen/qwen3.5-max" in pool["allowed_models"]
+    assert not any("claude" in m.lower() for m in pool["allowed_models"])
+    assert clamp_model("openai/gpt-4o") in pool["allowed_models"]
+
+
+def test_models_endpoint_appends_models():
+    assert models_endpoint("https://openrouter.ai/api/v1", "openrouter") == (
+        "https://openrouter.ai/api/v1/models"
+    )
+    assert models_endpoint("https://api.deepseek.com/v1", "deepseek").endswith("/models")
+
+
+def test_config_and_monitor_llm_ops_http(monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from backend.main import app
+
+    monkeypatch.setattr(task_manager, "tasks", {})
+    monkeypatch.setattr(
+        "backend.core.provider_pool._http_get_json",
+        lambda url, key, timeout=15.0: {"data": [{"id": "deepseek-chat"}, {"id": "deepseek-reasoner"}]},
+    )
+
+    with TestClient(app) as client:
+        saved = client.post(
+            "/config",
+            json={
+                "api_key": "sk-ds-http",
+                "api_base": "https://api.deepseek.com",
+                "model": "gpt-4o",
+            },
+        )
+        assert saved.status_code == 200, saved.text
+        body = saved.json()
+        assert body["provider_kind"] == "deepseek"
+        assert "deepseek-chat" in body["allowed_models"]
+        assert body["model"] in body["allowed_models"]
+
+        ops = client.get("/monitor/llm-ops")
+        assert ops.status_code == 200
+        assert ops.json()["provider_kind"] == "deepseek"
+
+        refreshed = client.post("/config/models/refresh")
+        assert refreshed.status_code == 200
+        prefs = client.put("/config/ops", json={"refresh_interval_sec": 120})
+        assert prefs.status_code == 200
+        assert prefs.json()["ops"]["refresh_interval_sec"] == 120
+
+def test_compatible_hub_models_deepseek_only(monkeypatch):
+    from backend.core.provider_pool import compatible_hub_models
+    from backend.hub.catalog import HUB_CATALOG, PROVIDER_OF, runtime_hub_whitelist
+
+    save_runtime_config(
+        api_key="sk-ds-hub",
+        api_base="https://api.deepseek.com",
+        model="gpt-4o",
+    )
+    monkeypatch.setattr(
+        "backend.core.provider_pool._http_get_json",
+        lambda url, key, timeout=15.0: (_ for _ in ()).throw(RuntimeError("offline")),
+    )
+    refresh_model_catalog(reason="test")
+    compat = compatible_hub_models(sorted(HUB_CATALOG), PROVIDER_OF)
+    assert compat == ["deepseek-v4-flash"]
+    assert "gpt-5.6-sol" not in compat
+    assert runtime_hub_whitelist() == ["deepseek-v4-flash"]
+
+
+def test_openrouter_maps_hub_models_by_vendor_prefix(monkeypatch):
+    from backend.core.provider_pool import compatible_hub_models
+    from backend.hub.catalog import HUB_CATALOG, PROVIDER_OF
+
+    save_runtime_config(
+        api_key="sk-or-hub",
+        api_base="https://openrouter.ai/api/v1",
+        model="",
+    )
+
+    def fake_get(url, key, timeout=15.0):
+        return {
+            "data": [
+                {"id": "deepseek/deepseek-chat"},
+                {"id": "openai/gpt-4o"},
+                {"id": "anthropic/claude-sonnet"},
+            ]
+        }
+
+    monkeypatch.setattr("backend.core.provider_pool._http_get_json", fake_get)
+    refresh_model_catalog(reason="test")
+    compat = compatible_hub_models(sorted(HUB_CATALOG), PROVIDER_OF)
+    assert "deepseek-v4-flash" in compat
+    assert "gpt-5.6-sol" in compat
+    assert "gemini-3.1-pro" not in compat
+
+
+def test_preferred_model_clamped_to_pool(monkeypatch):
+    from backend.company.role_catalog import create_custom_role, resolve_runtime
+
+    save_runtime_config(
+        api_key="sk-ds-pref",
+        api_base="https://api.deepseek.com",
+        model="deepseek-chat",
+    )
+    monkeypatch.setattr(
+        "backend.core.provider_pool._http_get_json",
+        lambda url, key, timeout=15.0: (_ for _ in ()).throw(RuntimeError("offline")),
+    )
+    refresh_model_catalog(reason="test")
+    created = create_custom_role(
+        {
+            "id": "pool_lock_test",
+            "name": "pool lock test",
+            "preferred_model": "gpt-4o",
+            "system_prompt": "test",
+        }
+    )
+    runtime = resolve_runtime(created["id"])
+    assert runtime["preferred_model"] == "deepseek-chat"

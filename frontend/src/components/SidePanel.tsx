@@ -2,13 +2,16 @@
  * SidePanel — 左侧上下文面板（220px）。
  *
  * 根据 activeView 显示不同内容：
- * - Chat → 会话列表（原 Sidebar 逻辑）
- * - Dashboard → 面版子导航
- * - OPC → OPC 标签列表
+ * - Chat → 会话列表
+ * - Monitor → 角色 Agent 名冊 + 其他監控分頁
+ * - Hub / Traces → 說明
  */
-import { useEffect, useState } from 'react';
-import type { ChatSession } from '../types';
-import type { ViewKey } from './AppShell';
+import { useEffect, useMemo, useState } from 'react';
+import { fetchAgentMonitor } from '../api/client';
+import { AGENT_STATUS_META, agentOpenCount } from '../lib/agentUi';
+import { AGENT_FALLBACK_ROSTER } from '../lib/monitorFallbacks';
+import type { ChatSession, RoleAgent } from '../types';
+import type { MonitorTab, ViewKey } from './AppShell';
 
 interface SidePanelProps {
   activeView: ViewKey;
@@ -19,6 +22,10 @@ interface SidePanelProps {
   onNewSession: () => void;
   onDeleteSession: (id: string) => void;
   onClose: () => void;
+  monitorTab: MonitorTab;
+  onMonitorTabChange: (tab: MonitorTab) => void;
+  focusAgentId: string | null;
+  onFocusAgent: (id: string | null) => void;
 }
 
 function formatRelative(ts: number): string {
@@ -109,27 +116,193 @@ function SessionList({
   );
 }
 
-/** 监控面板子导航 */
-function MonitorNav() {
+/** AI Hub 側欄說明 */
+function HubNav() {
   return (
     <div className="p-3">
-      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">监控中心</p>
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">AI Hub</p>
       <div className="space-y-2">
-        <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2">
-          <p className="text-xs font-medium text-blue-300">📊 控制面版</p>
-          <p className="mt-0.5 text-[11px] text-gray-500">任务统计 · 成功率 · 成本分析</p>
-        </div>
-        <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 px-3 py-2">
-          <p className="text-xs font-medium text-cyan-300">🏭 OPC 监控</p>
-          <p className="mt-0.5 text-[11px] text-gray-500">6 级闭环 · 审计日志 · 安全护栏</p>
+        <div className="rounded-lg border border-[#5e6ad2]/30 bg-[#5e6ad2]/10 px-3 py-2">
+          <p className="text-xs font-medium text-[#828fff]">🛰️ 多方編排</p>
+          <p className="mt-0.5 text-[11px] text-gray-500">
+            GPT-5.6 Sol 旗艦 · Gemini 3.1 Pro 多模態 · 零 Claude
+          </p>
         </div>
         <div className="rounded-lg border border-white/5 bg-gray-800/40 px-3 py-2">
-          <p className="text-xs font-medium text-gray-300">☁️ 云控制台</p>
+          <p className="text-xs font-medium text-gray-300">故障轉移</p>
           <p className="mt-0.5 text-[11px] text-gray-500">
-            费用帐单 · 资源监控 · 实例管理 · 告警
+            Sol → Gemini → DeepSeek → GLM-5.2
+          </p>
+        </div>
+        <div className="rounded-lg border border-white/5 bg-gray-800/40 px-3 py-2">
+          <p className="text-xs font-medium text-gray-300">屬地合規</p>
+          <p className="mt-0.5 text-[11px] text-gray-500">
+            CN 強制 DeepSeek / Qwen / MiMo
           </p>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** 监控面板子导航 */
+const MONITOR_NAV: { key: MonitorTab; icon: string; label: string }[] = [
+  { key: 'overview', icon: '▣', label: '總覽' },
+  { key: 'dashboard', icon: '📊', label: '控制面版' },
+  { key: 'opc', icon: '🏭', label: 'OPC' },
+  { key: 'hub', icon: '🛰️', label: 'AI Hub' },
+  { key: 'llm', icon: '⚙', label: 'LLM 運維' },
+  { key: 'cloud', icon: '☁️', label: '雲控制台' },
+  { key: 'memory', icon: '🧠', label: '記憶庫' },
+  { key: 'checkpoints', icon: '💾', label: '檢查點' },
+];
+
+function AgentRoster({
+  focusAgentId,
+  onPick,
+}: {
+  focusAgentId: string | null;
+  onPick: (id: string) => void;
+}) {
+  const [agents, setAgents] = useState<RoleAgent[]>(AGENT_FALLBACK_ROSTER);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const data = await fetchAgentMonitor();
+        if (!cancelled && data.agents?.length) setAgents(data.agents);
+      } catch {
+        if (!cancelled) setAgents(AGENT_FALLBACK_ROSTER);
+      }
+    };
+    void load();
+    const timer = setInterval(() => void load(), 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, []);
+
+  const grouped = useMemo(() => {
+    const levels = [
+      { level: 0, label: '決策層' },
+      { level: 1, label: '技術領導' },
+      { level: 2, label: '領域領導' },
+      { level: 3, label: '執行層' },
+      { level: 4, label: '支援' },
+    ];
+    return levels
+      .map((lv) => ({ ...lv, agents: agents.filter((a) => a.level === lv.level) }))
+      .filter((g) => g.agents.length > 0);
+  }, [agents]);
+
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
+      {grouped.map((group) => (
+        <div key={group.level} className="mb-2">
+          <p className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-600">
+            L{group.level} {group.label}
+          </p>
+          <div className="space-y-0.5">
+            {group.agents.map((agent) => {
+              const meta = AGENT_STATUS_META[agent.status] ?? AGENT_STATUS_META.idle;
+              const active = agent.id === focusAgentId;
+              const count = agentOpenCount(agent);
+              return (
+                <button
+                  key={agent.id}
+                  type="button"
+                  onClick={() => onPick(agent.id)}
+                  className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left ${
+                    active
+                      ? 'border border-blue-500/40 bg-blue-500/10'
+                      : 'border border-transparent hover:bg-gray-800'
+                  }`}
+                >
+                  <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${meta.dot}`} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-xs text-gray-200">{agent.name}</span>
+                    <span className={`block truncate text-[10px] ${meta.text}`}>{meta.label}</span>
+                  </span>
+                  {count > 0 && (
+                    <span className="font-mono text-[10px] text-gray-500">{count}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MonitorNav({
+  monitorTab,
+  onMonitorTabChange,
+  onClose,
+  focusAgentId,
+  onFocusAgent,
+}: {
+  monitorTab: MonitorTab;
+  onMonitorTabChange: (tab: MonitorTab) => void;
+  onClose: () => void;
+  focusAgentId: string | null;
+  onFocusAgent: (id: string | null) => void;
+}) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="border-b border-gray-800 p-3">
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">监控中心</p>
+        <div className="flex flex-wrap gap-1">
+          <button
+            type="button"
+            onClick={() => {
+              onMonitorTabChange('agents');
+              onClose();
+            }}
+            className={`rounded-md border px-2 py-1 text-[11px] ${
+              monitorTab === 'agents'
+                ? 'border-blue-500/40 bg-blue-500/10 text-blue-300'
+                : 'border-white/5 bg-gray-800/40 text-gray-400'
+            }`}
+          >
+            ◈ 角色 Agent
+          </button>
+          {MONITOR_NAV.map((item) => {
+            const active = monitorTab === item.key;
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => {
+                  onMonitorTabChange(item.key);
+                  onClose();
+                }}
+                className={`rounded-md border px-2 py-1 text-[11px] ${
+                  active
+                    ? 'border-blue-500/40 bg-blue-500/10 text-blue-300'
+                    : 'border-white/5 bg-gray-800/40 text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                {item.icon} {item.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <p className="px-3 pt-2 text-[10px] font-semibold uppercase tracking-wider text-gray-600">
+        17 位角色 Agent
+      </p>
+      <AgentRoster
+        focusAgentId={monitorTab === 'agents' ? focusAgentId : null}
+        onPick={(id) => {
+          onFocusAgent(id);
+          onMonitorTabChange('agents');
+          onClose();
+        }}
+      />
     </div>
   );
 }
@@ -143,6 +316,10 @@ export default function SidePanel({
   onNewSession,
   onDeleteSession,
   onClose,
+  monitorTab,
+  onMonitorTabChange,
+  focusAgentId,
+  onFocusAgent,
 }: SidePanelProps) {
   return (
     <>
@@ -155,7 +332,7 @@ export default function SidePanel({
       )}
 
       <aside
-        className={`fixed inset-y-10 left-12 z-30 flex w-56 flex-col border-r border-gray-800 bg-gray-900 transition-transform md:static md:translate-x-0 ${
+        className={`fixed inset-y-10 left-12 z-30 flex w-56 flex-col overflow-y-auto border-r border-gray-800 bg-gray-900 transition-transform md:static md:translate-x-0 ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -179,7 +356,37 @@ export default function SidePanel({
             onDeleteSession={onDeleteSession}
           />
         )}
-        {activeView === 'monitor' && <MonitorNav />}
+        {activeView === 'monitor' && (
+          <MonitorNav
+            monitorTab={monitorTab}
+            onMonitorTabChange={onMonitorTabChange}
+            onClose={onClose}
+            focusAgentId={focusAgentId}
+            onFocusAgent={onFocusAgent}
+          />
+        )}
+        {activeView === 'hub' && <HubNav />}
+        {activeView === 'traces' && (
+          <div className="p-3">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+              執行軌跡
+            </p>
+            <div className="space-y-2">
+              <div className="rounded-lg border border-white/5 bg-gray-800/40 px-3 py-2">
+                <p className="text-xs font-medium text-gray-300">LLM 調用鏈</p>
+                <p className="mt-0.5 text-[11px] text-gray-500">prompt / response 可展開</p>
+              </div>
+              <div className="rounded-lg border border-white/5 bg-gray-800/40 px-3 py-2">
+                <p className="text-xs font-medium text-gray-300">評估 · 反思 · 改進</p>
+                <p className="mt-0.5 text-[11px] text-gray-500">反思閉環每一輪都入檔</p>
+              </div>
+              <div className="rounded-lg border border-white/5 bg-gray-800/40 px-3 py-2">
+                <p className="text-xs font-medium text-gray-300">工具呼叫</p>
+                <p className="mt-0.5 text-[11px] text-gray-500">公司工作項與 OPC 護欄</p>
+              </div>
+            </div>
+          </div>
+        )}
       </aside>
     </>
   );

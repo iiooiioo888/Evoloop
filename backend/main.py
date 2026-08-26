@@ -6,6 +6,7 @@
 """
 
 import logging
+from contextlib import asynccontextmanager
 import os
 import uuid
 from datetime import datetime, timezone
@@ -23,7 +24,19 @@ from backend.core.graph import MAX_ITERATIONS, PASS_THRESHOLD, evoloop_graph
 from backend.core import nodes
 from backend.core.llm import call_llm, call_llm_stream
 from backend.core.llm_config import get_runtime_config, masked_key, save_runtime_config
+from backend.core.provider_pool import public_pool, refresh_model_catalog, set_refresh_interval
+from backend.services.llm_ops import collect_llm_ops, llm_ops_loop, run_ops_once
+from backend.hub.monitor import collect_hub_monitor
+from backend.company.role_catalog import (
+    create_custom_role,
+    delete_custom_role,
+    reset_role_settings,
+    update_monitor_prefs,
+    update_role_settings,
+)
+from backend.services.agent_monitor import collect_agent_monitor
 from backend.services.dashboard import collect_dashboard
+from backend.services.opc_monitor import collect_opc_monitor
 from backend.services.docker_manager import get_docker_manager
 from backend.company.docker_tools import DOCKER_SERVICE_HOURLY_RATES
 from backend.services.cloud_console import (
@@ -34,6 +47,7 @@ from backend.services.cloud_console import (
 )
 from backend.services.task_broadcaster import task_broadcaster
 from backend.services.task_manager import task_manager
+from backend.hub.api import register_hub
 
 # ═══════════════════════════════════════════════════════════════
 # 全局公司預算狀態（由 orchestrator 更新，API 讀取）
@@ -63,10 +77,24 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    task = asyncio.create_task(llm_ops_loop())
+    try:
+        yield
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+
 app = FastAPI(
     title="EvoLoop Backend",
     description="EvoLoop AI 助手 — 反思闭环 + 多代理人公司运行时",
     version="0.1.0",
+    lifespan=_lifespan,
 )
 
 app.add_middleware(
@@ -75,6 +103,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# AI Hub 旁路面：/api/v1/*（Nginx 剝除 /api 時另掛 /v1/*）
+register_hub(app)
 
 
 class ChatRequest(BaseModel):
@@ -116,22 +147,53 @@ async def health():
 
 @app.get("/config")
 async def get_config():
-    """回傳当前 LLM 配置（金鑰脱敏）。"""
+    """回傳当前 LLM 配置（金鑰脱敏）與可用模型池。"""
     cfg = get_runtime_config()
+    pool = public_pool(cfg)
     return {
         "configured": bool(cfg.get("api_key")),
         "api_key": masked_key(cfg.get("api_key", "")),
         "api_base": cfg.get("api_base", ""),
-        "model": cfg.get("model", ""),
+        "model": cfg.get("model", "") or pool.get("model", ""),
+        **pool,
     }
 
 
 @app.post("/config")
 async def update_config(req: LlmConfigRequest):
-    """動態更新 LLM 配置（即時生效並持久化）。"""
+    """動態更新 LLM 配置（即時生效並持久化），隨後刷新可用模型池。"""
     save_runtime_config(api_key=req.api_key, api_base=req.api_base, model=req.model)
     logger.info("LLM 配置已更新（model=%s, api_base=%s）", req.model, req.api_base)
+    try:
+        refresh_model_catalog(reason="save")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("儲存後刷新模型目錄失敗：%s", exc)
     return await get_config()
+
+
+class LlmOpsPrefsBody(BaseModel):
+    refresh_interval_sec: int
+
+
+@app.post("/config/models/refresh")
+async def refresh_config_models():
+    """立刻爬取通用端點 /models 或重建單一廠商靜態池。"""
+    try:
+        return await asyncio.to_thread(run_ops_once, "manual")
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"刷新模型目錄失敗：{exc}") from exc
+
+
+@app.put("/config/ops")
+async def update_llm_ops(body: LlmOpsPrefsBody):
+    """更新模型目錄定時檢查間隔（秒）。"""
+    return set_refresh_interval(body.refresh_interval_sec)
+
+
+@app.get("/monitor/llm-ops")
+async def monitor_llm_ops():
+    """監控中心：目前 API 鎖定的模型池與定時檢查狀態。"""
+    return collect_llm_ops()
 
 
 @app.post("/config/test")
@@ -628,6 +690,155 @@ async def cleanup_memories(max_age_days: int = 30, min_score: float | None = Non
 async def dashboard():
     """控制面版聚合資料：統計/任務/存檔/OPC 審計/能力註冊表。"""
     return collect_dashboard()
+
+
+@app.get("/monitor/opc")
+async def monitor_opc():
+    """監控中心 OPC 分頁：護欄、審計、即時標籤、最近 6 級任務。"""
+    return collect_opc_monitor()
+
+
+@app.get("/monitor/hub")
+async def monitor_hub():
+    """監控中心 AI Hub 分頁：探針、熔斷、呼叫日誌、預算。"""
+    return collect_hub_monitor()
+
+
+class RoleSettingsBody(BaseModel):
+    enabled: bool | None = None
+    name: str | None = None
+    system_prompt: str | None = None
+    responsibilities: list[str] | None = None
+    default_tier: str | None = None
+    max_parallel_work: int | None = None
+    preferred_model: str | None = None
+    daily_budget_usd: float | None = None
+    tools_allowed: list[str] | None = None
+    notes: str | None = None
+    reporting_to: str | None = None
+    can_delegate_to: list[str] | None = None
+    alert_on_error: bool | None = None
+    alert_on_budget: bool | None = None
+    temperature: float | None = None
+    max_output_tokens: int | None = None
+    timeout_ms: int | None = None
+    routing_strategy: str | None = None
+    failover_models: list[str] | None = None
+    sla_latency_ms: int | None = None
+    max_retries: int | None = None
+    alert_on_sla: bool | None = None
+    level: int | None = None
+    category: str | None = None
+    language: str | None = None
+    always_require_review: bool | None = None
+    priority: int | None = None
+    description: str | None = None
+
+
+class CustomRoleBody(BaseModel):
+    id: str = ""
+    name: str
+    clone_from: str | None = None
+    level: int = 3
+    category: str = "management"
+    reporting_to: str | None = None
+    can_delegate_to: list[str] = []
+    responsibilities: list[str] = []
+    system_prompt: str = ""
+    max_parallel_work: int = 2
+    default_tier: str = "routine"
+    preferred_model: str = ""
+    daily_budget_usd: float = 0
+    tools_allowed: list[str] = []
+    notes: str = ""
+    enabled: bool = True
+    alert_on_error: bool = True
+    alert_on_budget: bool = True
+    alert_on_sla: bool = True
+    temperature: float = 0.7
+    max_output_tokens: int = 4096
+    timeout_ms: int = 120000
+    routing_strategy: str = "quality_first"
+    failover_models: list[str] = []
+    sla_latency_ms: int = 0
+    max_retries: int = 3
+    language: str = "zh-TW"
+    always_require_review: bool = False
+    priority: int = 3
+    description: str = ""
+
+
+class MonitorPrefsBody(BaseModel):
+    poll_interval_ms: int | None = None
+    show_disabled: bool | None = None
+    show_idle: bool | None = None
+    show_custom_only: bool | None = None
+    group_by: str | None = None
+    compact_cards: bool | None = None
+    default_desk_tab: str | None = None
+    sort_by: str | None = None
+    capacity_warn_pct: int | None = None
+    show_prompt_preview: bool | None = None
+    highlight_alerts: bool | None = None
+    auto_open_busy: bool | None = None
+
+
+@app.get("/monitor/agents")
+async def monitor_agents():
+    """監控中心角色 Agent：每位公司角色獨立任務列表與監控。"""
+    return collect_agent_monitor()
+
+
+@app.put("/monitor/agents/prefs")
+async def monitor_agents_prefs(body: MonitorPrefsBody):
+    """更新角色監控顯示偏好（輪詢間隔、是否顯示停用／待命）。"""
+    try:
+        return update_monitor_prefs(body.model_dump(exclude_none=True))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.put("/monitor/agents/{role_id}/settings")
+async def monitor_agent_settings(role_id: str, body: RoleSettingsBody):
+    """更新指定角色的設定（提示詞、模型、預算、啟用狀態）。"""
+    try:
+        return update_role_settings(role_id, body.model_dump(exclude_none=True))
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/monitor/agents/{role_id}/reset")
+async def monitor_agent_reset(role_id: str):
+    """還原內建角色設定為 STANDARD_ROLES 預設。"""
+    try:
+        return reset_role_settings(role_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/monitor/agents")
+async def monitor_agents_create(body: CustomRoleBody):
+    """新增自定義角色（出現在監控中心，可編輯完整角色設定）。"""
+    try:
+        return create_custom_role(body.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/monitor/agents/{role_id}")
+async def monitor_agents_delete(role_id: str):
+    """刪除自定義角色。內建角色不可刪，請改為停用。"""
+    try:
+        delete_custom_role(role_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "id": role_id}
 
 
 # ==================== Docker 容器管理 API ====================

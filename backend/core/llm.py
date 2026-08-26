@@ -20,6 +20,7 @@ from litellm.exceptions import APIError, RateLimitError
 
 from backend.core.llm_cache import get_llm_cache
 from backend.core.llm_config import get_runtime_config
+from backend.core.provider_pool import clamp_model
 
 load_dotenv()
 
@@ -56,12 +57,16 @@ def call_llm(
     prompt: str,
     system: str | None = None,
     model: str | None = None,
+    max_retries: int | None = None,
     **kwargs,
 ) -> str:
     """呼叫 LLM 並回傳回應文字。
 
     內建指數退避重試，處理速率限制（RateLimitError）
     與暫時性 API 錯誤。
+
+    max_retries 預設 3（與 MAX_RETRIES 相同），以保持反思閉環行為；
+    Hub 路由器切模型前應傳 max_retries=1，避免 3×3 放大延遲。
     """
     messages = []
     if system:
@@ -71,9 +76,9 @@ def call_llm(
     params = _llm_params()
     if model:
         params["model"] = model
-        # 顯式傳入的模型同樣需要補前綴（如公司模式層級路由）
-        if params.get("api_base"):
-            params["model"] = _ensure_provider_prefix(params["model"])
+    params["model"] = clamp_model(params.get("model"))
+    if params.get("api_base"):
+        params["model"] = _ensure_provider_prefix(params["model"])
 
     # ── 查詢快取 ──
     cache = get_llm_cache()
@@ -81,8 +86,9 @@ def call_llm(
     if cached is not None:
         return cached
 
+    retries = MAX_RETRIES if max_retries is None else max(1, int(max_retries))
     last_error: Exception | None = None
-    for attempt in range(1, MAX_RETRIES + 1):
+    for attempt in range(1, retries + 1):
         try:
             response = completion(
                 model=params["model"],
@@ -98,20 +104,21 @@ def call_llm(
             last_error = exc
             wait = RETRY_BACKOFF_SECONDS * attempt
             logger.warning(
-                "LLM 速率限制，%.1f 秒後重試（%d/%d）", wait, attempt, MAX_RETRIES
+                "LLM 速率限制，%.1f 秒後重試（%d/%d）", wait, attempt, retries
             )
             time.sleep(wait)
         except APIError as exc:
             last_error = exc
-            logger.warning("LLM 呼叫失敗：%s，重試（%d/%d）", exc, attempt, MAX_RETRIES)
+            logger.warning("LLM 呼叫失敗：%s，重試（%d/%d）", exc, attempt, retries)
             time.sleep(RETRY_BACKOFF_SECONDS)
-    raise RuntimeError(f"LLM 呼叫於 {MAX_RETRIES} 次重試後仍失敗") from last_error
+    raise RuntimeError(f"LLM 呼叫於 {retries} 次重試後仍失敗") from last_error
 
 
 def call_llm_stream(
     prompt: str,
     system: str | None = None,
     model: str | None = None,
+    max_retries: int | None = None,
     **kwargs,
 ):
     """呼叫 LLM 並串流回傳回應片段（生成器）。
@@ -126,11 +133,13 @@ def call_llm_stream(
     params = _llm_params()
     if model:
         params["model"] = model
-        if params.get("api_base"):
-            params["model"] = _ensure_provider_prefix(params["model"])
+    params["model"] = clamp_model(params.get("model"))
+    if params.get("api_base"):
+        params["model"] = _ensure_provider_prefix(params["model"])
 
+    retries = MAX_RETRIES if max_retries is None else max(1, int(max_retries))
     last_error: Exception | None = None
-    for attempt in range(1, MAX_RETRIES + 1):
+    for attempt in range(1, retries + 1):
         try:
             response = completion(
                 model=params["model"],
@@ -148,14 +157,14 @@ def call_llm_stream(
             last_error = exc
             wait = RETRY_BACKOFF_SECONDS * attempt
             logger.warning(
-                "LLM 速率限制，%.1f 秒後重試（%d/%d）", wait, attempt, MAX_RETRIES
+                "LLM 速率限制，%.1f 秒後重試（%d/%d）", wait, attempt, retries
             )
             time.sleep(wait)
         except APIError as exc:
             last_error = exc
-            logger.warning("LLM 呼叫失敗：%s，重試（%d/%d）", exc, attempt, MAX_RETRIES)
+            logger.warning("LLM 呼叫失敗：%s，重試（%d/%d）", exc, attempt, retries)
             time.sleep(RETRY_BACKOFF_SECONDS)
-    raise RuntimeError(f"LLM 呼叫於 {MAX_RETRIES} 次重試後仍失敗") from last_error
+    raise RuntimeError(f"LLM 呼叫於 {retries} 次重試後仍失敗") from last_error
 
 
 def parse_json_response(text: str) -> dict:

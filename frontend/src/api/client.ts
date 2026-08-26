@@ -8,7 +8,7 @@
  * 生產環境可設定 VITE_API_URL 環境變數指向後端位址。
  */
 
-import type { CheckpointSummary, CloudAlertsData, CloudBilling, CloudEventsData, CloudMonitoring, DashboardData, DockerActionResult, DockerBudget, DockerStatus, TaskOptions, TaskProgress, TraceEntry, TraceSummary } from '../types';
+import type { AgentMonitorData, AgentMonitorPrefs, CheckpointSummary, CloudAlertsData, CloudBilling, CloudEventsData, CloudMonitoring, DashboardData, DockerActionResult, DockerBudget, DockerStatus, HubMonitorData, LlmOpsData, OpcMonitorData, RoleAgent, TaskOptions, TaskProgress, TraceEntry, TraceSummary } from '../types';
 
 const API_BASE: string = import.meta.env.VITE_API_URL ?? '/api';
 
@@ -187,6 +187,15 @@ export interface LlmConfig {
   api_key: string; // 脱敏後的金鑰
   api_base: string;
   model: string;
+  provider_kind?: string;
+  provider_label?: string;
+  lock_message?: string;
+  allowed_models?: string[];
+  catalog?: Array<{ id: string; name: string; owned_by: string }>;
+  catalog_source?: string;
+  catalog_fetched_at?: string;
+  catalog_error?: string;
+  ops?: LlmOpsData['ops'];
 }
 
 /** 取得当前 LLM 配置狀態。 */
@@ -208,6 +217,28 @@ export async function saveConfig(config: {
     body: JSON.stringify(config),
   });
   if (!resp.ok) throw new Error(`儲存配置失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
+export async function fetchLlmOps(): Promise<LlmOpsData> {
+  const resp = await fetch(apiUrl('/monitor/llm-ops'));
+  if (!resp.ok) throw new Error(`讀取 LLM 運維失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
+export async function refreshLlmModels(): Promise<LlmOpsData> {
+  const resp = await fetch(apiUrl('/config/models/refresh'), { method: 'POST' });
+  if (!resp.ok) throw new Error(`刷新模型目錄失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
+export async function updateLlmOpsPrefs(refreshIntervalSec: number): Promise<LlmOpsData> {
+  const resp = await fetch(apiUrl('/config/ops'), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ refresh_interval_sec: refreshIntervalSec }),
+  });
+  if (!resp.ok) throw new Error(`更新運維間隔失敗（HTTP ${resp.status}）`);
   return resp.json();
 }
 
@@ -471,6 +502,74 @@ export async function fetchDashboard(): Promise<DashboardData> {
   return resp.json();
 }
 
+/** 監控中心 OPC 快照（護欄 / 審計 / 即時標籤）。 */
+export async function fetchOpcMonitor(): Promise<OpcMonitorData> {
+  const resp = await fetch(apiUrl('/monitor/opc'));
+  if (!resp.ok) throw new Error(`讀取 OPC 監控失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
+/** 監控中心 AI Hub 快照（探針 / 熔斷 / 呼叫日誌 / 預算）。 */
+export async function fetchHubMonitor(): Promise<HubMonitorData> {
+  const resp = await fetch(apiUrl('/monitor/hub'));
+  if (!resp.ok) throw new Error(`讀取 Hub 監控失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
+/** 監控中心角色 Agent（每位公司角色獨立任務列表）。 */
+export async function fetchAgentMonitor(): Promise<AgentMonitorData> {
+  const resp = await fetch(apiUrl('/monitor/agents'));
+  if (!resp.ok) throw new Error(`讀取角色 Agent 監控失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
+export async function updateAgentSettings(roleId: string, body: Record<string, unknown>): Promise<RoleAgent> {
+  const resp = await fetch(apiUrl(`/monitor/agents/${encodeURIComponent(roleId)}/settings`), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) {
+    const detail = await resp.text();
+    throw new Error(detail || `更新角色設定失敗（HTTP ${resp.status}）`);
+  }
+  return resp.json();
+}
+
+export async function resetAgentSettings(roleId: string): Promise<RoleAgent> {
+  const resp = await fetch(apiUrl(`/monitor/agents/${encodeURIComponent(roleId)}/reset`), { method: 'POST' });
+  if (!resp.ok) throw new Error(`還原角色設定失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
+export async function createCustomAgent(body: Record<string, unknown>): Promise<RoleAgent> {
+  const resp = await fetch(apiUrl('/monitor/agents'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) {
+    const detail = await resp.text();
+    throw new Error(detail || `建立角色失敗（HTTP ${resp.status}）`);
+  }
+  return resp.json();
+}
+
+export async function deleteCustomAgent(roleId: string): Promise<void> {
+  const resp = await fetch(apiUrl(`/monitor/agents/${encodeURIComponent(roleId)}`), { method: 'DELETE' });
+  if (!resp.ok) throw new Error(`刪除角色失敗（HTTP ${resp.status}）`);
+}
+
+export async function updateAgentMonitorPrefs(body: Partial<AgentMonitorPrefs>): Promise<AgentMonitorPrefs> {
+  const resp = await fetch(apiUrl('/monitor/agents/prefs'), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) throw new Error(`更新監控偏好失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
 // ==================== Docker 容器管理 ====================
 
 /** 獲取 Docker 狀態摘要（容器列表 + 健康檢查）。 */
@@ -583,5 +682,168 @@ export async function toggleAlertRule(ruleId: string): Promise<Record<string, un
 export async function deleteAlertRule(ruleId: string): Promise<{ deleted: boolean }> {
   const resp = await fetch(apiUrl(`/cloud/alerts/${encodeURIComponent(ruleId)}`), { method: 'DELETE' });
   if (!resp.ok) throw new Error(`刪除告警失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
+// ==================== AI Hub（/api/v1，不得剝除前綴） ====================
+
+export const HUB_DEV_API_KEY = 'ak_live_hub_dev_key_for_local_only';
+
+function hubUrl(path: string): string {
+  const base: string = import.meta.env.VITE_API_URL ?? '/api';
+  return `${base}/v1${path}`;
+}
+
+function hubHeaders(apiKey: string, extra?: Record<string, string>): HeadersInit {
+  return {
+    Authorization: `Bearer ${apiKey}`,
+    'Content-Type': 'application/json; charset=utf-8',
+    ...extra,
+  };
+}
+
+async function readHubError(resp: Response): Promise<string> {
+  try {
+    const body = (await resp.json()) as { detail?: string; title?: string; code?: string };
+    return body.detail || body.title || body.code || `HTTP ${resp.status}`;
+  } catch {
+    return `請求失敗（HTTP ${resp.status}）`;
+  }
+}
+
+export interface HubModelInfo {
+  id: string;
+  provider: string;
+  intelligence: number;
+  price_in_per_1m: number;
+  price_out_per_1m: number;
+  cn_allowed: boolean;
+  available_in_pool?: boolean;
+}
+
+export interface HubCatalog {
+  models: HubModelInfo[];
+  strategies: string[];
+  default_chain: string[];
+  cn_set: string[];
+  race_pair: string[];
+  quality_flagship: string;
+  pool_lock?: {
+    provider_kind: string;
+    provider_label: string;
+    lock_message: string;
+    allowed_models: string[];
+  };
+}
+
+export interface HubChatResult {
+  id: string;
+  model: string;
+  chosen_provider: string;
+  cost_usd: number;
+  latency_ms: number;
+  routing_strategy: string;
+  failover_hops: number;
+  cache: string;
+  notice?: string;
+  race?: boolean;
+  choices: Array<{ message: { role: string; content: string }; finish_reason: string }>;
+  usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+}
+
+export interface HubAgentCreateResult {
+  task_id: string;
+  status: string;
+  poll_url: string;
+  eta_ms: number;
+}
+
+export interface HubAgentTask {
+  task_id: string;
+  status: string;
+  progress_pct: number;
+  chosen_provider: string | null;
+  cost_usd: number;
+  latency_ms: number | null;
+  trace_id?: string;
+  result?: {
+    content?: string;
+    model?: string;
+    failover_hops?: number;
+    tool_traces?: Array<{
+      tool: string;
+      latency_ms: number;
+      http_status: number;
+      data?: Record<string, unknown>;
+    }>;
+  };
+  error?: { code?: string; detail?: string };
+}
+
+export async function fetchHubCatalog(apiKey: string = HUB_DEV_API_KEY): Promise<HubCatalog> {
+  const resp = await fetch(hubUrl('/catalog'), { headers: hubHeaders(apiKey) });
+  if (!resp.ok) throw new Error(await readHubError(resp));
+  return resp.json();
+}
+
+export async function hubChatCompletion(opts: {
+  apiKey?: string;
+  prompt: string;
+  strategy: string;
+  region: string;
+  model?: string;
+  maxTokens?: number;
+}): Promise<HubChatResult> {
+  const extra: Record<string, string> = {
+    'x-routing-strategy': opts.strategy,
+    'X-Client-Region': opts.region,
+  };
+  const body: Record<string, unknown> = {
+    messages: [{ role: 'user', content: opts.prompt }],
+    temperature: 0.2,
+    max_tokens: opts.maxTokens ?? 2048,
+  };
+  if (opts.model) body.model = opts.model;
+  const resp = await fetch(hubUrl('/chat/completions'), {
+    method: 'POST',
+    headers: hubHeaders(opts.apiKey ?? HUB_DEV_API_KEY, extra),
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) throw new Error(await readHubError(resp));
+  return resp.json();
+}
+
+export async function hubCreateAgentTask(opts: {
+  apiKey?: string;
+  input: string;
+  tools?: string[];
+  strategy?: string;
+  region?: string;
+}): Promise<HubAgentCreateResult> {
+  const extra: Record<string, string> = {
+    'x-routing-strategy': opts.strategy ?? 'quality_first',
+    'X-Client-Region': opts.region ?? 'TW',
+  };
+  const resp = await fetch(hubUrl('/agent/tasks'), {
+    method: 'POST',
+    headers: hubHeaders(opts.apiKey ?? HUB_DEV_API_KEY, extra),
+    body: JSON.stringify({
+      input: opts.input,
+      tools: opts.tools ?? ['StocksX_get_price'],
+      timeout_seconds: 300,
+    }),
+  });
+  if (!resp.ok) throw new Error(await readHubError(resp));
+  return resp.json();
+}
+
+export async function hubGetAgentTask(
+  taskId: string,
+  apiKey: string = HUB_DEV_API_KEY,
+): Promise<HubAgentTask> {
+  const resp = await fetch(hubUrl(`/agent/tasks/${encodeURIComponent(taskId)}`), {
+    headers: hubHeaders(apiKey),
+  });
+  if (!resp.ok) throw new Error(await readHubError(resp));
   return resp.json();
 }

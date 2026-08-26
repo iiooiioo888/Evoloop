@@ -15,10 +15,30 @@ pip-delete-this-directory.txt
 .coverage
 .coverage.*
 .cache
+.pytest_cache/
+.pytest_tmp/
 nosetests.xml
 coverage.xml
 *.cover
 *.log
 .git/modules/
 .DS_Store
+
+# Node / 前端構建
+node_modules/
+dist/
+frontend/dist/
+
+# 執行期資料（勿進倉庫）
+backend/data/
+opc_service/audit_logs/*.jsonl
+
+# 環境與密鑰
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
 ```

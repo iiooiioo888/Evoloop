@@ -213,12 +213,20 @@ export default function MonitoringPanel() {
         </div>
       )}
 
-      {/* 無數據 */}
+      {/* 無數據：仍畫出預期服務卡，避免整頁空白 */}
       {!loading && services.length === 0 && (
-        <div className="flex flex-col items-center py-12 text-center">
-          <span className="mb-2 text-4xl">📈</span>
-          <p className="text-sm text-gray-500">暫無監控數據</p>
-          <p className="text-xs text-gray-600">後台每 60 秒採集一次，請稍候</p>
+        <div className="rounded-lg border border-gray-800 bg-gray-900/80 p-4">
+          <p className="text-sm text-gray-300">暫無監控採樣</p>
+          <p className="mt-1 text-xs text-gray-500">後台每 60 秒採集一次 Docker stats，請稍候或確認 docker.sock。</p>
+          <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {['backend', 'frontend', 'opc', 'redis', 'chroma'].map((svc) => (
+              <div key={svc} className="rounded-md border border-gray-800 bg-gray-950/40 p-3">
+                <p className="text-[10px] uppercase text-gray-500">{svc}</p>
+                <div className="mt-2 h-8 rounded bg-gray-800/80" />
+                <p className="mt-1 text-[11px] text-gray-600">CPU — · MEM —</p>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

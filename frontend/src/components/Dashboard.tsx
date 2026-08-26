@@ -13,16 +13,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
-import { createTask, fetchDashboard, fetchTask } from '../api/client';
+import { createTask, fetchAgentMonitor, fetchDashboard, fetchTask } from '../api/client';
 import type {
   ArchiveRecord,
   Capability,
   DashboardData,
+  RoleAgent,
   TaskEvent,
   TaskProgress,
   TaskSummary,
 } from '../types';
 import { COMPANY_PHASES, STANDARD_PHASES, phaseIndex } from './TaskPanel';
+import { AGENT_FALLBACK_ROSTER } from '../lib/monitorFallbacks';
+import { AGENT_STATUS_META, agentOpenCount } from '../lib/agentUi';
 import '../dashboard.css';
 
 interface DashboardProps {
@@ -30,6 +33,8 @@ interface DashboardProps {
   onOpenTask: (task: TaskProgress) => void;
   /** 嵌入模式：去除独立页面外壳，适配 IDE 主内容区 */
   embedded?: boolean;
+  /** 點擊角色 Agent 時切到該工作台 */
+  onOpenAgent?: (id: string) => void;
 }
 
 type ViewKey = 'console' | 'overview' | 'tasks' | 'content' | 'skills' | 'audit';
@@ -451,8 +456,9 @@ function CapStats({ cap }: { cap: Capability }) {
   );
 }
 
-export default function Dashboard({ onBack, onOpenTask, embedded }: DashboardProps) {
+export default function Dashboard({ onBack, onOpenTask, embedded, onOpenAgent }: DashboardProps) {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [agents, setAgents] = useState<RoleAgent[]>(AGENT_FALLBACK_ROSTER);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<ViewKey>('console');
   const [rpTab, setRpTab] = useState<'trace' | 'ctx' | 'metrics'>('trace');
@@ -468,7 +474,12 @@ export default function Dashboard({ onBack, onOpenTask, embedded }: DashboardPro
 
   const load = useCallback(async () => {
     try {
-      setData(await fetchDashboard());
+      const [dash, roster] = await Promise.all([
+        fetchDashboard(),
+        fetchAgentMonitor().catch(() => null),
+      ]);
+      setData(dash);
+      if (roster?.agents?.length) setAgents(roster.agents);
       setError(null);
     } catch (err) {
       setError((err as Error).message);
@@ -567,7 +578,7 @@ export default function Dashboard({ onBack, onOpenTask, embedded }: DashboardPro
   const audit = data?.opc_audit;
 
   return (
-    <div className={embedded ? 'flex flex-1 flex-col min-h-0' : 'nx'}>
+    <div className={embedded ? 'nx nx-embedded' : 'nx'}>
       {/* ══ TOPBAR ══ */}
       <header className="topbar">
         <div className="logo">
@@ -598,44 +609,43 @@ export default function Dashboard({ onBack, onOpenTask, embedded }: DashboardPro
           <span className="stat">技能 <strong>{skillsOn}/{data?.capabilities.length ?? 0}</strong></span>
           <button className="icon-btn" title="匯出 JSON" onClick={exportJson}>⤓</button>
           <button className="icon-btn" title="重新整理（5 秒自動輪詢）" onClick={() => void load()}>⟳</button>
-          <button className="icon-btn" title="返回對話" onClick={onBack}>←</button>
+          {!embedded && (
+            <button className="icon-btn" title="返回對話" onClick={onBack}>←</button>
+          )}
         </div>
       </header>
 
       {/* ══ SIDEBAR ══ */}
       <aside className="sidebar">
-        <div className="side-label">智能體</div>
+        <div className="side-label">角色 Agent</div>
         <div className="agents">
-          <div className={`agent-row ${!anyRunning ? 'active' : ''}`}>
-            <div className="agent-dot a">◈</div>
-            <div className="agent-info">
-              <div className="agent-name">反思代理</div>
-              <div className="agent-meta">{model} · standard</div>
-            </div>
-            <span className={`agent-badge ${(data?.tasks ?? []).some((t) => t.resolved_path !== 'company' && (t.status === 'running' || t.status === 'pending')) ? 'on' : 'off'}`}>
-              {(data?.tasks ?? []).some((t) => t.resolved_path !== 'company' && (t.status === 'running' || t.status === 'pending')) ? '活躍' : '待命'}
-            </span>
-          </div>
-          <div className="agent-row">
-            <div className="agent-dot b">◆</div>
-            <div className="agent-info">
-              <div className="agent-name">公司編排器</div>
-              <div className="agent-meta">multi-agent · company</div>
-            </div>
-            <span className={`agent-badge ${(data?.tasks ?? []).some((t) => t.resolved_path === 'company' && (t.status === 'running' || t.status === 'pending')) ? 'on' : 'off'}`}>
-              {(data?.tasks ?? []).some((t) => t.resolved_path === 'company' && (t.status === 'running' || t.status === 'pending')) ? '活躍' : '待命'}
-            </span>
-          </div>
-          <div className="agent-row">
-            <div className="agent-dot c">◇</div>
-            <div className="agent-info">
-              <div className="agent-name">OPC 感知-行動</div>
-              <div className="agent-meta">opc ua · guard</div>
-            </div>
-            <span className={`agent-badge ${(stats?.opc_total ?? 0) > 0 ? 'on' : 'off'}`}>
-              {(stats?.opc_total ?? 0) > 0 ? '活躍' : '待命'}
-            </span>
-          </div>
+          {agents.map((agent) => {
+            const meta = AGENT_STATUS_META[agent.status] ?? AGENT_STATUS_META.idle;
+            const open = agentOpenCount(agent);
+            const current = agent.work_items.find((i) => i.status === 'executing') ?? agent.current_item;
+            return (
+              <button
+                key={agent.id}
+                type="button"
+                className={`agent-row ${agent.status === 'busy' ? 'active' : ''}`}
+                onClick={() => onOpenAgent?.(agent.id)}
+                title={agent.responsibilities[0] ?? agent.name}
+              >
+                <div className={`agent-dot ${agent.level <= 1 ? 'a' : agent.level === 2 ? 'b' : 'c'}`}>
+                  {agent.name.slice(0, 1)}
+                </div>
+                <div className="agent-info">
+                  <div className="agent-name">{agent.name}</div>
+                  <div className="agent-meta">
+                    {current && open > 0 ? current.title : `L${agent.level} · ${meta.label}`}
+                  </div>
+                </div>
+                <span className={`agent-badge ${open > 0 || agent.status === 'busy' ? 'on' : 'off'}`}>
+                  {open > 0 ? `${open}` : meta.label}
+                </span>
+              </button>
+            );
+          })}
         </div>
         <div className="side-label">MCP 技能</div>
         <div className="skills">

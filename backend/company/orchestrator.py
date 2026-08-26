@@ -38,6 +38,7 @@ from backend.company.react_loop import ReActExecutor
 from backend.company.role_memory import get_role_memory
 from backend.company.events import CompanyEvent, EventBus
 from backend.company.prompts import PromptConfig
+from backend.company.role_catalog import resolve_runtime
 from backend.company.roles import STANDARD_ROLES, RoleType
 from backend.company.run_log import append_run_record, utc_now_iso
 from backend.company.state import (
@@ -613,6 +614,9 @@ class CompanyOrchestrator:
             role_def = STANDARD_ROLES.get(role_type, STANDARD_ROLES[RoleType.DEVELOPER])
 
         model = self.budget.resolve_model_for_tier(item.tier)
+        runtime = resolve_runtime(role_type.value)
+        if runtime.get("preferred_model"):
+            model = runtime["preferred_model"]
         context = self._build_context(item)
 
         # 使用角色專用執行提示（若有）
@@ -650,19 +654,32 @@ class CompanyOrchestrator:
         # ── 重試迴圈（含指數退避 + 超時 + 角色升級）──
         retry_cfg = self.config.retry_config
         last_error = None
+        timeout_s = retry_cfg.deadline_seconds
+        if runtime.get("timeout_ms"):
+            timeout_s = max(5.0, float(runtime["timeout_ms"]) / 1000.0)
+        max_retries = retry_cfg.max_retries
+        if runtime.get("max_retries") is not None:
+            try:
+                max_retries = max(0, min(8, int(runtime["max_retries"])))
+            except (TypeError, ValueError):
+                max_retries = retry_cfg.max_retries
 
-        for attempt in range(retry_cfg.max_retries + 1):
+        for attempt in range(max_retries + 1):
             import time as _time
             _start_time = _time.monotonic()
             try:
                 # ── 工具調用閉環執行（含超時控制）──
-                system_prompt = role_def.system_prompt or self.prompt_config.developer_execute_system
-                if retry_cfg.deadline_seconds > 0:
+                system_prompt = (
+                    runtime.get("system_prompt")
+                    or role_def.system_prompt
+                    or self.prompt_config.developer_execute_system
+                )
+                if timeout_s > 0:
                     raw = await asyncio.wait_for(
                         self._execute_with_tool_loop(
                             prompt, system_prompt, model, role_type.value, item,
                         ),
-                        timeout=retry_cfg.deadline_seconds,
+                        timeout=timeout_s,
                     )
                 else:
                     raw = await self._execute_with_tool_loop(
@@ -749,6 +766,9 @@ class CompanyOrchestrator:
 
             role_def = self.config.roles.get(RoleType.REVIEWER, STANDARD_ROLES[RoleType.REVIEWER])
             model = self.budget.resolve_model_for_tier(BudgetTier.REASONING)
+            runtime = resolve_runtime(RoleType.REVIEWER.value)
+            if runtime.get("preferred_model"):
+                model = runtime["preferred_model"]
 
             artifact_text = current.artifacts.get("output", str(current.artifacts))
 
@@ -762,7 +782,7 @@ class CompanyOrchestrator:
             try:
                 raw = call_llm(
                     prompt,
-                    system=role_def.system_prompt or self.prompt_config.reviewer_system,
+                    system=runtime.get("system_prompt") or role_def.system_prompt or self.prompt_config.reviewer_system,
                     model=model,
                 )
                 cost = CostTracker.estimate_cost_rough(model, "medium")
@@ -929,7 +949,9 @@ class CompanyOrchestrator:
         try:
             raw = call_llm(
                 prompt,
-                system=role_def.system_prompt or self.prompt_config.synthesizer_system,
+                system=resolve_runtime(RoleType.SYNTHESIZER.value).get("system_prompt")
+                or role_def.system_prompt
+                or self.prompt_config.synthesizer_system,
                 model=model,
             )
             cost = CostTracker.estimate_cost_rough(model, "high")

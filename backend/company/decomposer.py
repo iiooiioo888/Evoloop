@@ -321,7 +321,15 @@ class TaskDecomposer:
         """LLM 驅動拆分：利用 LLM 理解目標語義，智能分解。"""
         org_chart_str = self._format_org_chart()
         role_descriptions = self._format_role_descriptions()
-        valid_roles = "/".join(rt.value for rt in self.config.roles)
+        try:
+            from backend.company.role_catalog import resolve_runtime
+            valid_roles = "/".join(
+                rt.value
+                for rt in self.config.roles
+                if resolve_runtime(rt.value).get("enabled", True)
+            )
+        except Exception:  # noqa: BLE001
+            valid_roles = "/".join(rt.value for rt in self.config.roles)
 
         model = self.budget.resolve_model_for_tier(BudgetTier.REASONING)
         prompt = self.prompt_config.manager_decompose.format(

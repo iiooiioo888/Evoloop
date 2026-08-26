@@ -222,10 +222,15 @@ export default function AlertsPanel() {
         </div>
       )}
 
-      {/* 告警歷史 */}
-      {history.length > 0 && (
-        <div>
-          <h3 className="mb-2 text-sm font-medium text-gray-200">觸發歷史</h3>
+      {/* 告警歷史（無資料也保留區塊） */}
+      <div>
+        <h3 className="mb-2 text-sm font-medium text-gray-200">觸發歷史</h3>
+        {history.length === 0 ? (
+          <div className="rounded-lg border border-gray-800 bg-gray-900/80 px-4 py-8 text-center">
+            <p className="text-sm text-gray-500">尚無觸發紀錄</p>
+            <p className="mt-1 text-xs text-gray-600">規則啟用後，超過閾值會寫入此時間線</p>
+          </div>
+        ) : (
           <div className="max-h-64 space-y-1.5 overflow-auto rounded-lg border border-gray-800 bg-gray-900/80 p-2">
             {history.map((h, i) => (
               <div
@@ -245,8 +250,8 @@ export default function AlertsPanel() {
               </div>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

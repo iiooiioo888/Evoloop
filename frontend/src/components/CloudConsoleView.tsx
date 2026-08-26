@@ -1,11 +1,12 @@
 /**
  * CloudConsoleView — 雲控制台主視圖。
  *
- * 整合四大模組：
+ * 整合五大模組：
  * - 📊 費用帳單 — BillingPanel
  * - 📈 資源監控 — MonitoringPanel
  * - 🐳 實例管理 — DockerView（容器卡片 + 啟停控制）
  * - ⚠ 告警中心 — AlertsPanel
+ * - 📜 事件時間線 — EventsPanel
  *
  * 透過頂部標籤切換，提供完整的雲端管理體驗。
  */
@@ -13,15 +14,17 @@ import { useState } from 'react';
 import AlertsPanel from './AlertsPanel';
 import BillingPanel from './BillingPanel';
 import DockerView from './DockerView';
+import EventsPanel from './EventsPanel';
 import MonitoringPanel from './MonitoringPanel';
 
-type CloudTab = 'billing' | 'monitoring' | 'instances' | 'alerts';
+type CloudTab = 'billing' | 'monitoring' | 'instances' | 'alerts' | 'events';
 
 const TABS: { key: CloudTab; icon: string; label: string; desc: string }[] = [
   { key: 'billing', icon: '📊', label: '費用帳單', desc: '按時計費 · 服務明細' },
   { key: 'monitoring', icon: '📈', label: '資源監控', desc: 'CPU · 記憶體 · 網路' },
   { key: 'instances', icon: '🐳', label: '實例管理', desc: '容器啟停 · 日誌' },
   { key: 'alerts', icon: '⚠️', label: '告警中心', desc: '閾值規則 · 歷史' },
+  { key: 'events', icon: '📜', label: '事件時間線', desc: 'start · stop · restart' },
 ];
 
 export default function CloudConsoleView() {
@@ -57,6 +60,7 @@ export default function CloudConsoleView() {
         {activeTab === 'monitoring' && <MonitoringPanel />}
         {activeTab === 'instances' && <DockerView />}
         {activeTab === 'alerts' && <AlertsPanel />}
+        {activeTab === 'events' && <EventsPanel />}
       </div>
     </div>
   );

@@ -16,6 +16,7 @@ interface TopBarProps {
 
 const VIEW_LABELS: Record<ViewKey, { icon: string; label: string }> = {
   chat: { icon: '💬', label: '对话' },
+  hub: { icon: '🛰️', label: 'AI Hub' },
   monitor: { icon: '📊', label: '监控' },
   traces: { icon: '📜', label: '执行轨迹' },
 };
@@ -74,6 +75,15 @@ export default function TopBar({
           />
           {llmConfigured === null ? '未知' : llmConfigured ? '已连接' : '未配置'}
         </span>
+
+        {import.meta.env.VITE_GITHUB_PAGES === 'true' && (
+          <span
+            className="hidden items-center rounded-full bg-indigo-500/15 px-2.5 py-0.5 text-[11px] text-indigo-300 sm:flex"
+            title="此為 GitHub Pages 靜態預覽，聊天與寫入需本地或 Docker 啟動完整服務"
+          >
+            靜態預覽
+          </span>
+        )}
 
         {/* OPC 右侧面板开关 */}
         <button

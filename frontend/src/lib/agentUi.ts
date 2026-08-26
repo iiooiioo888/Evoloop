@@ -1,0 +1,104 @@
+/**
+ * 角色 Agent 監控共用顯示邏輯。
+ */
+import type { RoleAgent } from '../types';
+
+export const AGENT_STATUS_META: Record<string, { label: string; dot: string; text: string }> = {
+  busy: { label: '執行中', dot: 'bg-[#4cc38a] animate-pulse', text: 'text-[#4cc38a]' },
+  waiting: { label: '等待中', dot: 'bg-amber-400', text: 'text-amber-300' },
+  error: { label: '阻塞', dot: 'bg-red-400', text: 'text-red-300' },
+  idle: { label: '待命', dot: 'bg-[#62666d]', text: 'text-[#8a8f98]' },
+  disabled: { label: '停用', dot: 'bg-[#3a3d44]', text: 'text-[#62666d]' },
+};
+
+export const TIER_LABEL: Record<string, string> = {
+  critical: '關鍵模型',
+  reasoning: '推理模型',
+  routine: '日常模型',
+  summary: '摘要模型',
+};
+
+export function blankMetrics() {
+  return {
+    review_pass: 0,
+    review_rework: 0,
+    review_force: 0,
+    errors: 0,
+    tool_calls: 0,
+    budget_alerts: 0,
+    items_total: 0,
+    success_rate: 0,
+    avg_cost_usd: 0,
+    capacity_pct: 0,
+    daily_spent_usd: 0,
+    avg_latency_ms: 0,
+    tokens_in: 0,
+    tokens_out: 0,
+    last_model: '',
+    sla_breaches: 0,
+    retries: 0,
+  };
+}
+
+export const ROUTING_LABEL: Record<string, string> = {
+  quality_first: '品質優先',
+  cost_first: '成本優先',
+  speed_first: '速度優先',
+  manual: '指定模型',
+};
+
+export const CATEGORY_LABEL: Record<string, string> = {
+  ui: 'UI 設計',
+  css: '樣式',
+  js: '前端邏輯',
+  backend: '後端',
+  test: '測試',
+  devops: '維運',
+  management: '管理',
+  review: '審查',
+  security: '資安',
+  data: '資料',
+  product: '產品',
+  docs: '文件',
+  mobile: '行動端',
+  research: '研究',
+  ai: 'AI / Prompt',
+  legal: '合規',
+  finance: '金融／量化',
+  industrial: '工業／OPC',
+  creative: '創意／敘事',
+  crawler: '爬蟲／採集',
+  platform: '平台／GitHub',
+  hub: 'AI Hub',
+  memory: '記憶／知識庫',
+};
+
+export function agentOpenCount(agent: Pick<RoleAgent, 'queue' | 'executing' | 'inbox' | 'blocked'>): number {
+  return agent.queue + agent.executing + (agent.inbox.in_review ?? 0) + agent.blocked;
+}
+
+export function fmtUsd(n: number): string {
+  if (!n) return '$0';
+  if (n < 0.01) return `$${n.toFixed(4)}`;
+  return `$${n.toFixed(3)}`;
+}
+
+export function fmtWhen(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso.slice(11, 19) || iso;
+  return d.toLocaleString('zh-TW', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+}
+
+export function pickDefaultAgentId(agents: RoleAgent[], preferred?: string | null): string {
+  if (preferred && agents.some((a) => a.id === preferred)) return preferred;
+  const busy = agents.find((a) => a.status === 'busy') ?? agents.find((a) => a.status === 'waiting' || a.status === 'error');
+  if (busy) return busy.id;
+  return agents.find((a) => a.id === 'manager')?.id ?? agents[0]?.id ?? 'manager';
+}

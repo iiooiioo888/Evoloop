@@ -43,7 +43,17 @@ def get_runtime_config() -> dict:
     if not cfg.get("api_key"):
         cfg["api_key"] = os.getenv("OPENAI_API_KEY", "")
     if not cfg.get("model"):
-        cfg["model"] = os.getenv("EVOL_MODEL", "gpt-4o")
+        env_model = os.getenv("EVOL_MODEL", "").strip()
+        api_base = str(cfg.get("api_base") or os.getenv("OPENAI_API_BASE", "") or "")
+        if env_model:
+            cfg["model"] = env_model
+        elif api_base:
+            from backend.core.provider_pool import classify_provider, static_catalog
+
+            rows = static_catalog(classify_provider(api_base, ""))
+            cfg["model"] = rows[0]["id"] if rows else "gpt-4o"
+        else:
+            cfg["model"] = "gpt-4o"
     return cfg
 
 
@@ -88,12 +98,40 @@ def save_runtime_config(
         except OSError as exc:
             logger.warning("LLM 配置持久化失败（内存中仍生效）：%s", exc)
 
-    # 同步到环境变量，让 LiteLLM/OpenAI SDK 默认行为一致
+    _sync_env(snapshot)
+    return snapshot
+
+
+def _sync_env(snapshot: dict) -> None:
     if snapshot.get("api_key"):
         os.environ["OPENAI_API_KEY"] = snapshot["api_key"]
     if snapshot.get("api_base"):
         os.environ["OPENAI_API_BASE"] = snapshot["api_base"]
+
+
+def merge_runtime_config(fields: dict) -> dict:
+    """合併任意欄位並持久化（模型目錄、運維狀態）。"""
+    global _config
+    with _lock:
+        if _config is None:
+            _config = _load_from_file()
+        for key, value in fields.items():
+            _config[key] = value
+        snapshot = dict(_config)
+        try:
+            with open(_config_path(), "w", encoding="utf-8") as f:
+                json.dump(snapshot, f, ensure_ascii=False, indent=2)
+        except OSError as exc:
+            logger.warning("LLM 配置持久化失败（内存中仍生效）：%s", exc)
+    _sync_env(snapshot)
     return snapshot
+
+
+def reset_runtime_config() -> None:
+    """測試用：清掉記憶體快取，下次讀檔。"""
+    global _config
+    with _lock:
+        _config = None
 
 
 def masked_key(api_key: str) -> str:

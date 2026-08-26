@@ -46,6 +46,48 @@
   -webkit-font-smoothing: antialiased;
 }
 
+/* 嵌入監控中心：AppShell 已有側欄，隱藏 Nexus 左欄，把主內容撐滿 */
+.nx.nx-embedded {
+  height: 100%;
+  min-height: 0;
+  flex: 1;
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  grid-template-rows: auto minmax(0, 1fr) 52px;
+}
+
+.nx.nx-embedded .logo,
+.nx.nx-embedded .top-sep {
+  display: none;
+}
+
+.nx.nx-embedded .sidebar {
+  display: none;
+}
+
+.nx.nx-embedded .topbar {
+  flex-wrap: wrap;
+  height: auto;
+  min-height: 48px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  row-gap: 8px;
+}
+
+.nx.nx-embedded .view-switch {
+  margin-left: 0;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 1100px) {
+  .nx.nx-embedded {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .nx.nx-embedded .right-panel {
+    display: none;
+  }
+}
+
 /* ===== TOPBAR ===== */
 .nx .topbar { grid-column: 1/-1; display: flex; align-items: center; padding: 0 24px; border-bottom: 1px solid var(--border-subtle); gap: 16px; }
 .nx .logo { display: flex; align-items: center; gap: 10px; }
@@ -69,8 +111,9 @@
 /* ===== SIDEBAR ===== */
 .nx .sidebar { border-right: 1px solid var(--border-subtle); display: flex; flex-direction: column; overflow: hidden; }
 .nx .side-label { font-size: 11px; font-weight: 500; color: var(--text-4); padding: 16px 16px 10px; }
-.nx .agents { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 4px; }
-.nx .agent-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--r-sm); transition: background 0.12s; }
+.nx .agents { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 2px; overflow-y: auto; flex: 1; min-height: 0; max-height: 52%; }
+.nx .agent-row { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: var(--r-sm); transition: background 0.12s; width: 100%; text-align: left; background: none; border: none; cursor: pointer; font-family: inherit; }
+.nx .agent-row:hover { background: var(--bg-elevated); }
 .nx .agent-row.active { background: var(--accent-soft); }
 .nx .agent-dot { width: 28px; height: 28px; border-radius: var(--r-sm); display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
 .nx .agent-dot.a { background: var(--accent-soft); color: var(--accent); }
