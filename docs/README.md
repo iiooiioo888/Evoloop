@@ -1,6 +1,7 @@
 # 📚 EvoLoop 知識庫
 
-> 自我反思 × 多代理人公司 × 工業閉環 — 永不停止進化的 AI 系統
+> 自我反思 × 多代理人公司 × 工業閉環 — 永不停止進化的 AI 系統  
+> 單一主線版本（`master`）· 倉庫：[iiooiioo888/Evoloop](https://github.com/iiooiioo888/Evoloop) · Demo：[GitHub Pages](https://iiooiioo888.github.io/Evoloop/)
 
 ## 目錄
 
@@ -8,7 +9,7 @@
 
 - [架構總覽](architecture/overview.md) — 統一管線、三層能力、數據流
 - [反思閉環](architecture/reflection-loop.md) — 評分 → 反思 → 改進迭代機制
-- [公司運行時](architecture/company-runtime.md) — 多代理人協調、工作項狀態機、預算管控
+- [公司運行時](architecture/company-runtime.md) — 多代理人協調、80 席角色、工作項狀態機、預算管控
 - [OPC 工業整合](architecture/opc-integration.md) — 6 級閉環、安全護欄、超時降級
 
 ### 📡 API
@@ -17,7 +18,7 @@
 
 ### ⚙️ 配置
 
-- [配置參考](config/reference.md) — 環境變數、模型價格、預算、LLM 配置
+- [配置參考](config/reference.md) — 環境變數、模型池／運維、模型價格、預算、LLM 配置
 
 ### 🛠️ 開發
 
@@ -35,7 +36,8 @@
 |--------|--------|
 | 了解系統整體架構 | [架構總覽](architecture/overview.md) |
 | 查看 API 端點 | [REST API 參考](api/reference.md) |
-| 配置 LLM 模型 | [配置參考](config/reference.md) |
+| 配置 LLM／模型池鎖定 | [配置參考](config/reference.md) · 根目錄 [README](../README.md#-模型池與運維) |
+| 監控中心／自定義角色 | 根目錄 [README](../README.md#-監控中心) |
 | 本地開發調試 | [開發指南](development/guide.md) |
 | 部署到生產環境 | [部署指南](deployment/guide.md) |
 | 理解反思閉環如何工作 | [反思閉環](architecture/reflection-loop.md) |

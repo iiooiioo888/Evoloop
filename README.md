@@ -2,183 +2,187 @@
 
 # 🔄 EvoLoop
 
-**自我反思 × 多代理人公司 × 工业闭环**
+**自我反思 × 多代理人公司 × 工業閉環**
 
-生成 → 评估 → 反思 → 优化，永不停止进化的 AI 系统
+生成 → 評估 → 反思 → 優化，永不停止進化的 AI 系統
 
-[![Python](https://img.shields.io/badge/Python-3.12+-3776ab?logo=python&logoColor=white)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/Python-3.10–3.12-3776ab?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.2+-1c3d5a?logo=langchain&logoColor=white)](https://github.com/langchain-ai/langgraph)
 [![React](https://img.shields.io/badge/React-18-61dafb?logo=react&logoColor=white)](https://react.dev/)
-[![Tests](https://img.shields.io/badge/Tests-185%20passed-success?logo=pytest&logoColor=white)](backend/tests/)
+[![Tests](https://img.shields.io/badge/Tests-251%20passed-success?logo=pytest&logoColor=white)](backend/tests/)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
 [![GitHub Pages](https://img.shields.io/badge/Demo-GitHub%20Pages-222?logo=githubpages&logoColor=white)](https://iiooiioo888.github.io/Evoloop/)
 
-**線上預覽：** [https://iiooiioo888.github.io/Evoloop/](https://iiooiioo888.github.io/Evoloop/)（靜態 UI，聊天與寫入需本地或 Docker 啟動完整服務）
+**倉庫：** [https://github.com/iiooiioo888/Evoloop](https://github.com/iiooiioo888/Evoloop)
+
+**線上預覽：** [https://iiooiioo888.github.io/Evoloop/](https://iiooiioo888.github.io/Evoloop/)  
+（靜態 UI；聊天、寫入與模型刷新需本地或 Docker 啟動完整服務）
 
 </div>
 
 ---
 
-## 📖 目录
+## 📖 目錄
 
-- [什么是 EvoLoop？](#-什么是-evoloop)
-- [架构总览](#️-架构总览)
-- [项目结构](#-项目结构)
+- [什麼是 EvoLoop？](#-什麼是-evoloop)
+- [本版亮點](#-本版亮點)
+- [單一版本說明](#-單一版本說明)
+- [架構總覽](#️-架構總覽)
+- [專案結構](#-專案結構)
 - [核心能力](#-核心能力)
-- [系统优化](#-系统优化)
-- [快速开始](#-快速开始)
-- [环境变数](#️-环境变数)
-- [测试](#-测试)
-- [技术栈](#️-技术栈)
-- [文档](#-文档)
-- [常见问题](#-常见问题)
-- [路线图](#️-路线图)
+- [監控中心](#-監控中心)
+- [模型池與運維](#-模型池與運維)
+- [系統優化](#-系統優化)
+- [快速開始](#-快速開始)
+- [環境變數](#️-環境變數)
+- [測試](#-測試)
+- [技術棧](#️-技術棧)
+- [文件](#-文件)
+- [常見問題](#-常見問題)
+- [路線圖](#️-路線圖)
 
 ---
 
-## 🧠 什么是 EvoLoop？
+## 🧠 什麼是 EvoLoop？
 
-EvoLoop 不是一个普通的 AI 助手——它是一个**具备自我反思闭环的统一模式 AI 系统**。反思闭环、公司运行时、OPC 整合三大能力融合在同一条管线中，由系统自动判断执行策略。
+EvoLoop 不是普通的 AI 助手——它是具備**自我反思閉環**的**統一模式** AI 系統。反思閉環、公司運行時、OPC 整合走同一條 LangGraph 管線，由 `route_by_complexity` 依任務內容自動選擇執行路徑。
 
-| 能力 | 说明 |
+| 能力 | 說明 |
 |:---:|------|
-| 🔄 **反思闭环** | 4 维度独立评分（准确/完整/清晰/相关），低于门槛自动进入反思回圈，迭代改进直到达标 |
-| 🏢 **公司运行时** | 复杂任务自动触发：Manager 分解 → 多角色并行执行 → Reviewer 审查 → Synthesizer 整合 |
-| 🏭 **OPC 整合** | 工业任务自动注入感测数据上下文，6 级闭环（感知→预处理→分析→诊断→决策→执行），每级带超时降级 |
-| ☁️ **云控制台** | 费用账单、资源监控、告警中心、实例管理——像 AWS 一样管理你的 AI 基础设施 |
-| 🧠 **语义记忆** | 向量记忆库 + LLM 语义缓存，成功经验自动沉淀为 few-shot 参考 |
+| 🔄 **反思閉環** | 4 維度獨立評分（準確／完整／清晰／相關），低於門檻自動反思改進直到達標 |
+| 🏢 **公司運行時** | 複雜任務自動觸發：Manager 分解 → 多角色並行 → Reviewer 審查 → Synthesizer 整合 |
+| 🏭 **OPC 整合** | 工業任務注入感測上下文，6 級閉環（感知→預處理→分析→診斷→決策→執行） |
+| 🖥️ **監控中心** | 單一前端：角色 Agent／總覽／控制面版／OPC／AI Hub／LLM 運維／雲控制台／記憶／檢查點 |
+| 🎭 **角色目錄** | **80** 個內建角色（Level 0–4）+ 自定義角色 CRUD + 執行期設定覆蓋 |
+| 🔌 **模型池鎖定** | 依已存 API 鎖定可用模型；單一廠商只准該廠商；OpenRouter 等通用端點爬取 `/models` |
+| ☁️ **雲控制台** | 費用帳單、資源監控、告警中心、實例管理 |
+| 🧠 **語義記憶** | 向量記憶庫 + LLM 語義快取，成功經驗沉澱為 few-shot |
 
 ```mermaid
 graph LR
-    A[使用者查询] --> B[记忆检索]
-    B --> C[OPC 上下文增强]
-    C --> D{复杂度路由}
-    D -->|简单任务| E[单次 LLM 生成]
-    D -->|复杂任务| F[公司运行时]
-    D -->|工业任务| G[OPC 6 级闭环]
-    E --> H[多维度评估]
+    A[使用者查詢] --> B[記憶檢索]
+    B --> C[OPC 上下文增強]
+    C --> D{複雜度路由}
+    D -->|簡單任務| E[單次 LLM 生成]
+    D -->|複雜任務| F[公司運行時]
+    D -->|工業任務| G[OPC 6 級閉環]
+    E --> H[多維度評估]
     F --> H
     G --> H
-    H -->|分数 < 门槛| I[反思 → 改进]
+    H -->|分數 < 門檻| I[反思 → 改進]
     I --> H
-    H -->|分数 ≥ 门槛| J[存入记忆库]
+    H -->|分數 ≥ 門檻| J[存入記憶庫]
 ```
 
 ---
 
-## 🏗️ 架构总览
+## ✨ 本版亮點
+
+本倉庫為**單一主線**（`master`），下列能力已落地：
+
+| 主題 | 你會得到什麼 |
+|------|-------------|
+| **監控中心擴充** | 9 個子分頁；80 席角色工作台；完整角色設定表單；自定義角色新增／複製／刪除；監控偏好（輪詢、分組、篩選） |
+| **通用模型優化** | 只存 DeepSeek → 全系統只能用 DeepSeek；OpenRouter／Ollama／vLLM → 爬取 `/models` 寫入配置；定時檢查 + 手動刷新 + 健康快照 |
+| **GitHub / Pages** | 推送 `master` 跑 CI，並部署靜態 Demo → [iiooiioo888.github.io/Evoloop](https://iiooiioo888.github.io/Evoloop/) |
+
+---
+
+## 🧩 單一版本說明
+
+專案已**合拼為單一主線版本**（僅 `master`）：
+
+| 項目 | 現況 |
+|------|------|
+| 前端 | 僅一套 IDE 風格 UI（`AppShell`）；不再維護平行「舊版／新版」介面 |
+| 監控 | Hub 併入**監控中心**子分頁；導航與降級資料單一來源（`monitorTabs` / `monitorFallbacks`） |
+| CI / Pages | 推送 `master` → `test.yml` 測試 + `deploy-pages.yml` 部署 GitHub Pages |
+| 倉庫 | [iiooiioo888/Evoloop](https://github.com/iiooiioo888/Evoloop) → [GitHub Pages](https://iiooiioo888.github.io/Evoloop/) |
+
+> 舊 `main` 已合併停用，避免雙版本分叉。
+
+---
+
+## 🏗️ 架構總覽
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                        🖥️ 前端 (React + Vite)                     │
-│    ActivityBar │ SidePanel │ ChatView │ MonitorView │ TraceView  │
-│    IDE 风格布局 · 即时任务追踪 · OPC 监控 · 多维评分展示            │
+│                     🖥️ 前端（單一版本 · React + Vite）              │
+│  ActivityBar │ SidePanel │ ChatView │ MonitorView │ TraceView   │
+│  監控：Agents / 總覽 / 控制面版 / OPC / Hub / LLM / 雲 / 記憶 / CP │
 └───────────────────────────────┬──────────────────────────────────┘
-                                │ REST API + WebSocket + SSE
+                                │ REST + WebSocket + SSE
 ┌───────────────────────────────┴──────────────────────────────────┐
-│                    ⚙️ 后端 (FastAPI + LangGraph)                  │
-│                                                                   │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐   │
-│  │    反思闭环      │  │    公司运行时    │  │    OPC 整合     │   │
-│  │  ─────────────  │  │  ─────────────  │  │  ─────────────  │   │
-│  │  generate       │  │  orchestrator   │  │  sense          │   │
-│  │  evaluate       │  │  decomposer     │  │  preprocess     │   │
-│  │  reflect        │  │  reviewer       │  │  analyze        │   │
-│  │  improve        │  │  synthesizer    │  │  diagnose       │   │
-│  │                 │  │  budget         │  │  decide / act   │   │
-│  └─────────────────┘  └─────────────────┘  └─────────────────┘   │
-│                                                                   │
-│  ┌─────────────────────────────────────────────────────────────┐ │
-│  │  基础设施：LLMCache · Evaluation · StateStore · VectorMemory │ │
-│  │           TaskManager · Archiver · TraceLogger · EventBus   │ │
-│  └─────────────────────────────────────────────────────────────┘ │
+│                    ⚙️ 後端（FastAPI + LangGraph）                   │
+│  反思閉環 │ 公司運行時 │ OPC │ role_catalog │ provider_pool       │
+│  LLMCache · Evaluation · StateStore · VectorMemory · llm_ops     │
 └───────────────────────────────┬──────────────────────────────────┘
                                 │
 ┌───────────────────────────────┴──────────────────────────────────┐
-│                    🗄️ 基础设施 (Docker Compose)                   │
+│                    🗄️ Docker Compose                              │
 │         Redis · ChromaDB · OPC Simulator · Nginx                 │
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-### 公司运行时内部流程（复杂任务自动触发）
+### 公司運行時內部流程
 
 ```
-Manager 分解目标
-  │  TaskDecomposer（LLM / 模板 / 规则 三策略）
+Manager 分解目標
+  │  TaskDecomposer（LLM / 模板 / 規則）
   ▼
-工作项 DAG（依赖 + 优先级排序）
-  │
+工作項 DAG → 並行執行池（自適應並發）
   ▼
-并行执行池（自适应并发控制，响应式调节）
-  │  Developer 角色依优先级执行
+Reviewer 審查閘（通過 / Rework / 角色升級）
   ▼
-Reviewer 审查闸
-  ├─ ✅ 通过 → Done
-  └─ ❌ 不通过 → Rework（最多 N 轮，失败后角色升级）
-  ▼
-Synthesizer 整合 → Manager 最终审查
-  │
-  ▼
-外部反思回圈（多维度评估 → 动态迭代 → 分层反思）
+Synthesizer 整合 → 外部反思回圈
 ```
 
 ---
 
-## 📁 项目结构
+## 📁 專案結構
 
 ```
 evoloop/
-├── backend/                     # FastAPI 后端 + LangGraph 核心
-│   ├── main.py                  #   应用入口（/chat /tasks /dashboard /trace）
-│   ├── core/                    #   图定义、状态、LLM 调用层
-│   │   ├── graph.py             #     统一模式图（复杂度路由 + 动态迭代）
-│   │   ├── nodes.py             #     核心节点（生成/多维评估/分层反思/改进）
-│   │   ├── company_nodes.py     #     公司运行时节点（错误回退策略）
-│   │   ├── evaluation.py        #     多维度评估引擎（4维评分 + 规则fallback + 交叉评估）
-│   │   ├── llm_cache.py         #     LLM 语义缓存（精确匹配 + embedding 语义匹配）
-│   │   ├── llm.py               #     LiteLLM 统一调用层（集成缓存）
-│   │   └── state.py             #     EvoLoopState（含多维评估类型）
-│   ├── company/                 #   多代理人公司运行时
-│   │   ├── orchestrator.py      #     公司协调器（自适应并发控制）
-│   │   ├── decomposer.py        #     任务拆分器（独立主模组）
-│   │   ├── budget.py            #     预算控制 + 模型路由（动态价格配置）
-│   │   ├── work_item.py         #     工作项状态机 + 依赖 DAG
-│   │   ├── roles.py             #     角色定义 + 组织模板
-│   │   ├── events.py            #     EventBus 生命周期事件
-│   │   └── prompts.py           #     Prompt 模板（PromptConfig）
-│   ├── services/                #   营运服务
-│   │   ├── state_store.py       #     统一状态存储接口（Redis/JSONL/Memory）
-│   │   ├── task_manager.py      #     后台任务管理器
-│   │   ├── trace_logger.py      #     执行轨迹记录器
-│   │   ├── dashboard.py         #     控制面版聚合
-│   │   └── archiver.py          #     文本化存檔 (JSONL)
-│   ├── memory/                  #   向量记忆库 (ChromaDB，自适应阈值)
-│   ├── config/                  #   配置文件
-│   │   └── model_costs.json     #     模型价格表（支持运行时热更新）
-│   ├── prompts/                 #   Prompt 模板
-│   └── tests/                   #   185+ 测试案例
-├── opc_service/                 # OPC UA 工业微服务
-│   ├── graph.py                 #   6 级闭环图（带超时降级 + 人工确认）
-│   ├── guard.py                 #   安全护栏（白名单/边界检查）
-│   └── simulator/               #   模拟 OPC 伺服器
-├── frontend/                    # React + Vite + TypeScript
+├── backend/                     # FastAPI + LangGraph
+│   ├── main.py                  #   /chat /tasks /monitor/* /config /cloud
+│   ├── core/
+│   │   ├── graph.py             #     統一模式圖 + 複雜度路由
+│   │   ├── nodes.py             #     生成 / 多維評估 / 分層反思 / 改進
+│   │   ├── provider_pool.py     #     依 API 鎖定模型池 + 爬取目錄
+│   │   ├── llm_config.py        #     運行時 LLM 配置持久化
+│   │   ├── llm.py               #     LiteLLM 統一調用（含 clamp_model）
+│   │   ├── evaluation.py        #     4 維評估引擎
+│   │   └── llm_cache.py         #     精確 + 語義快取
+│   ├── company/
+│   │   ├── roles.py             #     80 個內建角色 + 組織模板
+│   │   ├── role_catalog.py      #     角色設定覆蓋 + 自定義角色持久化
+│   │   ├── orchestrator.py      #     公司協調器
+│   │   └── ...
+│   ├── hub/                     #   AI Hub（探針 / 熔斷 / 目錄）
+│   ├── services/
+│   │   ├── agent_monitor.py     #     角色 Agent 監控聚合
+│   │   ├── llm_ops.py           #     模型目錄定時刷新迴圈
+│   │   ├── cloud_console.py     #     雲控制台聚合
+│   │   └── ...
+│   ├── data/role_catalog.json   #   角色目錄資料（可覆寫路徑）
+│   └── tests/                   #   251 測試
+├── opc_service/                 # OPC UA 工業微服務 + 安全護欄
+├── frontend/                    # React + Vite + TypeScript（單一 UI）
 │   └── src/
-│       ├── components/          #   UI 组件（IDE 风格布局）
-│       │   ├── ChatView.tsx     #     聊天视图
-│       │   ├── MessageBubble.tsx#     消息气泡（含多维评分展示）
-│       │   ├── MonitorView.tsx  #     监控视图
-│       │   ├── TraceView.tsx    #     执行轨迹
-│       │   └── ...
-│       ├── api/client.ts        #   API 客户端（SSE + WebSocket）
-│       └── types.ts             #   TypeScript 型别（含 MultiDimEvaluation）
-├── docs/                        # 📚 知识库
-│   ├── architecture/            #   架构文档
-│   ├── api/                     #   API 参考
-│   ├── config/                  #   配置参考
-│   ├── development/             #   开发指南
-│   └── deployment/              #   部署指南
-├── docker-compose.yml           # 五服务编排
+│       ├── lib/monitorTabs.ts   #   監控分頁單一資料源
+│       └── components/
+│           ├── MonitorView.tsx
+│           ├── AgentsMonitorPanel.tsx
+│           ├── RoleSettingsPanel.tsx
+│           ├── LlmOpsPanel.tsx
+│           ├── HubPanel.tsx
+│           └── ...
+├── docs/                        # 知識庫
+├── .github/workflows/
+│   ├── test.yml                 #   master CI
+│   └── deploy-pages.yml         #   GitHub Pages
+├── docker-compose.yml
 └── requirements.txt
 ```
 
@@ -186,360 +190,426 @@ evoloop/
 
 ## ✨ 核心能力
 
-### 🔄 反思闭环（多维度评估）
+### 🔄 反思閉環
 
-| 特性 | 说明 |
+| 特性 | 說明 |
 |------|------|
-| **4 维度评分** | 准确性(35%) · 完整性(30%) · 清晰度(20%) · 相关性(15%)，加权总分 0-10 |
-| **规则 Fallback** | LLM 评估失败时，使用关键词覆盖率、结构指标等规则启发式评分（不再一律 0 分） |
-| **交叉评估** | 可选：不同模型覆核评估结果，打破自评偏差 |
-| **动态迭代** | 分数变化率 < 0.5 时提前终止，避免浪费 token |
-| **分层反思** | 低分(<5) 深度反思传入完整评估细节；中分(5-8) 表面修正只传入最弱维度摘要 |
-| **LLM 语义缓存** | 精确匹配 + embedding 语义匹配（相似度 > 0.92 复用），TTL 1 小时，LRU 淘汰 |
-| **记忆注入** | 成功经验存入 ChromaDB（含高分正样本），做 few-shot 参考 |
-| **记忆去重** | 新增前 embedding 相似度检查，避免重复记忆堆积 |
-| **记忆蒸馏** | LLM 定期将同主题旧记忆合并为精炼摘要，减少检索噪音 |
-| **Prompt 压缩** | 长上下文自动截断（头尾保留），节省 token |
-| **响应质量门** | 返回前校验：空回答降级、过短警告、相关性检测 |
+| **4 維度評分** | 準確性 35% · 完整性 30% · 清晰度 20% · 相關性 15% |
+| **規則 Fallback** | LLM 評估失敗時用啟發式規則，不再一律 0 分 |
+| **交叉評估** | 可選第二模型覆核 |
+| **動態迭代** | 分數變化率過低提前終止 |
+| **分層反思** | 低分深度反思／中分表面修正 |
+| **LLM 語義快取** | 精確匹配 + embedding 語義命中（預設 > 0.92） |
+| **記憶去重／蒸餾** | 相似度去重 + 定期摘要合併 |
 
-### 🏢 多代理人公司
+### 🏢 多代理人公司與角色
 
-| 特性 | 说明 |
+| 特性 | 說明 |
 |------|------|
-| 层级角色 | Level 0-4，Manager → Tech Lead → Domain Lead → Executor → Support |
-| 组织模板 | `page_dev` / `fullstack_app` / `research_report` / `quick_task` / `full_company` |
-| 任务拆分 | LLM · 模板 · 规则 三策略，预算压力下自动降级 |
-| 工作项状态机 | Planning → Ready → Executing → In Review → Rework / Done / Blocked |
-| 依赖 DAG | 无依赖并行，有依赖等待上游 |
-| 审查闸 | Reviewer 审查不通过 → 退回修改（最多 N 轮） |
-| 角色升级 | LLM 失败后自动升级到上级角色处理 |
-| **错误回退** | 公司失败但有部分产出 → 降级到反思闭环继续优化（不再直接丢弃） |
-| **自适应并发** | 根据 API 响应时间和 429 错误率动态调节并行数 |
-| **SSE 实时串流** | 公司运行时不再降级为同步，实时推送分解/执行/审查/整合各阶段进度 |
-| **拆分缓存** | 相同目标+策略的拆分结果 LRU 缓存，避免重复 LLM 调用 |
+| **內建角色** | **80** 席，Level 0–4 |
+| **角色目錄** | `role_catalog`：內建設定覆蓋 + 自定義角色 CRUD |
+| **角色設定** | Prompt、職責、偏好模型、日／週／月預算、工具、路由、告警、SLA…（見下表） |
+| 組織模板 | `page_dev` / `fullstack_app` / `research_report` / `quick_task` / `full_company` 等 |
+| 工作項狀態機 | Planning → Ready → Executing → In Review → Rework / Done / Blocked |
+| 錯誤回退 | 公司失敗但有部分產出 → 降級反思閉環繼續優化 |
+| SSE 即時串流 | 分解／執行／審查／整合各階段進度推送 |
 
-### 💰 预算管控
+#### 內建角色層級
 
-| 特性 | 说明 |
+| Level | 數量 | 範例 |
+|------|:----:|------|
+| 0 Manager | 1 | 專案經理 |
+| 1 Lead | 10 | 技術／架構／資安／產品／財務／工業／創意／平台／AI／成長主管 |
+| 2 Domain Lead | 4 | 前端／後端／測試／資料主管 |
+| 3 Executor | 54 | UI、DevOps、OPC、RAG、評測、PLC／IoT、GitHub Ops、Hub 執勤… |
+| 4 Support | 11 | 審查者、整合者、Prompt、法務、記憶策展、知識庫… |
+
+#### 角色可編輯設定（摘要）
+
+| 類別 | 欄位 |
 |------|------|
-| 模型路由 | 依任务复杂度选择 tier（routine / normal / critical） |
-| 预算压力 | 软限制提醒 + 硬限制停止 |
-| 成本追踪 | 每笔 LLM 调用记录 token 数与费用 |
-| **动态价格** | 模型价格从 `config/model_costs.json` 加载，支持运行时热更新 |
-| Docker 成本 | 容器按量计费，纳入月度预算压力计算 |
+| 身分 | `name`、`description`、`level`、`category`、`tags`、`enabled` |
+| Prompt | `system_prompt`、`responsibilities`、`language` |
+| 模型 | `preferred_model`（經 `clamp_model`）、`failover_models`、`routing_strategy` |
+| 預算 | `daily_budget_usd` / `weekly_budget_usd` / `monthly_budget_usd`、`default_tier` |
+| 執行 | `temperature`、`max_output_tokens`、`timeout_ms`、`max_retries`、`max_parallel_work` |
+| 治理 | `tools_allowed`、`always_require_review`、`require_human_approval`、`auto_escalate` |
+| 告警 | `alert_on_error` / `budget` / `sla`、`notify_channel`、`quiet_hours`、`on_call` |
+| 其他 | `stream_enabled`、`cache_enabled`、`pii_redact`、`heartbeat_sec`、`priority` |
 
-### 🏭 OPC UA 工业整合
+資料寫入 `backend/data/role_catalog.json`（可用 `EVOL_ROLE_CATALOG_PATH` 覆寫）。
 
-| 特性 | 说明 |
+### 💰 預算管控
+
+| 特性 | 說明 |
 |------|------|
-| 6 级闭环 | 感知 → 预处理 → 分析 → 诊断 → 决策 → 执行 |
-| 安全护栏 | 写入白名单 + 数值边界检查 + 审计日志 |
-| 模拟伺服器 | 内建温度/压力/流量/阀门/马达模拟 |
-| 双协议 | REST API + WebSocket 即时订阅 |
-| **超时降级** | 每级 30 秒超时，超时后使用上一级缓存结果继续（不再阻断管线） |
-| **人工确认** | 可选：关键执行级（act）启用人工确认机制 |
+| 模型路由 | 依任務複雜度選 tier（routine / normal / critical） |
+| **模型池 clamp** | 路由與角色偏好模型一律經 `clamp_model` 鎖在可用池內 |
+| 動態價格 | `backend/config/model_costs.json`，支援熱更新 |
 
-### 🔧 工程品质
+### 🏭 OPC UA 工業整合
 
-| 特性 | 说明 |
+| 特性 | 說明 |
 |------|------|
-| 事件系统 | 17 种 CompanyEvent，非阻塞 EventBus |
-| 检查点 | 序列化/反序列化完整运行状态，支援中断恢复 |
-| 后台任务 | 非同步执行，Redis 持久化（TTL 7 天），记忆体降级 |
-| 执行轨迹 | 完整记录每个节点的输入输出，可视化追踪 |
-| **统一状态存储** | 抽象 StateStore 接口，Redis / JSONL / Memory 三后端适配 |
-| **SSE 实时反馈** | 串流推送多维评分、迭代进度、早期终止事件 |
+| 6 級閉環 | 感知 → 預處理 → 分析 → 診斷 → 決策 → 執行 |
+| 安全護欄 | 寫入白名單 + 數值邊界 + 審計日誌（禁止繞過） |
+| 超時降級 | 每級可超時後用上一級快取繼續 |
 
 ---
 
-## 🔬 系统优化
+## 🖥️ 監控中心
 
-项目已完成 10 项架构级优化：
+前端**只有一個監控中心**（`MonitorView`）。分頁順序與側欄共用 `frontend/src/lib/monitorTabs.ts`：
 
-| # | 方向 | 层级 | 说明 |
-|---|------|------|------|
-| 1 | **多维度评分** | 🔴 架构 | 4 维度独立评分 + 规则 fallback + 交叉模型评估 |
-| 2 | **错误回退** | 🔴 架构 | 公司运行时失败 → 降级到反思闭环（不再直接丢弃） |
-| 3 | **LLM 语义缓存** | 🔴 架构 | 精确匹配 + embedding 语义匹配，减少重复 API 调用 |
-| 4 | **动态迭代** | 🟡 性能 | 分数变化率检测提前终止 + 分层反思（低分深度/中分表面） |
-| 5 | **记忆质量** | 🟡 性能 | 自适应相似度阈值 + 高分正样本也保存 |
-| 6 | **自适应并发** | 🟡 性能 | 根据响应时间和 429 错误率动态调节并行数 |
-| 7 | **统一状态** | 🟢 工程 | StateStore 抽象接口，Redis/JSONL/Memory 三后端 |
-| 8 | **前端实时** | 🟢 工程 | SSE 推送多维评分 + 前端 badge 渲染 |
-| 9 | **价格动态化** | 🟢 工程 | 模型价格从 JSON 配置加载，支持运行时热更新 |
-| 10 | **OPC 降级** | 🟢 工程 | 每级超时 fallback + 可选人工确认 |
-| 11 | **公司模式串流** | 🔴 UX | 公司运行时 SSE 实时推送分解/执行/审查/整合进度 |
-| 12 | **记忆去重** | 🟡 质量 | 新增前 embedding 相似度检查，distance < 0.05 跳过 |
-| 13 | **拆分缓存** | 🟡 性能 | 相同目标+策略的拆分结果 LRU 缓存复用 |
-| 14 | **Prompt 压缩** | 🟡 成本 | 长上下文截断（头尾保留+省略标记），节省 token |
-| 15 | **记忆蒸馏** | 🟡 质量 | LLM 将多条旧记忆合并为一条精炼摘要 |
-| 16 | **响应质量门** | 🟡 质量 | 返回前校验：空回答降级/过短警告/相关性检测 |
+| 分頁 | 說明 |
+|------|------|
+| **角色 Agent** | 每位角色獨立工作台（佇列／看板／事件）；編輯設定；新增／複製／刪除自定義角色 |
+| **總覽** | 系統健康與各模組入口 |
+| **控制面版** | 任務與儀表板聚合 |
+| **OPC 監控** | 護欄、審計、即時標籤 |
+| **AI Hub** | 探針、熔斷、呼叫日誌、預算 |
+| **LLM 運維** | 供應商鎖定、可用模型目錄、定時檢查、手動刷新、健康快照 |
+| **雲控制台** | 帳單、資源監控、告警 |
+| **記憶庫** | 向量記憶檢視與清理 |
+| **檢查點** | 運行檢查點列表與恢復入口 |
 
-详见 [知识库](docs/README.md)。
+### 監控偏好（角色 Agent）
+
+| 偏好 | 說明 |
+|------|------|
+| `poll_interval_ms` | 輪詢間隔 |
+| `group_by` | 依 level／category 分組 |
+| `show_disabled` / `show_idle` / `show_custom_only` | 顯示篩選 |
+| `compact_cards` | 緊湊卡片 |
+| `default_desk_tab` | 預設工作台分頁 |
+
+### 相關 API
+
+- `GET/POST/PUT/DELETE /monitor/agents*` — Agent 監控、偏好、角色設定、自定義角色
+- `GET /monitor/opc` · `GET /monitor/hub` · `GET /monitor/llm-ops`
+- `POST /config/models/refresh` · `PUT /config/ops`
+- `GET/PUT /config` · `POST /config/test`
 
 ---
 
-## 🚀 快速开始
+## 🔌 模型池與運維
 
-### 环境需求
+核心模組：`backend/core/provider_pool.py` + `backend/services/llm_ops.py`。
 
-| 工具 | 版本 | 说明 |
+### 鎖定規則
+
+| 情境 | 行為 |
+|------|------|
+| 只配置 DeepSeek（或 Qwen／Moonshot 等單一廠商） | Agent **只能**使用該廠商模型，不會落到無關的預設模型 |
+| OpenRouter／Ollama／vLLM 等通用端點 | `GET /models` 爬取可用目錄，寫入運行時配置 |
+| 角色偏好模型不在池內 | 自動 `clamp` 到池內第一個可用模型 |
+| Hub 目錄 | 與目前 API 可用池取交集（只存 DeepSeek 時 Hub 只顯示相容列） |
+
+### 運維能力
+
+| 能力 | 說明 |
+|------|------|
+| 定時檢查 | 背景迴圈依間隔刷新模型目錄（預設 300 秒） |
+| 手動刷新 | 監控中心 **LLM 運維** 或 `POST /config/models/refresh` |
+| 健康快照 | 上次成功時間、延遲、連續失敗、是否過期（stale） |
+| 開關 | `EVOL_LLM_OPS_ENABLED` / `EVOL_LLM_OPS_INTERVAL_SEC` |
+
+**範例 A — 單一廠商：**
+
+```env
+OPENAI_API_KEY=sk-your-deepseek-key
+OPENAI_API_BASE=https://api.deepseek.com
+EVOL_MODEL=deepseek-chat
+```
+
+→ 全系統 Agent 鎖定 `deepseek-*`。
+
+**範例 B — OpenRouter 通用 API：**
+
+```env
+OPENAI_API_KEY=sk-or-...
+OPENAI_API_BASE=https://openrouter.ai/api/v1
+EVOL_LLM_OPS_ENABLED=true
+EVOL_LLM_OPS_INTERVAL_SEC=300
+```
+
+→ 定時／手動爬取 `/models`，目錄寫入配置與監控面板；Agent 只能從該目錄選用。
+
+---
+
+## 🔬 系統優化
+
+| # | 方向 | 說明 |
+|---|------|------|
+| 1–16 | 既有架構優化 | 多維評分、錯誤回退、語義快取、動態迭代、記憶品質、自適應並發、StateStore、SSE、價格動態化、OPC 降級、公司串流、記憶去重／蒸餾、Prompt 壓縮、品質門 |
+| 17 | **模型池鎖定** | 依 API 供應商鎖定可用模型，禁止跨廠商誤用 |
+| 18 | **通用目錄爬取** | OpenRouter 等端點定時／手動同步 `/models` |
+| 19 | **角色目錄** | 監控中心可編輯內建設定並建立自定義角色（80 席） |
+| 20 | **單一前端版本** | Hub 併入監控中心；Pages／CI 單一主線 |
+
+詳見 [知識庫](docs/README.md)。
+
+---
+
+## 🚀 快速開始
+
+### 環境需求
+
+| 工具 | 版本 | 說明 |
 |------|------|------|
-| Python | 3.10–3.12 | 后端运行时 |
-| Node.js | 20+ | 前端构建 |
-| Docker | 可选 | 容器化部署 |
+| Python | 3.10–3.12 | 後端 |
+| Node.js | 20+ | 前端 |
+| Docker | 可選 | 容器化部署 |
 
-### 1️⃣ 安装
+### 1️⃣ 安裝
 
 ```powershell
-# 克隆仓库
 git clone https://github.com/iiooiioo888/Evoloop.git
 cd Evoloop
 
-# 虚拟环境
 python -m venv .venv
 .venv\Scripts\Activate.ps1
 
-# 安装依赖
 pip install -r requirements.txt
 
-# 设定环境变数
 copy .env.example .env
-# 编辑 .env 填入你的 API 金钥
+# 編輯 .env：填入 API 金鑰；單一廠商請一併設定對應 api_base／模型
 ```
 
-### 2️⃣ 验证安装
+### 2️⃣ 驗證
 
 ```powershell
-# LLM 连线测试
 python backend/scripts/test_llm_connection.py
-
-# 运行测试（无需 API 金钥）
 pytest backend/tests/ -q
 ```
 
-### 3️⃣ 启动服务
+### 3️⃣ 啟動
 
 ```powershell
-# 后端 API（http://localhost:8000）
+# 後端 http://localhost:8000
 python -m backend.main
 
-# 前端（http://localhost:5173）
+# 前端 http://localhost:5173
 cd frontend && npm install && npm run dev
 
-# OPC 微服务（可选，含模拟伺服器）
+# OPC（可選）
 $env:OPC_SIM_ENABLED="true"; python -m opc_service.main
 ```
 
-### Docker Compose 一键部署
+### Docker Compose
 
 ```powershell
-# 全部服务
 docker compose up -d
-
-# 仅基础设施（Redis + ChromaDB）
 docker compose up -d redis chroma
-
-# 查看日志
 docker compose logs -f backend
 ```
 
-| 服务 | 端口 | 说明 |
+| 服務 | 端口 | 說明 |
 |------|------|------|
-| `backend` | 8000 | FastAPI + LangGraph 核心 |
-| `frontend` | 5173 / 80 | React + Vite（dev/prod） |
-| `opc_service` | 8001 | OPC UA 微服务 |
-| `redis` | 6379 | 任务持久化 |
-| `chroma` | 8100 | 向量记忆库 |
+| `backend` | 8000 | FastAPI + LangGraph |
+| `frontend` | 5173 / 80 | React（dev／prod） |
+| `opc_service` | 8001 | OPC UA |
+| `redis` | 6379 | 任務持久化 |
+| `chroma` | 8100 | 向量記憶庫 |
+
+### GitHub Pages
+
+推送到 `master` 後，Actions `Deploy to GitHub Pages` 會：
+
+1. 匯出監控降級資料（單一來源：`python -m backend.scripts.export_monitor_fallback`）
+2. 以 `VITE_BASE=/Evoloop/`、`VITE_GITHUB_PAGES=true` 建置前端
+3. 部署至 [https://iiooiioo888.github.io/Evoloop/](https://iiooiioo888.github.io/Evoloop/)
+
+靜態站可瀏覽 UI；完整聊天／寫入請本地或 Docker 啟動後端（可設 `VITE_API_URL`）。
 
 ---
 
-## ⚙️ 环境变数
+## ⚙️ 環境變數
 
-### 必填
+### 必填／LLM
 
-| 变数 | 预设值 | 说明 |
-|------|--------|------|
-| `OPENAI_API_KEY` | — | **必填**，LLM 金钥（支援 OpenAI / Claude / Gemini） |
+| 變數 | 預設 | 說明 |
+|------|------|------|
+| `OPENAI_API_KEY` | — | LLM 金鑰（LiteLLM；亦可用 DeepSeek／OpenRouter 等相容金鑰） |
+| `OPENAI_API_BASE` | — | 可選端點（如 `https://api.deepseek.com`、`https://openrouter.ai/api/v1`） |
+| `EVOL_MODEL` | `gpt-4o` | 預設模型（會被模型池 clamp） |
+| `EVOL_PASS_THRESHOLD` | `8` | 反思通過門檻 |
+| `EVOL_MAX_ITERATIONS` | `3` | 最大迭代次數 |
+| `EVOL_MIN_SCORE_IMPROVEMENT` | `0.5` | 最小分數提升（低於此提前終止） |
+| `EVOL_CROSS_EVAL_MODEL` | — | 交叉評估模型 |
 
-### LLM 与反思
+### 模型運維
 
-| 变数 | 预设值 | 说明 |
-|------|--------|------|
-| `EVOL_MODEL` | `gpt-4o` | 预设模型 |
-| `EVOL_PASS_THRESHOLD` | `8` | 反思回圈通过门槛 |
-| `EVOL_MAX_ITERATIONS` | `3` | 最大迭代次数 |
-| `EVOL_MIN_SCORE_IMPROVEMENT` | `0.5` | 最小分数提升（低于此值提前终止） |
-| `EVOL_CROSS_EVAL_MODEL` | — | 交叉评估模型（不设置则跳过） |
+| 變數 | 預設 | 說明 |
+|------|------|------|
+| `EVOL_LLM_OPS_ENABLED` | `true` | 啟用背景目錄刷新 |
+| `EVOL_LLM_OPS_INTERVAL_SEC` | `300` | 刷新間隔（秒，限制 60–3600） |
 
-### LLM 缓存
+### 角色目錄
 
-| 变数 | 预设值 | 说明 |
-|------|--------|------|
-| `EVOL_LLM_CACHE_SIZE` | `512` | 缓存条目上限 |
-| `EVOL_LLM_CACHE_TTL` | `3600` | 缓存 TTL（秒） |
-| `EVOL_SEMANTIC_CACHE` | `true` | 是否启用语义缓存 |
-| `EVOL_SEMANTIC_THRESHOLD` | `0.92` | 语义相似度阈值 |
+| 變數 | 預設 | 說明 |
+|------|------|------|
+| `EVOL_ROLE_CATALOG_PATH` | `backend/data/role_catalog.json` | 角色目錄持久化路徑 |
 
-### 基础设施
+### LLM 快取
 
-| 变数 | 预设值 | 说明 |
-|------|--------|------|
-| `REDIS_URL` | `redis://localhost:6379/0` | Redis 连线 |
-| `CHROMA_HOST` / `CHROMA_PORT` | `localhost` / `8100` | ChromaDB 连线 |
-| `OPC_SIM_ENABLED` | `false` | 启用模拟 OPC 伺服器 |
-| `OPC_WRITE_WHITELIST` | — | 写入白名单（逗号分隔） |
-| `OPC_STAGE_TIMEOUT` | `30` | OPC 每级超时（秒） |
-| `OPC_ACT_HUMAN_CONFIRM` | `false` | OPC 执行级人工确认 |
+| 變數 | 預設 | 說明 |
+|------|------|------|
+| `EVOL_LLM_CACHE_SIZE` | `512` | 快取條目上限 |
+| `EVOL_LLM_CACHE_TTL` | `3600` | TTL（秒） |
+| `EVOL_SEMANTIC_CACHE` | `true` | 語義快取 |
+| `EVOL_SEMANTIC_THRESHOLD` | `0.92` | 語義相似度閾值 |
 
-### 上下文与缓存
+### 基礎設施
 
-| 变数 | 预设值 | 说明 |
-|------|--------|------|
-| `EVOL_MAX_CONTEXT_CHARS` | `6000` | Prompt 上下文截断上限（字符） |
-| `EVOL_MAX_ANSWER_CHARS` | `4000` | 回答截断上限（字符） |
-| `EVOL_DECOMPOSE_CACHE_SIZE` | `64` | 任务拆分缓存条目上限 |
+| 變數 | 預設 | 說明 |
+|------|------|------|
+| `REDIS_URL` | `redis://localhost:6379/0` | Redis |
+| `CHROMA_HOST` / `CHROMA_PORT` | `localhost` / `8100` | ChromaDB |
+| `OPC_SIM_ENABLED` | `false` | 模擬 OPC 伺服器 |
+| `OPC_WRITE_WHITELIST` | — | 寫入白名單 |
+| `OPC_STAGE_TIMEOUT` | `30` | 每級超時（秒） |
+| `OPC_ACT_HUMAN_CONFIRM` | `false` | 執行級人工確認 |
 
-> 完整配置参考：[docs/config/reference.md](docs/config/reference.md)
+### 上下文
+
+| 變數 | 預設 | 說明 |
+|------|------|------|
+| `EVOL_MAX_CONTEXT_CHARS` | `6000` | Prompt 截斷上限 |
+| `EVOL_MAX_ANSWER_CHARS` | `4000` | 回答截斷上限 |
+| `EVOL_DECOMPOSE_CACHE_SIZE` | `64` | 拆分快取上限 |
+
+> 完整配置：[docs/config/reference.md](docs/config/reference.md) · 範例：[.env.example](.env.example)
 
 ---
 
-## 🧪 测试
+## 🧪 測試
 
 ```powershell
-# 全部测试（185+ 案例，无需 API 金钥）
 pytest backend/tests/ -q
 
-# 分类测试
-pytest backend/tests/test_company.py         # 公司运行时
-pytest backend/tests/test_opc_service.py     # OPC 工业闭环
-pytest backend/tests/test_reflection_loop.py # 反思回圈
-pytest backend/tests/test_architecture.py    # 架构约束
+pytest backend/tests/test_company.py
+pytest backend/tests/test_opc_service.py
+pytest backend/tests/test_reflection_loop.py
+pytest backend/tests/test_provider_pool.py
+pytest backend/tests/test_monitor.py
+pytest backend/tests/test_architecture.py
 ```
 
-| 测试类别 | 案例数 | 涵盖范围 |
-|----------|--------|----------|
-| 公司运行时 | 84 | 工作项状态机、预算管理、模型路由、任务拆分、事件系统、检查点、优先级 |
-| Docker 管理 | 39 | 容器操作、健康检查、工具权限、API 端点、Stub 降级 |
-| OPC 服务 | 15 | 6 级闭环、安全护栏、审计日志 |
-| 反思回圈 | 4 | 高分通过、低分迭代、记忆注入 |
-| 架构约束 | 8 | LLM 调用层、安全护栏、禁止操作 |
-| 控制面版 | 3 | 仪表板聚合、降级安全 |
-| 文本存档 | 4 | JSONL 写入、反思映射 |
+目前 **251** 個案例（無需真實 API 金鑰；單元測試以 monkeypatch 隔離 LLM／Redis／OPC）。
 
----
-
-## 🛠️ 技术栈
-
-| 层级 | 技术 | 用途 |
-|------|------|------|
-| 核心闭环 | LangGraph + LiteLLM | 反思回圈图 + 多模型路由 |
-| 后端 | FastAPI + uvicorn | REST API 服务 |
-| 公司运行时 | 自研 (company/) | 多代理人协调 · 预算管控 |
-| 评估引擎 | 自研 (evaluation.py) | 4 维度评分 · 规则 fallback · 交叉评估 |
-| 缓存 | 自研 (llm_cache.py) | 精确匹配 + 语义匹配两级缓存 |
-| 向量资料库 | ChromaDB | 记忆存储与相似检索（自适应阈值） |
-| 快取 | Redis | 任务持久化 · 会话状态 |
-| 状态存储 | 自研 (state_store.py) | Redis / JSONL / Memory 统一接口 |
-| 工业协议 | OPC UA (asyncua) | 工业数据读写与订阅 |
-| 前端 | React 18 + Vite + TypeScript | IDE 风格 UI · Tailwind CSS v4 |
-| 测试 | pytest + pytest-asyncio | 185+ 案例 · Mock 隔离 |
-| 部署 | Docker Compose | 五服务一键编排 |
-
----
-
-## 📚 文档
-
-完整知识库位于 [`docs/`](docs/README.md)：
-
-| 文档 | 内容 |
+| 類別 | 涵蓋 |
 |------|------|
-| [架构总览](docs/architecture/overview.md) | 统一管线、三層能力、数据流、目录结构 |
-| [反思闭环](docs/architecture/reflection-loop.md) | 多维度评估、动态迭代、分层反思、LLM 缓存 |
-| [公司运行时](docs/architecture/company-runtime.md) | 多代理人协调、工作项状态机、预算管控 |
-| [OPC 整合](docs/architecture/opc-integration.md) | 6 级闭环、安全护栏、超时降级 |
-| [REST API 参考](docs/api/reference.md) | 端点、请求/回应格式、SSE 串流 |
-| [配置参考](docs/config/reference.md) | 环境变数、模型价格、.env.example |
-| [开发指南](docs/development/guide.md) | 本地环境、测试、扩展点、调试 |
-| [部署指南](docs/deployment/guide.md) | Docker Compose、GitHub Pages、生产建议 |
+| 公司運行時 | 狀態機、預算、拆分、事件、檢查點、自定義角色 |
+| 模型池 | DeepSeek 鎖定、OpenRouter 爬取、Hub 交集、HTTP 運維端點 |
+| 監控中心 | Agent 監控、角色設定 CRUD、偏好 |
+| OPC／反思／架構 | 護欄、閉環、LLM 調用層約束 |
 
 ---
 
-## ❓ 常见问题
+## 🛠️ 技術棧
+
+| 層級 | 技術 | 用途 |
+|------|------|------|
+| 核心閉環 | LangGraph + LiteLLM | 反思圖 + 多模型路由 |
+| 後端 | FastAPI + asyncio | REST／SSE／WebSocket |
+| 公司運行時 | `company/` + `role_catalog` | 多代理人 + 可編輯角色 |
+| 模型運維 | `provider_pool` + `llm_ops` | 鎖定／爬取／定時檢查 |
+| AI Hub | `hub/` | 探針、熔斷、目錄 |
+| 向量庫 | ChromaDB | 記憶檢索 |
+| 快取 | Redis | 任務／狀態 |
+| 工業協議 | OPC UA (asyncua) | 感測讀寫 |
+| 前端 | React 18 + Vite + TS | 單一 IDE 風格 UI |
+| 測試 | pytest | 251 案例 |
+| 部署 | Docker Compose + GitHub Pages | 一鍵編排 + 靜態預覽 |
+
+---
+
+## 📚 文件
+
+| 文件 | 內容 |
+|------|------|
+| [架構總覽](docs/architecture/overview.md) | 統一管線、資料流 |
+| [反思閉環](docs/architecture/reflection-loop.md) | 多維評估、快取 |
+| [公司運行時](docs/architecture/company-runtime.md) | 多代理人、80 席角色、預算 |
+| [OPC 整合](docs/architecture/opc-integration.md) | 6 級閉環、護欄 |
+| [REST API](docs/api/reference.md) | 端點與 SSE |
+| [配置參考](docs/config/reference.md) | 環境變數、模型池、價格 |
+| [開發指南](docs/development/guide.md) | 本地開發、擴展 |
+| [部署指南](docs/deployment/guide.md) | Docker、GitHub Pages |
+| [AGENTS.md](AGENTS.md) | Agent 約束與常用指令 |
+
+---
+
+## ❓ 常見問題
 
 <details>
-<summary><b>Q: 测试失败，出现 OSError: could not create numbered dir</b></summary>
+<summary><b>Q: 測試出現 OSError: could not create numbered dir</b></summary>
 
-这是 Windows 临时目录权限问题。已在 `pyproject.toml` 中配置使用项目内临时目录：
+Windows 暫存目錄權限問題。`pyproject.toml` 已設 `--basetemp=.pytest_tmp`。仍失敗時：
 
-```toml
-[tool.pytest.ini_options]
-addopts = "-v --basetemp=.pytest_tmp"
-```
-
-如仍有问题，手动指定：`pytest backend/tests/ --basetemp=.pytest_tmp`
+`pytest backend/tests/ --basetemp=.pytest_tmp`
 </details>
 
 <details>
-<summary><b>Q: 支援哪些 LLM 供应商？</b></summary>
+<summary><b>Q: 支援哪些 LLM？只填 DeepSeek 會怎樣？</b></summary>
 
-通过 LiteLLM 统一调用层，支援：
-- OpenAI (GPT-4o, GPT-4, GPT-3.5)
-- Anthropic (Claude 3.5/3)
-- Google (Gemini Pro/Flash)
-- Azure OpenAI
-- DeepSeek、Qwen、其他 LiteLLM 支援的模型
+透過 LiteLLM + 運行時配置。常見：OpenAI、DeepSeek、Qwen、Moonshot、OpenRouter、Ollama／vLLM 相容端點。
 
-只需设定对应的 API Key 环境变量即可。模型价格可从 `backend/config/model_costs.json` 自定义。
+**模型池規則：** 系統只依你保存的 API／端點開放可用模型。例如只存 DeepSeek → Agent 只能用 DeepSeek；OpenRouter → 爬取 `/models` 後寫入配置，Agent 只能從該目錄選用。
 </details>
 
 <details>
-<summary><b>Q: 如何自定义公司模式的组织模板？</b></summary>
+<summary><b>Q: 如何新增自定義角色？</b></summary>
 
-参考 `backend/company/roles.py` 中的模板定义，可通过 `CompanyConfig` 传入自定义角色和模板。详见 `backend/tests/test_company.py` 中的 `TestPromptConfig` 测试案例。
+監控中心 → **角色 Agent** → 新增／複製角色。資料寫入 `role_catalog.json`（可用 `EVOL_ROLE_CATALOG_PATH` 覆寫），並套用到後續公司運行時。亦可呼叫 `POST /monitor/agents`。
 </details>
 
 <details>
-<summary><b>Q: OPC 整合需要真实工业设备吗？</b></summary>
+<summary><b>Q: 內建有多少角色？設定能改哪些？</b></summary>
 
-不需要。设定 `OPC_SIM_ENABLED=true` 即可使用内建模拟伺服器进行测试。
+`STANDARD_ROLES` 目前為 **80** 席（Level 0–4）。監控中心可覆寫 Prompt、模型、預算、工具、告警、SLA、路由策略等，或再疊加自定義角色。
 </details>
 
 <details>
-<summary><b>Q: 如何启用交叉评估（第二模型覆核）？</b></summary>
+<summary><b>Q: OpenRouter 目錄多久更新一次？</b></summary>
 
-设置环境变量 `EVOL_CROSS_EVAL_MODEL` 为第二个模型名称（如 `deepseek-chat`）。不设置则跳过交叉评估。
+預設每 300 秒背景刷新（`EVOL_LLM_OPS_INTERVAL_SEC`）。監控中心 **LLM 運維** 可手動刷新；`EVOL_LLM_OPS_ENABLED=false` 可關閉背景任務。
 </details>
 
 <details>
-<summary><b>Q: LLM 缓存如何工作？</b></summary>
+<summary><b>Q: OPC 需要真實設備嗎？</b></summary>
 
-两级缓存：
-1. **精确匹配**：相同 prompt + system + model 的 SHA256 hash 直接命中
-2. **语义匹配**：embedding 余弦相似度 > 0.92 时复用（默认启用，可通过 `EVOL_SEMANTIC_CACHE=false` 关闭）
+不需要。`OPC_SIM_ENABLED=true` 即可用內建模擬伺服器。
+</details>
 
-缓存 TTL 1 小时，上限 512 条，LRU 淘汰。
+<details>
+<summary><b>Q: GitHub Pages 能聊天嗎？</b></summary>
+
+Pages 僅靜態前端預覽。聊天、寫入 OPC、刷新模型目錄等需連到本機或已部署的後端（可設 `VITE_API_URL`）。
+</details>
+
+<details>
+<summary><b>Q: 為什麼只有一個版本？</b></summary>
+
+前端與監控已合拼為單一 `AppShell` + `MonitorView`；CI／Pages 只追蹤 `master`，避免舊版／新版雙線維護。
 </details>
 
 ---
 
-## 🗺️ 路线图
+## 🗺️ 路線圖
 
-| 阶段 | 内容 | 状态 |
+| 階段 | 內容 | 狀態 |
 |------|------|:----:|
-| Phase 0 | 环境建设 | ✅ |
-| Phase 1 | 核心反思闭环 | ✅ |
-| Phase 2 | 向量记忆库 (ChromaDB) | ✅ |
-| Phase 3 | FastAPI 服务 | ✅ |
-| Phase 4 | 前端介面 (IDE 风格) | ✅ |
-| Phase 5 | DSPy 提示优化 | ⏳ |
-| Phase 6 | 多代理人公司运行时 | ✅ |
-| Phase 7 | OPC UA 工业整合 | ✅ |
-| Phase 8 | 执行轨迹可视化 | ✅ |
-| Phase 9 | 系统优化（10 项架构改进） | ✅ |
-| Phase 10 | 知识库文档 | ✅ |
+| Phase 0–4 | 環境、反思閉環、記憶庫、API、前端 | ✅ |
+| Phase 5 | DSPy 提示優化 | ⏳ |
+| Phase 6–8 | 公司運行時、OPC、軌跡可視化 | ✅ |
+| Phase 9–10 | 系統優化、知識庫 | ✅ |
 | Phase 11 | MCP 工具接入 | ⏳ |
-| Phase 12 | 记忆蒸馏 + A/B 评估 | ⏳ |
+| Phase 12 | 記憶蒸餾 + A/B 評估 | ⏳ |
+| Phase 13 | 監控中心擴充（角色設定／自定義角色／80 席） | ✅ |
+| Phase 14 | 模型池鎖定 + OpenRouter 爬取 + LLM 運維 | ✅ |
+| Phase 15 | 合拼單一版本 + GitHub Pages | ✅ |
 
 ---
 
@@ -547,8 +617,8 @@ addopts = "-v --basetemp=.pytest_tmp"
 
 **Built with ❤️ using Python · LangGraph · React · Docker**
 
-[📚 知识库](docs/README.md) · [📡 API 参考](docs/api/reference.md) · [🛠️ 开发指南](docs/development/guide.md) · [🚀 部署指南](docs/deployment/guide.md)
+[📚 知識庫](docs/README.md) · [📡 API](docs/api/reference.md) · [🛠️ 開發](docs/development/guide.md) · [🚀 部署](docs/deployment/guide.md) · [🌐 Demo](https://iiooiioo888.github.io/Evoloop/)
 
-[⬆ 回到顶部](#-evoloop)
+[⬆ 回到頂部](#-evoloop)
 
 </div>

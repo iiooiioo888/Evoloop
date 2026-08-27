@@ -12,13 +12,17 @@
 
 ## 角色體系
 
+內建 `STANDARD_ROLES` 共 **80** 席（Level 0–4）。監控中心可覆寫角色設定，或透過 `role_catalog` 新增自定義角色。
+
 ```
-Level 0: Manager（經理）      — 目標分解、最終審查
-Level 1: Tech Lead（技術主管） — 技術方案設計
-Level 2: Domain Lead（領域主管）— 領域專家
-Level 3: Executor（執行者）    — 具體任務執行
-Level 4: Support（支援）       — 輔助工作
+Level 0: Manager（1）           — 目標分解、最終審查
+Level 1: Lead（10）             — 技術／架構／資安／產品／財務／工業／創意／平台／AI／成長
+Level 2: Domain Lead（4）       — 前端／後端／測試／資料主管
+Level 3: Executor（54）         — 具體任務執行（含 OPC／RAG／GitHub Ops／Hub 等）
+Level 4: Support（11）          — 審查、整合、Prompt、法務、記憶策展、知識庫…
 ```
+
+角色設定（Prompt、偏好模型、預算、工具）持久化於 `EVOL_ROLE_CATALOG_PATH`（預設 `backend/data/role_catalog.json`）。偏好模型一律經 `clamp_model` 鎖在當前 API 可用池內。
 
 ## 組織模板
 

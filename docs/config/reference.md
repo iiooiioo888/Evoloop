@@ -6,14 +6,28 @@
 
 | 變數 | 說明 |
 |------|------|
-| `OPENAI_API_KEY` | LLM 金鑰（支援 OpenAI / Claude / Gemini） |
+| `OPENAI_API_KEY` | LLM 金鑰（LiteLLM；亦可用 DeepSeek／OpenRouter 等相容金鑰） |
 
 ### LLM 配置
 
 | 變數 | 預設值 | 說明 |
 |------|--------|------|
-| `EVOL_MODEL` | `gpt-4o` | 預設模型 |
+| `OPENAI_API_BASE` | — | 可選端點（如 `https://api.deepseek.com`、`https://openrouter.ai/api/v1`） |
+| `EVOL_MODEL` | `gpt-4o` | 預設模型（會被模型池 clamp） |
 | `EVOL_EMBED_MODEL` | `text-embedding-3-small` | 嵌入模型（用於記憶檢索和語義快取） |
+
+### 模型池運維
+
+| 變數 | 預設值 | 說明 |
+|------|--------|------|
+| `EVOL_LLM_OPS_ENABLED` | `true` | 啟用背景目錄刷新（OpenRouter 等 `/models`） |
+| `EVOL_LLM_OPS_INTERVAL_SEC` | `300` | 刷新間隔（秒，限制 60–3600） |
+
+### 角色目錄
+
+| 變數 | 預設值 | 說明 |
+|------|--------|------|
+| `EVOL_ROLE_CATALOG_PATH` | `backend/data/role_catalog.json` | 角色設定覆蓋 + 自定義角色持久化路徑 |
 
 ### 反思閉環
 
@@ -105,9 +119,14 @@ reload_model_costs()
 ```bash
 # 必填
 OPENAI_API_KEY=sk-your-key-here
+# OPENAI_API_BASE=https://api.deepseek.com
 
-# 模型
+# 模型（會被模型池 clamp）
 EVOL_MODEL=gpt-4o
+
+# 模型池運維
+EVOL_LLM_OPS_ENABLED=true
+EVOL_LLM_OPS_INTERVAL_SEC=300
 
 # 反思閉環
 EVOL_PASS_THRESHOLD=8
