@@ -27,21 +27,21 @@ function StatCard({
 }) {
   const valueCls =
     accent === 'green'
-      ? 'text-green-300'
+      ? 'text-[#34C759]'
       : accent === 'amber'
-        ? 'text-amber-300'
+        ? 'text-[#FF9500]'
         : accent === 'blue'
-          ? 'text-blue-300'
+          ? 'text-[#007AFF]'
           : accent === 'orange'
-            ? 'text-orange-300'
+            ? 'text-[#FF9500]'
             : accent === 'violet'
-              ? 'text-indigo-300'
-              : 'text-gray-100';
+              ? 'text-[#64D2FF]'
+              : 'text-[#F5F5F7]';
   return (
-    <div className="rounded-xl border border-gray-800 bg-gray-900/80 p-4">
-      <p className="text-[11px] uppercase tracking-wider text-gray-500">{label}</p>
-      <p className={`mt-1 text-2xl font-bold ${valueCls}`}>{value}</p>
-      {hint && <p className="mt-0.5 text-[11px] text-gray-600">{hint}</p>}
+    <div className="apple-card apple-card--pad">
+      <p className="apple-title">{label}</p>
+      <p className={`apple-data mt-2 text-[26px] ${valueCls}`}>{value}</p>
+      {hint && <p className="mt-2 text-[11px] font-normal text-[#8E8E93]">{hint}</p>}
     </div>
   );
 }
@@ -58,15 +58,15 @@ function SectionCard({
   action?: ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-xl border border-gray-800 bg-gray-900/80">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-800 px-4 py-3">
+    <section className="overflow-hidden apple-card !p-0">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.08] px-5 py-3.5">
         <div>
-          <h3 className="text-sm font-medium text-gray-200">{title}</h3>
-          {hint && <p className="mt-0.5 text-[11px] text-gray-500">{hint}</p>}
+          <h3 className="apple-heading text-[14px]">{title}</h3>
+          {hint && <p className="mt-1 text-[11px] font-normal text-[#8E8E93]">{hint}</p>}
         </div>
         {action}
       </div>
-      <div className="p-4">{children}</div>
+      <div className="p-5">{children}</div>
     </section>
   );
 }
@@ -75,7 +75,7 @@ function ServiceCostCard({ svc, maxCost }: { svc: CloudServiceCost; maxCost: num
   const pct = maxCost > 0 ? (svc.cost / maxCost) * 100 : 0;
   const isAliyun = svc.source === 'aliyun';
   return (
-    <div className="rounded-lg border border-gray-800/80 bg-gray-950/40 p-3">
+    <div className="apple-inset p-3">
       <div className="mb-2 flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-gray-200">

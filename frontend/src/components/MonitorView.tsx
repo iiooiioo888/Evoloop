@@ -102,18 +102,16 @@ export default function MonitorView({
   const current = MONITOR_TABS.find((t) => t.key === activeTab);
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden bg-[#010102]">
+    <div className="flex flex-1 flex-col overflow-hidden apple-canvas">
       {/* 即時動態：標題已在左側導航，主區不再重複 chrome／長說明 */}
       {activeTab !== 'balancer' && (
-        <div className="flex shrink-0 items-center gap-2 border-b border-[#23252a] bg-[#0f1011] px-4 py-2">
+        <div className="apple-chrome flex shrink-0 items-center gap-2 border-b px-4 py-2.5">
           <span className="text-sm leading-none">{current?.icon ?? '▣'}</span>
           <div className="min-w-0">
-            <p className="text-xs font-semibold text-[#f7f8f8]">
+            <p className="text-[13px] font-bold tracking-tight text-[#F5F5F7]">
               {current?.label ?? monitorTabLabel(activeTab)}
             </p>
-            <p className="text-[10px] text-[#62666d]">
-              左側外圍切換分頁 · ◈ 角色 Agent 與其他分頁同層
-            </p>
+            <p className="text-[10px] font-normal text-[#636366]">左側切換分頁</p>
           </div>
         </div>
       )}
@@ -137,7 +135,7 @@ export default function MonitorView({
         {activeTab === 'balancer' && <BalancerTab />}
         {activeTab === 'cloud' && <CloudConsoleView />}
         {activeTab === 'memory' && (
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#010102]">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden apple-canvas">
             <MemoryPanel />
           </div>
         )}

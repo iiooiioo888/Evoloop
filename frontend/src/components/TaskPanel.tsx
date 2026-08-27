@@ -308,7 +308,7 @@ export default function TaskPanel({ task, onOpenFull, onCancel, onResume, onOpen
               onResume(task.task_id);
             }}
             disabled={resuming}
-            className="ml-auto shrink-0 rounded border border-[#5e6ad2]/50 bg-[#5e6ad2]/10 px-1.5 py-0.5 text-[10px] text-[#828fff] transition-colors hover:bg-[#5e6ad2]/20 disabled:opacity-50"
+            className="ml-auto shrink-0 rounded border border-[#007AFF]/50 bg-[#007AFF]/10 px-1.5 py-0.5 text-[10px] text-[#64D2FF] transition-colors hover:bg-[#007AFF]/20 disabled:opacity-50"
           >
             {resuming ? '恢復中...' : '▶ 斷點續跑'}
           </button>
@@ -499,7 +499,7 @@ export default function TaskPanel({ task, onOpenFull, onCancel, onResume, onOpen
         {onOpenTrace && (
           <button
             onClick={() => onOpenTrace(task.task_id)}
-            className="flex-1 rounded-lg border border-gray-700/70 bg-gray-800/40 py-1.5 text-[11px] font-medium text-gray-300 transition-all duration-200 hover:border-[#5e6ad2]/70 hover:bg-[#5e6ad2]/10 hover:text-[#828fff] active:scale-[0.98]"
+            className="flex-1 rounded-lg border border-gray-700/70 bg-gray-800/40 py-1.5 text-[11px] font-medium text-gray-300 transition-all duration-200 hover:border-[#007AFF]/70 hover:bg-[#007AFF]/10 hover:text-[#64D2FF] active:scale-[0.98]"
           >
             📜 思考過程
           </button>

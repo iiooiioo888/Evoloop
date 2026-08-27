@@ -69,7 +69,7 @@ export default function LlmOpsPanel() {
   }, [models, query]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-[#010102] p-4 text-[#f7f8f8]">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto apple-canvas p-4 text-[#f7f8f8]">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-sm font-semibold">LLM 運維</h2>
@@ -93,14 +93,14 @@ export default function LlmOpsPanel() {
                 setBusy(false);
               }
             }}
-            className="rounded-md border border-[#5e6ad2]/40 bg-[#5e6ad2]/15 px-2 py-1 text-[11px] text-[#828fff] disabled:opacity-40"
+            className="rounded-md border border-[#007AFF]/40 bg-[#007AFF]/15 px-2 py-1 text-[11px] text-[#64D2FF] disabled:opacity-40"
           >
             {busy ? '爬取中…' : '立刻檢查目錄'}
           </button>
           <button
             type="button"
             onClick={() => void refresh()}
-            className="rounded-md border border-[#23252a] bg-[#0f1011] px-2 py-1 text-[11px] text-[#8a8f98]"
+            className="rounded-xl border border-white/[0.08] bg-[#1C1C1E] px-2 py-1 text-[11px] text-[#8a8f98]"
           >
             重新整理
           </button>
@@ -112,31 +112,31 @@ export default function LlmOpsPanel() {
       )}
 
       <div className="mb-4 grid grid-cols-2 gap-2 lg:grid-cols-5">
-        <div className="rounded-lg border border-[#23252a] bg-[#0f1011] px-3 py-2.5">
+        <div className="apple-card apple-card--tight !p-0 px-3 py-2.5">
           <p className="text-[10px] uppercase tracking-wider text-[#62666d]">供應商鎖定</p>
           <p className="mt-1 text-sm text-[#f7f8f8]">{data?.provider_label ?? '—'}</p>
           <p className="mt-0.5 text-[11px] text-[#8a8f98]">{data?.lock_message}</p>
         </div>
-        <div className="rounded-lg border border-[#23252a] bg-[#0f1011] px-3 py-2.5">
+        <div className="apple-card apple-card--tight !p-0 px-3 py-2.5">
           <p className="text-[10px] uppercase tracking-wider text-[#62666d]">健康</p>
           <p className={`mt-1 text-sm ${health.tone}`}>{health.text}</p>
           <p className="mt-0.5 text-[11px] text-[#8a8f98]">
             來源 {data?.catalog_source || '—'} · 原因 {ops?.last_reason || '—'}
           </p>
         </div>
-        <div className="rounded-lg border border-[#23252a] bg-[#0f1011] px-3 py-2.5">
+        <div className="apple-card apple-card--tight !p-0 px-3 py-2.5">
           <p className="text-[10px] uppercase tracking-wider text-[#62666d]">可用模型</p>
           <p className="mt-1 font-mono text-lg text-[#f7f8f8]">{data?.allowed_models.length ?? 0}</p>
           <p className="mt-0.5 text-[11px] text-[#8a8f98]">預設 {data?.model || '—'}</p>
         </div>
-        <div className="rounded-lg border border-[#23252a] bg-[#0f1011] px-3 py-2.5">
+        <div className="apple-card apple-card--tight !p-0 px-3 py-2.5">
           <p className="text-[10px] uppercase tracking-wider text-[#62666d]">最近 / 下次檢查</p>
           <p className="mt-1 text-sm text-[#f7f8f8]">{fmtWhen(ops?.last_ok_at || data?.catalog_fetched_at)}</p>
           <p className={`mt-0.5 text-[11px] ${ops?.stale ? 'text-amber-300' : 'text-[#8a8f98]'}`}>
             下次 {fmtWhen(ops?.next_check_at)} · {ops?.last_latency_ms ?? 0} ms
           </p>
         </div>
-        <div className="rounded-lg border border-[#23252a] bg-[#0f1011] px-3 py-2.5">
+        <div className="apple-card apple-card--tight !p-0 px-3 py-2.5">
           <p className="text-[10px] uppercase tracking-wider text-[#62666d]">定時間隔</p>
           <p className="mt-1 font-mono text-lg text-[#f7f8f8]">{ops?.refresh_interval_sec ?? 300}s</p>
           <div className="mt-1 flex flex-wrap gap-1">
@@ -145,7 +145,7 @@ export default function LlmOpsPanel() {
                 key={sec}
                 type="button"
                 className={`rounded px-1.5 py-0.5 text-[10px] ${
-                  ops?.refresh_interval_sec === sec ? 'bg-[#5e6ad2]/20 text-[#828fff]' : 'text-[#8a8f98]'
+                  ops?.refresh_interval_sec === sec ? 'bg-[#007AFF]/20 text-[#64D2FF]' : 'text-[#8a8f98]'
                 }`}
                 onClick={() => void updateLlmOpsPrefs(sec).then(setData)}
               >
@@ -171,14 +171,14 @@ export default function LlmOpsPanel() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="搜尋模型 ID / 名稱"
-            className="w-48 rounded-md border border-[#23252a] bg-[#0f1011] px-2 py-1 text-[11px] text-[#d0d6e0] placeholder:text-[#62666d]"
+            className="w-48 rounded-xl border border-white/[0.08] bg-[#1C1C1E] px-2 py-1 text-[11px] text-[#d0d6e0] placeholder:text-[#62666d]"
           />
           <p className="text-[10px] text-[#62666d]">{data?.catalog_url}</p>
         </div>
       </div>
-      <div className="overflow-hidden rounded-lg border border-[#23252a]">
+      <div className="overflow-hidden rounded-lg border border-white/[0.08]">
         <table className="w-full text-left text-[12px]">
-          <thead className="bg-[#0f1011] text-[10px] uppercase tracking-wider text-[#62666d]">
+          <thead className="bg-[#1C1C1E] text-[10px] uppercase tracking-wider text-[#62666d]">
             <tr>
               <th className="px-3 py-2 font-medium">模型 ID</th>
               <th className="px-3 py-2 font-medium">名稱</th>
@@ -196,10 +196,10 @@ export default function LlmOpsPanel() {
               </tr>
             ) : (
               filtered.slice(0, 120).map((m) => (
-                <tr key={m.id} className="border-t border-[#23252a]">
+                <tr key={m.id} className="border-t border-white/[0.08]">
                   <td className="px-3 py-1.5 font-mono text-[#d0d6e0]">
                     {m.id}
-                    {m.id === data?.model ? <span className="ml-2 text-[10px] text-[#828fff]">預設</span> : null}
+                    {m.id === data?.model ? <span className="ml-2 text-[10px] text-[#64D2FF]">預設</span> : null}
                   </td>
                   <td className="px-3 py-1.5 text-[#8a8f98]">{m.name}</td>
                   <td className="px-3 py-1.5 text-[#62666d]">{m.owned_by || '—'}</td>

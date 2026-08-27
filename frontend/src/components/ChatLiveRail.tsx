@@ -1,7 +1,7 @@
 /**
  * ChatLiveRail — 對話頁右側即時監控欄。
  * 呈現 Agent／雲端帳單／LLM／OPC／Docker 等多源卡片。
- * 即時動態停靠在對話欄上方；此處捷徑可切換真實場景。
+ * 即時動態由上方 LiveBoard 一次呈現，此處不再重複場景切換。
  */
 import { useMemo } from 'react';
 import {
@@ -10,42 +10,30 @@ import {
   fmtUsd,
   fmtWhen,
 } from '../lib/agentUi';
-import type { AnimScene } from '../lib/animLive';
 import type { ChatLiveMonitorState } from '../hooks/useChatLiveMonitor';
 import type { ChatMessage, RoleAgent } from '../types';
 import { HealthPill, MiniKpi, MonitorSection, RoadmapTable } from './ChatMonitorCards';
-
-const THEATER_SHORTCUTS: Array<{ key: AnimScene; label: string }> = [
-  { key: 'pipeline', label: '管線' },
-  { key: 'company', label: '協作' },
-  { key: 'report', label: '事件' },
-  { key: 'budget', label: '預算' },
-  { key: 'opc', label: 'OPC' },
-  { key: 'balancer', label: '路由' },
-];
 
 interface ChatLiveRailProps {
   monitor: ChatLiveMonitorState;
   messages?: ChatMessage[];
   compact?: boolean;
-  onOpenTheater?: () => void;
-  onOpenTheaterScene?: (scene: AnimScene) => void;
 }
 
 function BusyAgentRow({ agent }: { agent: RoleAgent }) {
   const meta = AGENT_STATUS_META[agent.status] ?? AGENT_STATUS_META.idle;
   const open = agentOpenCount(agent);
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-gray-800/80 bg-gray-950/40 px-2 py-1.5">
-      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${meta.dot}`} />
+    <div className="apple-inset flex items-center gap-2.5 px-2.5 py-2">
+      <span className={`h-2 w-2 shrink-0 rounded-full ${meta.dot}`} />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[12px] text-gray-200">{agent.name}</p>
-        <p className={`truncate text-[10px] ${meta.text}`}>
+        <p className="truncate text-[12px] font-bold text-[#F5F5F7]">{agent.name}</p>
+        <p className={`truncate text-[10px] font-normal ${meta.text}`}>
           {meta.label}
           {open > 0 ? ` · ${open} 項` : ''}
         </p>
       </div>
-      <span className="shrink-0 font-mono text-[10px] text-amber-300/90">{fmtUsd(agent.cost_usd)}</span>
+      <span className="apple-data shrink-0 text-[10px] text-[#FF9500]">{fmtUsd(agent.cost_usd)}</span>
     </div>
   );
 }
@@ -69,8 +57,6 @@ export default function ChatLiveRail({
   monitor,
   messages = [],
   compact,
-  onOpenTheater,
-  onOpenTheaterScene,
 }: ChatLiveRailProps) {
   const { agents, billing, llmOps, opc, docker, optimization, cloudLatest, memoryCount, updatedAt, error, refresh } =
     monitor;
@@ -138,14 +124,14 @@ export default function ChatLiveRail({
   const opcEdgeFresh = optimization?.opc_edge.cache_fresh;
   return (
     <aside
-      className={`flex min-h-0 flex-col gap-3 overflow-y-auto border-l border-gray-800 bg-gray-950/40 p-3 ${
+      className={`apple-canvas flex min-h-0 flex-col gap-4 overflow-y-auto overscroll-contain border-l border-white/[0.08] p-4 ${
         compact ? 'w-full' : 'w-[300px] shrink-0 sm:w-[340px] xl:w-[380px] 2xl:w-[420px]'
       }`}
     >
       <div className="flex items-center justify-between gap-2">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">即時監控</p>
-          <p className="text-[10px] text-gray-600">
+          <p className="apple-title">即時監控</p>
+          <p className="mt-1 text-[10px] font-normal text-[#636366]">
             {updatedAt ? `更新 ${fmtWhen(updatedAt)}` : '連線中…'}
             {' · '}5s 輪詢
           </p>
@@ -153,7 +139,7 @@ export default function ChatLiveRail({
         <button
           type="button"
           onClick={() => void refresh()}
-          className="rounded border border-gray-800 px-2 py-1 text-[10px] text-gray-400 hover:border-blue-500/40 hover:text-blue-300"
+          className="rounded-xl border border-white/[0.08] px-2.5 py-1 text-[10px] font-bold text-[#8E8E93] hover:border-[#007AFF]/40 hover:text-[#007AFF]"
         >
           刷新
         </button>
@@ -163,23 +149,6 @@ export default function ChatLiveRail({
           {error}
         </p>
       )}
-      <MonitorSection title="動態場景" hint="點選切換">
-        <div className="grid grid-cols-3 gap-1.5">
-          {THEATER_SHORTCUTS.map((s) => (
-            <button
-              key={s.key}
-              type="button"
-              onClick={() => {
-                onOpenTheaterScene?.(s.key);
-                onOpenTheater?.();
-              }}
-              className="rounded-xl border border-white/[0.08] bg-[#1c1c1e]/80 px-1.5 py-2 text-center text-[10px] font-medium text-[#8E8E93] transition-colors hover:border-[#007AFF]/40 hover:text-[#64D2FF]"
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
-      </MonitorSection>
       <MonitorSection title="系統健康" badge="LIVE">
         <div className="grid grid-cols-1 gap-1.5">
           <HealthPill
@@ -332,11 +301,11 @@ export default function ChatLiveRail({
           </div>
         </MonitorSection>
       )}
-      <MonitorSection title="活躍 Agent" hint={`${liveAgents.length} 席`}>
+      <MonitorSection title="活躍 Agent" hint={`${liveAgents.length} 席`} scroll maxHeight="220px">
         {liveAgents.length === 0 ? (
-          <p className="py-3 text-center text-[11px] text-gray-600">全部待命</p>
+          <p className="py-4 text-center text-[11px] text-[#636366]">全部待命</p>
         ) : (
-          <div className="space-y-1.5">
+          <div className="space-y-2">
             {liveAgents.map((a) => (
               <BusyAgentRow key={a.id} agent={a} />
             ))}
@@ -362,23 +331,23 @@ export default function ChatLiveRail({
           </div>
         )}
       </MonitorSection>
-      <MonitorSection title="事件流" hint="最近">
+      <MonitorSection title="事件流" hint="最近" scroll maxHeight="240px">
         {recentEvents.length === 0 ? (
-          <p className="py-2 text-center text-[11px] text-gray-600">尚無事件</p>
+          <p className="py-4 text-center text-[11px] text-[#636366]">尚無事件</p>
         ) : (
-          <div className="space-y-1">
+          <div className="space-y-2">
             {recentEvents.map((ev, i) => (
-              <div key={`${ev.ts}-${ev.event}-${i}`} className="border-b border-gray-800/80 py-1.5 last:border-0">
+              <div key={`${ev.ts}-${ev.event}-${i}`} className="border-b border-white/[0.06] pb-2 last:border-0">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-mono text-[10px] text-gray-600">{fmtWhen(ev.ts)}</span>
+                  <span className="apple-data text-[10px] text-[#636366]">{fmtWhen(ev.ts)}</span>
                   {ev.cost > 0 && (
-                    <span className="font-mono text-[10px] text-gray-500">{fmtUsd(ev.cost)}</span>
+                    <span className="apple-data text-[10px] text-[#8E8E93]">{fmtUsd(ev.cost)}</span>
                   )}
                 </div>
-                <p className="truncate text-[11px] text-gray-300">
+                <p className="mt-0.5 truncate text-[11px] font-bold text-[#F5F5F7]">
                   {ev.role} · {ev.event.replace(/_/g, ' ')}
                 </p>
-                {ev.title && <p className="truncate text-[10px] text-gray-600">{ev.title}</p>}
+                {ev.title && <p className="truncate text-[10px] font-normal text-[#636366]">{ev.title}</p>}
               </div>
             ))}
           </div>

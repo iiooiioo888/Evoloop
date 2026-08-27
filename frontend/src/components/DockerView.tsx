@@ -586,7 +586,7 @@ export default function DockerView() {
 
         {/* 公司預算與優化建議 */}
         {budget?.company_budget && (
-          <div className="rounded-lg border border-[#23252a] bg-[#0f1011] p-3">
+          <div className="apple-card apple-card--tight !p-0 p-3">
             <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
                 公司預算

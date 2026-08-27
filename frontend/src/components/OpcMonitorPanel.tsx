@@ -38,7 +38,7 @@ function Gauge({ value, min, max }: { value: number | null; min: number; max: nu
         className="h-full rounded-full"
         style={{
           width: `${pct}%`,
-          background: hot ? '#e5484d' : '#5e6ad2',
+          background: hot ? '#e5484d' : '#007AFF',
         }}
       />
     </div>
@@ -52,7 +52,7 @@ function PhaseStrip({ task }: { task: TaskProgress | null }) {
   const failed = task?.status === 'failed';
 
   return (
-    <div className="rounded-lg border border-[#23252a] bg-[#0f1011] p-4">
+    <div className="apple-card apple-card--tight !p-0 p-4">
       <div className="mb-3 flex items-center justify-between">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-[#62666d]">
           6 級感知–行動閉環
@@ -73,26 +73,26 @@ function PhaseStrip({ task }: { task: TaskProgress | null }) {
             <div key={p.key} className="flex flex-1 flex-col items-center">
               <div className="flex w-full items-center">
                 <div
-                  className={`h-0.5 flex-1 ${i === 0 ? 'opacity-0' : passed || active ? 'bg-[#5e6ad2]' : 'bg-[#23252a]'}`}
+                  className={`h-0.5 flex-1 ${i === 0 ? 'opacity-0' : passed || active ? 'bg-[#007AFF]' : 'bg-[#23252a]'}`}
                 />
                 <div
                   className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] ${
                     failed && i === idx
                       ? 'bg-red-500/20 text-red-300'
                       : passed
-                        ? 'bg-[#5e6ad2] text-white'
+                        ? 'bg-[#007AFF] text-white'
                         : active
-                          ? 'bg-[#5e6ad2]/20 text-[#828fff] ring-1 ring-[#5e6ad2]'
+                          ? 'bg-[#007AFF]/20 text-[#64D2FF] ring-1 ring-[#007AFF]'
                           : 'bg-[#141516] text-[#62666d]'
                   }`}
                 >
                   {failed && i === idx ? '!' : passed ? '✓' : i + 1}
                 </div>
                 <div
-                  className={`h-0.5 flex-1 ${i === OPC_PHASES.length - 1 ? 'opacity-0' : passed || (running && i + 1 === idx) ? 'bg-[#5e6ad2]' : 'bg-[#23252a]'}`}
+                  className={`h-0.5 flex-1 ${i === OPC_PHASES.length - 1 ? 'opacity-0' : passed || (running && i + 1 === idx) ? 'bg-[#007AFF]' : 'bg-[#23252a]'}`}
                 />
               </div>
-              <span className={`mt-1.5 text-[10px] ${active ? 'text-[#828fff]' : passed ? 'text-[#d0d6e0]' : 'text-[#62666d]'}`}>
+              <span className={`mt-1.5 text-[10px] ${active ? 'text-[#64D2FF]' : passed ? 'text-[#d0d6e0]' : 'text-[#62666d]'}`}>
                 {p.icon} {p.label}
               </span>
             </div>
@@ -109,7 +109,7 @@ function TagRow({ tag, reading }: { tag: OpcTagCatalog; reading?: OpcLiveReading
   const quality = reading?.quality ?? (reading ? 'Good' : '—');
   const good = quality === 'Good' || quality === '—';
   return (
-    <tr className="border-b border-[#23252a] last:border-0">
+    <tr className="border-b border-white/[0.08] last:border-0">
       <td className="py-2 pr-3">
         <p className="text-xs font-medium text-[#f7f8f8]">{tag.name}</p>
         <p className="text-[10px] text-[#62666d]">{tag.desc}</p>
@@ -174,7 +174,7 @@ export default function OpcMonitorPanel() {
   }, [data, live]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-[#010102] p-4 text-[#f7f8f8]">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto apple-canvas p-4 text-[#f7f8f8]">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-sm font-semibold">OPC UA 工業監控</h2>
@@ -196,7 +196,7 @@ export default function OpcMonitorPanel() {
           </span>
           <button
             onClick={() => void refresh()}
-            className="rounded-md border border-[#23252a] bg-[#0f1011] px-2 py-1 text-[11px] text-[#8a8f98] hover:text-[#f7f8f8]"
+            className="rounded-xl border border-white/[0.08] bg-[#1C1C1E] px-2 py-1 text-[11px] text-[#8a8f98] hover:text-[#f7f8f8]"
           >
             {loading ? '同步中' : '重新整理'}
           </button>
@@ -210,7 +210,7 @@ export default function OpcMonitorPanel() {
       )}
 
       {!connected && live?.error && (
-        <div className="mb-3 rounded-md border border-[#23252a] bg-[#0f1011] px-3 py-2 text-[11px] text-[#8a8f98]">
+        <div className="mb-3 rounded-xl border border-white/[0.08] bg-[#1C1C1E] px-3 py-2 text-[11px] text-[#8a8f98]">
           即時讀取失敗（{live.error}）。下方改顯示模擬標籤目錄、護欄邊界與審計檔。
         </div>
       )}
@@ -222,7 +222,7 @@ export default function OpcMonitorPanel() {
           { label: '寫入攔截', value: String(summary.blocked ?? 0) },
           { label: '讀 / 寫', value: `${summary.reads ?? 0} / ${summary.writes ?? 0}` },
         ].map((kpi) => (
-          <div key={kpi.label} className="rounded-lg border border-[#23252a] bg-[#0f1011] px-3 py-2.5">
+          <div key={kpi.label} className="apple-card apple-card--tight !p-0 px-3 py-2.5">
             <p className="text-[10px] uppercase tracking-wider text-[#62666d]">{kpi.label}</p>
             <p className="mt-1 font-mono text-lg text-[#f7f8f8]">{kpi.value}</p>
           </div>
@@ -237,10 +237,10 @@ export default function OpcMonitorPanel() {
         </p>
       )}
 
-      <div className="mt-4 overflow-x-auto rounded-lg border border-[#23252a] bg-[#0f1011]">
+      <div className="mt-4 overflow-x-auto apple-card apple-card--tight !p-0">
         <table className="w-full min-w-[640px] text-left">
           <thead>
-            <tr className="border-b border-[#23252a] text-[10px] uppercase tracking-wider text-[#62666d]">
+            <tr className="border-b border-white/[0.08] text-[10px] uppercase tracking-wider text-[#62666d]">
               <th className="px-3 py-2 font-medium">標籤</th>
               <th className="px-3 py-2 font-medium">即時值</th>
               <th className="px-3 py-2 font-medium">量程</th>
@@ -257,7 +257,7 @@ export default function OpcMonitorPanel() {
       </div>
 
       <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <section className="rounded-lg border border-[#23252a] bg-[#0f1011] p-3">
+        <section className="apple-card apple-card--tight !p-0 p-3">
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[#62666d]">
             審計日誌
           </p>
@@ -286,7 +286,7 @@ export default function OpcMonitorPanel() {
           )}
         </section>
 
-        <section className="rounded-lg border border-[#23252a] bg-[#0f1011] p-3">
+        <section className="apple-card apple-card--tight !p-0 p-3">
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[#62666d]">
             寫入護欄
           </p>
@@ -307,7 +307,7 @@ export default function OpcMonitorPanel() {
           </div>
         </section>
 
-        <section className="rounded-lg border border-[#23252a] bg-[#0f1011] p-3">
+        <section className="apple-card apple-card--tight !p-0 p-3">
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[#62666d]">
             最近 OPC 任務
           </p>

@@ -101,7 +101,7 @@ export default function AppShell({
   );
 
   return (
-    <div className="flex h-dvh flex-col bg-gray-950 text-gray-100">
+    <div className="flex h-dvh flex-col apple-canvas text-[#F5F5F7]">
       {/* ══ 顶栏 ══ */}
       <TopBar
         activeView={activeView}

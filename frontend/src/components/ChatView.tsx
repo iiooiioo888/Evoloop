@@ -1,16 +1,17 @@
 /**
  * ChatView — 全頁對話工作台：KPI +（對話欄內）即時動態 + 訊息 + 右側監控。
+ * 即時動態為 Apple LiveBoard 柵格，無場景輪播／自動下一步。
  */
 import { useEffect, useMemo, useState } from 'react';
 import { fmtUsd, fmtWhen } from '../lib/agentUi';
-import { type AnimScene, buildAnimLiveFeed } from '../lib/animLive';
+import { buildAnimLiveFeed } from '../lib/animLive';
 import { useChatLiveMonitor } from '../hooks/useChatLiveMonitor';
 import type { ChatMessage } from '../types';
-import AnimTheater from './AnimTheater';
 import ChatLiveRail from './ChatLiveRail';
 import { LiveTicker, TopKpi } from './ChatMonitorCards';
 import InputBar from './InputBar';
 import type { SendOptions } from './InputBar';
+import LiveBoard from './LiveBoard';
 import MessageList from './MessageList';
 
 interface ChatViewProps {
@@ -44,9 +45,8 @@ export default function ChatView({
 }: ChatViewProps) {
   const monitor = useChatLiveMonitor();
   const [railOpen, setRailOpen] = useState(true);
-  /** 劇場與訊息同欄停靠，不橫跨右側監控 */
-  const [theaterOpen, setTheaterOpen] = useState(true);
-  const [theaterScene, setTheaterScene] = useState<AnimScene>('pipeline');
+  /** LiveBoard 與訊息同欄停靠，不橫跨右側監控 */
+  const [boardOpen, setBoardOpen] = useState(true);
 
   const s = monitor.agents?.summary;
   const streaming = messages.some((m) => m.streaming);
@@ -77,9 +77,9 @@ export default function ChatView({
     ],
   );
 
-  // 有真實活動時自動展開劇場
+  // 有真實活動時自動展開面板
   useEffect(() => {
-    if (liveFeed.live || streaming || sending) setTheaterOpen(true);
+    if (liveFeed.live || streaming || sending) setBoardOpen(true);
   }, [liveFeed.live, streaming, sending]);
 
   const tickerItems = useMemo(() => {
@@ -105,11 +105,6 @@ export default function ChatView({
     return items.slice(0, 12);
   }, [sending, streaming, messages, monitor.agents?.agents]);
 
-  const openTheaterScene = (scene: AnimScene) => {
-    setTheaterScene(scene);
-    setTheaterOpen(true);
-  };
-
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="shrink-0 border-b border-gray-800 bg-gray-950/50 px-3 py-2.5 lg:px-4">
@@ -117,7 +112,7 @@ export default function ChatView({
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">對話工作台</p>
             <p className="text-[10px] text-gray-600">
-              KPI · 對話欄即時動態 · 右側監控
+              KPI · LiveBoard · 右側監控
               {sending || streaming ? ' · 生成中' : ''}
               {runningTasks > 0 ? ` · ${runningTasks} 任務進行中` : ''}
               {liveFeed.live ? ' · LIVE' : ''}
@@ -126,10 +121,10 @@ export default function ChatView({
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => setTheaterOpen((v) => !v)}
+              onClick={() => setBoardOpen((v) => !v)}
               className="rounded-xl border border-white/[0.08] px-2.5 py-1 text-[11px] text-[#8E8E93] hover:border-[#007AFF]/40 hover:text-[#64D2FF]"
             >
-              {theaterOpen ? '收合動態' : '展開動態'}
+              {boardOpen ? '收合動態' : '展開動態'}
             </button>
             <button
               type="button"
@@ -154,7 +149,7 @@ export default function ChatView({
             label="開放工作"
             value={String(s?.work_items_open ?? 0)}
             hint={`角色 ${s?.roles_total ?? 0}`}
-            accent="text-[#828fff]"
+            accent="text-[#64D2FF]"
           />
           <TopKpi
             label="公司任務"
@@ -179,7 +174,7 @@ export default function ChatView({
             label="API 用量"
             value={fmtUsd(s?.total_api_cost_usd ?? 0)}
             hint="LLM token"
-            accent="text-[#828fff]"
+            accent="text-[#64D2FF]"
           />
           <TopKpi
             label="Docker"
@@ -225,7 +220,7 @@ export default function ChatView({
                 : '—'
             }
             hint="P0 任務-模型匹配"
-            accent="text-[#828fff]"
+            accent="text-[#64D2FF]"
           />
         </div>
       </div>
@@ -256,18 +251,9 @@ export default function ChatView({
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className="flex min-w-0 flex-1 flex-col">
-          {theaterOpen && (
-            <div className="anim-theater-dock shrink-0 border-b border-white/[0.06] bg-gradient-to-b from-[#2c2c2e]/80 to-transparent px-3 py-2">
-              <AnimTheater
-                variant="dock"
-                motion
-                initialScene="pipeline"
-                scene={theaterScene}
-                onSceneChange={setTheaterScene}
-                feed={liveFeed}
-                scenes={['pipeline', 'company', 'report', 'budget', 'opc', 'balancer']}
-                className="!border-white/[0.08] !bg-[#1c1c1e]/70"
-              />
+          {boardOpen && (
+            <div className="anim-theater-dock shrink-0 border-b border-white/[0.06] px-3 py-2">
+              <LiveBoard feed={liveFeed} density="dock" />
             </div>
           )}
           <MessageList
@@ -286,12 +272,7 @@ export default function ChatView({
 
         {railOpen && (
           <div className="hidden min-h-0 lg:flex">
-            <ChatLiveRail
-              monitor={monitor}
-              messages={messages}
-              onOpenTheater={() => setTheaterOpen(true)}
-              onOpenTheaterScene={openTheaterScene}
-            />
+            <ChatLiveRail monitor={monitor} messages={messages} />
           </div>
         )}
         {railOpen && (
@@ -302,13 +283,7 @@ export default function ChatView({
               className="flex-1 bg-black/50"
               onClick={() => setRailOpen(false)}
             />
-            <ChatLiveRail
-              monitor={monitor}
-              messages={messages}
-              compact
-              onOpenTheater={() => setTheaterOpen(true)}
-              onOpenTheaterScene={openTheaterScene}
-            />
+            <ChatLiveRail monitor={monitor} messages={messages} compact />
           </div>
         )}
       </div>

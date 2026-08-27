@@ -32,7 +32,7 @@ export default function OptimizationPanel() {
   const opc = data?.opc_edge;
 
   return (
-    <div className="mt-6 border-t border-[#23252a] pt-5">
+    <div className="mt-6 border-t border-white/[0.08] pt-5">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="text-sm font-semibold text-[#f7f8f8]">性能優化路線圖</h3>
@@ -43,7 +43,7 @@ export default function OptimizationPanel() {
         <button
           type="button"
           onClick={() => void refresh()}
-          className="rounded-md border border-[#23252a] bg-[#0f1011] px-2 py-1 text-[11px] text-[#8a8f98]"
+          className="rounded-xl border border-white/[0.08] bg-[#1C1C1E] px-2 py-1 text-[11px] text-[#8a8f98]"
         >
           重新整理
         </button>
@@ -58,21 +58,21 @@ export default function OptimizationPanel() {
       <RoadmapTable items={data?.roadmap ?? []} />
 
       <div className="mb-4 mt-4 grid grid-cols-2 gap-2 lg:grid-cols-5">
-        <div className="rounded-lg border border-[#23252a] bg-[#0f1011] px-3 py-2.5">
+        <div className="apple-card apple-card--tight !p-0 px-3 py-2.5">
           <p className="text-[10px] uppercase tracking-wider text-[#62666d]">LLM 快取命中率</p>
           <p className="mt-1 font-mono text-lg text-[#4cc38a]">{hitPct}%</p>
           <p className="mt-0.5 text-[11px] text-[#8a8f98]">
             命中 {cache?.hits ?? 0} · 未中 {cache?.misses ?? 0} · 語義 {cache?.semantic_hits ?? 0}
           </p>
         </div>
-        <div className="rounded-lg border border-[#23252a] bg-[#0f1011] px-3 py-2.5">
+        <div className="apple-card apple-card--tight !p-0 px-3 py-2.5">
           <p className="text-[10px] uppercase tracking-wider text-[#62666d]">路由自適應</p>
           <p className="mt-1 font-mono text-lg text-[#f7f8f8]">{routing?.adaptive_length_threshold ?? '—'}</p>
           <p className="mt-0.5 text-[11px] text-[#8a8f98]">
             simple {routing?.simple_count ?? 0} · company {routing?.company_count ?? 0}
           </p>
         </div>
-        <div className="rounded-lg border border-[#23252a] bg-[#0f1011] px-3 py-2.5">
+        <div className="apple-card apple-card--tight !p-0 px-3 py-2.5">
           <p className="text-[10px] uppercase tracking-wider text-[#62666d]">反思早停</p>
           <p className="mt-1 text-sm text-[#f7f8f8]">
             門檻 {data?.reflection.pass_threshold ?? 8} · 最多 {data?.reflection.max_iterations ?? 3} 輪
@@ -81,14 +81,14 @@ export default function OptimizationPanel() {
             最小提升 Δ{data?.reflection.min_score_improvement ?? 0.5}
           </p>
         </div>
-        <div className="rounded-lg border border-[#23252a] bg-[#0f1011] px-3 py-2.5">
+        <div className="apple-card apple-card--tight !p-0 px-3 py-2.5">
           <p className="text-[10px] uppercase tracking-wider text-[#62666d]">Review+Synth</p>
           <p className={`mt-1 text-sm ${data?.merge_review_synth.enabled ? 'text-[#4cc38a]' : 'text-amber-300'}`}>
             {data?.merge_review_synth.enabled ? '合併模式' : '分離模式'}
           </p>
           <p className="mt-0.5 text-[11px] text-[#8a8f98]">EVOL_MERGE_REVIEW_SYNTH</p>
         </div>
-        <div className="rounded-lg border border-[#23252a] bg-[#0f1011] px-3 py-2.5">
+        <div className="apple-card apple-card--tight !p-0 px-3 py-2.5">
           <p className="text-[10px] uppercase tracking-wider text-[#62666d]">OPC 邊緣層</p>
           <p className="mt-1 text-sm text-[#f7f8f8]">
             {opc?.tier ?? 'auto'} · TTL {opc?.edge_ttl_sec ?? 5}s
@@ -99,8 +99,8 @@ export default function OptimizationPanel() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-[#23252a]">
-        <p className="border-b border-[#23252a] bg-[#0f1011] px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-[#62666d]">
+      <div className="overflow-hidden rounded-lg border border-white/[0.08]">
+        <p className="border-b border-white/[0.08] bg-[#1C1C1E] px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-[#62666d]">
           環節 → 模型層級（P0 任務-模型匹配）
         </p>
         <table className="w-full text-left text-[12px]">
@@ -113,9 +113,9 @@ export default function OptimizationPanel() {
           </thead>
           <tbody>
             {Object.entries(data?.stage_router ?? {}).map(([stage, info]) => (
-              <tr key={stage} className="border-t border-[#23252a]">
+              <tr key={stage} className="border-t border-white/[0.08]">
                 <td className="px-3 py-1.5 font-mono text-[#d0d6e0]">{stage}</td>
-                <td className="px-3 py-1.5 text-[#828fff]">{info.tier}</td>
+                <td className="px-3 py-1.5 text-[#64D2FF]">{info.tier}</td>
                 <td className="px-3 py-1.5 font-mono text-[#8a8f98]">{info.model}</td>
               </tr>
             ))}

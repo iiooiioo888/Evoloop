@@ -55,11 +55,11 @@ function Kpi({
     <button
       type="button"
       onClick={onClick}
-      className="rounded-lg border border-[#23252a] bg-[#0f1011] px-3 py-3 text-left transition-colors hover:border-[#34343a]"
+      className="apple-card apple-card--tight apple-card--pad text-left transition-colors hover:border-white/15"
     >
-      <p className="text-[10px] uppercase tracking-wider text-[#62666d]">{label}</p>
-      <p className="mt-1 font-mono text-xl text-[#f7f8f8]">{value}</p>
-      <p className="mt-1 text-[11px] text-[#8a8f98]">{hint}</p>
+      <p className="apple-title">{label}</p>
+      <p className="apple-data mt-2 text-[22px] text-[#F5F5F7]">{value}</p>
+      <p className="mt-2 text-[11px] font-normal text-[#8E8E93]">{hint}</p>
     </button>
   );
 }
@@ -76,14 +76,14 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-lg border border-[#23252a] bg-[#0f1011] p-3">
-      <div className="mb-2 flex items-center justify-between">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-[#62666d]">{title}</p>
-        <button className="text-[11px] text-[#828fff]" onClick={onAction}>
+    <section className="apple-card">
+      <div className="apple-card__head">
+        <p className="apple-title">{title}</p>
+        <button className="text-[11px] font-bold text-[#007AFF]" onClick={onAction}>
           {action}
         </button>
       </div>
-      {children}
+      <div className="apple-card__body apple-card__body--static">{children}</div>
     </section>
   );
 }
@@ -177,7 +177,7 @@ export default function MonitorOverview({ onOpenTab }: MonitorOverviewProps) {
   );
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-[#010102] p-4 text-[#f7f8f8]">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain apple-canvas p-5 text-[#F5F5F7] sm:p-6">
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h2 className="text-sm font-semibold">監控總覽</h2>
@@ -187,7 +187,7 @@ export default function MonitorOverview({ onOpenTab }: MonitorOverviewProps) {
         </div>
         <button
           onClick={() => void refresh()}
-          className="rounded-md border border-[#23252a] bg-[#0f1011] px-2 py-1 text-[11px] text-[#8a8f98] hover:text-[#f7f8f8]"
+          className="rounded-xl border border-white/[0.08] bg-[#1C1C1E] px-2 py-1 text-[11px] text-[#8a8f98] hover:text-[#f7f8f8]"
         >
           重新整理
         </button>
@@ -199,7 +199,7 @@ export default function MonitorOverview({ onOpenTab }: MonitorOverviewProps) {
         </div>
       )}
 
-      <div className="mb-4 grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
+      <div className="mb-5 grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
         <Kpi
           label="任務成功率"
           value={`${dash?.stats.success_rate ?? 0}%`}
@@ -294,7 +294,7 @@ export default function MonitorOverview({ onOpenTab }: MonitorOverviewProps) {
             </div>
             <span
               className={`h-2.5 w-2.5 shrink-0 rounded-full ${
-                liveFeed.live ? 'bg-[#30D158]' : 'bg-[#636366]'
+                liveFeed.live ? 'bg-[#34C759]' : 'bg-[#636366]'
               }`}
             />
           </button>
@@ -343,7 +343,7 @@ export default function MonitorOverview({ onOpenTab }: MonitorOverviewProps) {
                   key={agent.id}
                   type="button"
                   onClick={() => onOpenTab('agents', agent.id)}
-                  className="rounded-md border border-[#23252a] px-2.5 py-2 text-left hover:border-[#34343a]"
+                  className="rounded-md border border-white/[0.08] px-2.5 py-2 text-left hover:border-[#34343a]"
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="truncate text-[12px] text-[#d0d6e0]">
@@ -385,7 +385,7 @@ export default function MonitorOverview({ onOpenTab }: MonitorOverviewProps) {
                 <span className="w-36 truncate text-[#d0d6e0]">{m.id}</span>
                 <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#141516]">
                   <div
-                    className="h-full bg-[#5e6ad2]"
+                    className="h-full bg-[#007AFF]"
                     style={{
                       width: `${Math.min(100, ((Number(m.latency_ewma_ms) || 0) / 15000) * 100)}%`,
                     }}
@@ -428,7 +428,7 @@ export default function MonitorOverview({ onOpenTab }: MonitorOverviewProps) {
             (dash?.tasks ?? []).slice(0, 8).map((t) => (
               <div
                 key={t.task_id}
-                className="flex justify-between border-b border-[#23252a] py-1.5 text-[11px] last:border-0"
+                className="flex justify-between border-b border-white/[0.08] py-1.5 text-[11px] last:border-0"
               >
                 <span className="min-w-0 truncate text-[#d0d6e0]">{t.query || t.task_id.slice(0, 8)}</span>
                 <span
@@ -454,7 +454,7 @@ export default function MonitorOverview({ onOpenTab }: MonitorOverviewProps) {
             hub!.call_logs.slice(0, 8).map((log, i) => (
               <div
                 key={`${log.id ?? i}`}
-                className="flex justify-between border-b border-[#23252a] py-1.5 text-[11px] last:border-0"
+                className="flex justify-between border-b border-white/[0.08] py-1.5 text-[11px] last:border-0"
               >
                 <span className="text-[#d0d6e0]">{log.model_name}</span>
                 <span className="text-[#8a8f98]">{log.status}</span>
@@ -470,7 +470,7 @@ export default function MonitorOverview({ onOpenTab }: MonitorOverviewProps) {
             opc!.audit.recent.slice(0, 8).map((row, i) => (
               <div
                 key={`${row.timestamp}-${i}`}
-                className="flex justify-between border-b border-[#23252a] py-1.5 text-[11px] last:border-0"
+                className="flex justify-between border-b border-white/[0.08] py-1.5 text-[11px] last:border-0"
               >
                 <span className="text-[#d0d6e0]">
                   {row.operation} {row.tag_name}
@@ -490,7 +490,7 @@ export default function MonitorOverview({ onOpenTab }: MonitorOverviewProps) {
             events.slice(0, 8).map((e, i) => (
               <div
                 key={`${e.ts}-${i}`}
-                className="flex justify-between border-b border-[#23252a] py-1.5 text-[11px] last:border-0"
+                className="flex justify-between border-b border-white/[0.08] py-1.5 text-[11px] last:border-0"
               >
                 <span className="text-[#d0d6e0]">
                   {e.type} · {e.service}

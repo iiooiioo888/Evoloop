@@ -2,7 +2,7 @@
  *
  * 按 Linear 設計規範：
  * - Canvas: #010102, Surface-1: #0f1011, Hairline: #23252a
- * - Primary accent: #5e6ad2 (lavender-blue)
+ * - Primary accent: #007AFF (lavender-blue)
  * - 使用 surface ladder + hairline borders，不用 shadow
  *
  * 功能：
@@ -17,7 +17,7 @@ import type { TraceEntry, TraceSummary } from '../types';
 
 // ── 事件類型元數據 ──
 const EVENT_META: Record<string, { label: string; icon: string; color: string }> = {
-  llm_call: { label: 'LLM 調用', icon: '🤖', color: 'text-[#5e6ad2]' },
+  llm_call: { label: 'LLM 調用', icon: '🤖', color: 'text-[#007AFF]' },
   context_injection: { label: '上下文注入', icon: '📎', color: 'text-cyan-400' },
   evaluation: { label: '評估', icon: '📊', color: 'text-yellow-400' },
   reflection: { label: '反思', icon: '💭', color: 'text-purple-400' },
@@ -55,7 +55,7 @@ function TraceEventCard({ entry }: { entry: TraceEntry }) {
   const meta = EVENT_META[entry.event] ?? { label: entry.event, icon: '📋', color: 'text-gray-400' };
 
   return (
-    <div className="rounded-lg border border-[#23252a] bg-[#0f1011] p-3 transition-colors hover:border-[#34343a]">
+    <div className="apple-card apple-card--tight !p-0 p-3 transition-colors hover:border-[#34343a]">
       {/* 標題行 */}
       <button
         onClick={() => setExpanded((v) => !v)}
@@ -82,7 +82,7 @@ function TraceEventCard({ entry }: { entry: TraceEntry }) {
         <div className="mt-1.5">
           {entry.event === 'llm_call' && (
             <p className="truncate text-[11px] text-[#8a8f98]">
-              {entry.model && <span className="text-[#5e6ad2]">[{entry.model}] </span>}
+              {entry.model && <span className="text-[#007AFF]">[{entry.model}] </span>}
               {String(entry.prompt ?? '').slice(0, 100)}...
             </p>
           )}
@@ -115,13 +115,13 @@ function TraceEventCard({ entry }: { entry: TraceEntry }) {
 
       {/* 展開詳情 */}
       {expanded && (
-        <div className="mt-2 space-y-2 border-t border-[#23252a] pt-2">
+        <div className="mt-2 space-y-2 border-t border-white/[0.08] pt-2">
           {entry.event === 'llm_call' && (
             <>
               {entry.system && (
                 <div>
                   <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-[#62666d]">System</p>
-                  <pre className="max-h-32 overflow-y-auto whitespace-pre-wrap rounded-md bg-[#010102] p-2 text-[11px] leading-relaxed text-[#d0d6e0]">
+                  <pre className="max-h-32 overflow-y-auto whitespace-pre-wrap rounded-md apple-canvas p-2 text-[11px] leading-relaxed text-[#d0d6e0]">
                     {entry.system}
                   </pre>
                 </div>
@@ -130,7 +130,7 @@ function TraceEventCard({ entry }: { entry: TraceEntry }) {
                 <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-[#62666d]">
                   Prompt ({entry.prompt_length ?? 0} chars)
                 </p>
-                <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-md bg-[#010102] p-2 text-[11px] leading-relaxed text-[#d0d6e0]">
+                <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-md apple-canvas p-2 text-[11px] leading-relaxed text-[#d0d6e0]">
                   {entry.prompt}
                 </pre>
               </div>
@@ -138,7 +138,7 @@ function TraceEventCard({ entry }: { entry: TraceEntry }) {
                 <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-[#62666d]">
                   Response ({entry.response_length ?? 0} chars)
                 </p>
-                <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-md bg-[#010102] p-2 text-[11px] leading-relaxed text-[#d0d6e0]">
+                <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-md apple-canvas p-2 text-[11px] leading-relaxed text-[#d0d6e0]">
                   {entry.response}
                 </pre>
               </div>
@@ -168,26 +168,26 @@ function TraceEventCard({ entry }: { entry: TraceEntry }) {
                 </div>
               )}
               {entry.raw_response && (
-                <pre className="max-h-32 overflow-y-auto whitespace-pre-wrap rounded-md bg-[#010102] p-2 text-[11px] text-[#8a8f98]">
+                <pre className="max-h-32 overflow-y-auto whitespace-pre-wrap rounded-md apple-canvas p-2 text-[11px] text-[#8a8f98]">
                   {entry.raw_response}
                 </pre>
               )}
             </>
           )}
           {entry.event === 'reflection' && (
-            <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-md bg-[#010102] p-2 text-[11px] leading-relaxed text-[#d0d6e0]">
+            <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-md apple-canvas p-2 text-[11px] leading-relaxed text-[#d0d6e0]">
               {entry.reflection}
             </pre>
           )}
           {entry.event === 'improvement' && (
-            <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-md bg-[#010102] p-2 text-[11px] leading-relaxed text-[#d0d6e0]">
+            <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-md apple-canvas p-2 text-[11px] leading-relaxed text-[#d0d6e0]">
               {entry.improved_answer}
             </pre>
           )}
           {entry.event === 'context_injection' && entry.items && (
             <div className="space-y-1">
               {entry.items.map((item, i) => (
-                <p key={i} className="rounded-md bg-[#010102] p-2 text-[11px] text-[#d0d6e0]">
+                <p key={i} className="rounded-md apple-canvas p-2 text-[11px] text-[#d0d6e0]">
                   {item.slice(0, 300)}
                 </p>
               ))}
@@ -202,12 +202,12 @@ function TraceEventCard({ entry }: { entry: TraceEntry }) {
                 <span className="text-[11px] text-[#8a8f98]">{entry.tool}</span>
               </div>
               {entry.args && (
-                <pre className="max-h-24 overflow-y-auto whitespace-pre-wrap rounded-md bg-[#010102] p-2 text-[11px] text-[#d0d6e0]">
+                <pre className="max-h-24 overflow-y-auto whitespace-pre-wrap rounded-md apple-canvas p-2 text-[11px] text-[#d0d6e0]">
                   {JSON.stringify(entry.args, null, 2)}
                 </pre>
               )}
               {entry.result && (
-                <pre className="max-h-32 overflow-y-auto whitespace-pre-wrap rounded-md bg-[#010102] p-2 text-[11px] text-[#d0d6e0]">
+                <pre className="max-h-32 overflow-y-auto whitespace-pre-wrap rounded-md apple-canvas p-2 text-[11px] text-[#d0d6e0]">
                   {entry.result}
                 </pre>
               )}
@@ -270,9 +270,9 @@ export default function TraceView() {
   const filteredEvents = filter === 'all' ? events : events.filter((e) => e.event === filter);
 
   return (
-    <div className="flex h-full flex-col bg-[#010102]">
+    <div className="flex h-full flex-col apple-canvas">
       {/* 標題列 */}
-      <div className="flex items-center justify-between border-b border-[#23252a] px-4 py-3">
+      <div className="flex items-center justify-between border-b border-white/[0.08] px-4 py-3">
         <h2 className="text-sm font-medium tracking-tight text-[#f7f8f8]">
           📜 執行軌跡
           <span className="ml-2 text-xs font-normal text-[#8a8f98]">
@@ -283,7 +283,7 @@ export default function TraceView() {
           {selectedTaskId && (
             <button
               onClick={() => { setSelectedTaskId(null); setEvents([]); }}
-              className="rounded-md border border-[#23252a] bg-[#0f1011] px-3 py-1.5 text-xs text-[#f7f8f8] transition-colors hover:border-[#34343a]"
+              className="rounded-xl border border-white/[0.08] bg-[#1C1C1E] px-3 py-1.5 text-xs text-[#f7f8f8] transition-colors hover:border-[#34343a]"
             >
               ← 返回列表
             </button>
@@ -291,7 +291,7 @@ export default function TraceView() {
           <button
             onClick={() => void loadTraces()}
             disabled={loading}
-            className="rounded-md border border-[#23252a] bg-[#0f1011] px-3 py-1.5 text-xs text-[#f7f8f8] transition-colors hover:border-[#34343a] disabled:opacity-40"
+            className="rounded-xl border border-white/[0.08] bg-[#1C1C1E] px-3 py-1.5 text-xs text-[#f7f8f8] transition-colors hover:border-[#34343a] disabled:opacity-40"
           >
             {loading ? '...' : '🔄'}
           </button>
@@ -323,10 +323,10 @@ export default function TraceView() {
               <button
                 key={t.task_id}
                 onClick={() => void loadEvents(t.task_id)}
-                className="w-full rounded-lg border border-[#23252a] bg-[#0f1011] p-3 text-left transition-colors hover:border-[#5e6ad2]/40"
+                className="w-full apple-card apple-card--tight !p-0 p-3 text-left transition-colors hover:border-[#007AFF]/40"
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-mono text-xs text-[#5e6ad2]">{t.task_id}</span>
+                  <span className="font-mono text-xs text-[#007AFF]">{t.task_id}</span>
                   <span className="text-[10px] text-[#62666d]">{t.file_size_kb} KB</span>
                 </div>
                 <div className="mt-1 flex items-center gap-3 text-[11px] text-[#8a8f98]">
@@ -343,7 +343,7 @@ export default function TraceView() {
       {selectedTaskId && (
         <div className="flex flex-1 flex-col overflow-hidden">
           {/* 篩選列 */}
-          <div className="flex flex-wrap gap-1.5 border-b border-[#23252a] px-4 py-2">
+          <div className="flex flex-wrap gap-1.5 border-b border-white/[0.08] px-4 py-2">
             {FILTER_OPTIONS.map((opt) => (
               <button
                 key={opt.value}

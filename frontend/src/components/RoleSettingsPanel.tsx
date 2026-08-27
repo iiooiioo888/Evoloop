@@ -169,7 +169,7 @@ function Field({
 }
 
 const inputCls =
-  'w-full rounded-md border border-[#23252a] bg-[#0f1011] px-2 py-1.5 text-[12px] text-[#f7f8f8] outline-none focus:border-[#5e6ad2]/60';
+  'w-full rounded-xl border border-white/[0.08] bg-[#1C1C1E] px-2 py-1.5 text-[12px] text-[#f7f8f8] outline-none focus:border-[#007AFF]/60';
 
 interface RoleSettingsPanelProps {
   agent: RoleAgent;
@@ -223,7 +223,7 @@ export default function RoleSettingsPanel({
             <button
               type="button"
               onClick={() => onClone(agent)}
-              className="rounded border border-[#23252a] px-2 py-1 text-[11px] text-[#8a8f98] hover:text-[#f7f8f8]"
+              className="rounded border border-white/[0.08] px-2 py-1 text-[11px] text-[#8a8f98] hover:text-[#f7f8f8]"
             >
               複製為自定義
             </button>
@@ -232,7 +232,7 @@ export default function RoleSettingsPanel({
             <button
               type="button"
               onClick={() => void onReset()}
-              className="rounded border border-[#23252a] px-2 py-1 text-[11px] text-[#8a8f98] hover:text-[#f7f8f8]"
+              className="rounded border border-white/[0.08] px-2 py-1 text-[11px] text-[#8a8f98] hover:text-[#f7f8f8]"
             >
               還原預設
             </button>
@@ -250,7 +250,7 @@ export default function RoleSettingsPanel({
             type="button"
             disabled={saving || !dirty}
             onClick={() => void onSave(draft)}
-            className="rounded border border-[#5e6ad2]/40 bg-[#5e6ad2]/15 px-2 py-1 text-[11px] text-[#828fff] disabled:opacity-40"
+            className="rounded border border-[#007AFF]/40 bg-[#007AFF]/15 px-2 py-1 text-[11px] text-[#64D2FF] disabled:opacity-40"
           >
             {saving ? '儲存中…' : '儲存設定'}
           </button>
@@ -272,7 +272,7 @@ export default function RoleSettingsPanel({
             type="button"
             onClick={() => setSection(key)}
             className={`rounded px-2 py-1 text-[11px] ${
-              section === key ? 'bg-[#5e6ad2]/20 text-[#828fff]' : 'text-[#8a8f98]'
+              section === key ? 'bg-[#007AFF]/20 text-[#64D2FF]' : 'text-[#8a8f98]'
             }`}
           >
             {label}
@@ -564,21 +564,21 @@ export default function RoleSettingsPanel({
 
       {section === 'alerts' && (
         <div className="space-y-3">
-          <div className="rounded-xl border border-[#23252a] bg-[#0f1011] p-3">
+          <div className="apple-card p-3">
             <div className="mb-2 flex items-baseline justify-between gap-2">
               <h4 className="text-[11px] font-semibold uppercase tracking-wider text-[#8a8f98]">預算上限</h4>
               <span className="text-[10px] text-[#62666d]">合計 = API＋Docker＋阿里雲 · 0=不限</span>
             </div>
             <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-              <div className="rounded-lg border border-[#23252a]/80 bg-[#141516] px-3 py-2">
+              <div className="rounded-lg border border-white/[0.08]/80 bg-[#141516] px-3 py-2">
                 <p className="text-[10px] text-[#62666d]">API 用量</p>
-                <p className="mt-0.5 text-[12px] text-[#828fff]">LLM token 花費</p>
+                <p className="mt-0.5 text-[12px] text-[#64D2FF]">LLM token 花費</p>
               </div>
-              <div className="rounded-lg border border-[#23252a]/80 bg-[#141516] px-3 py-2">
+              <div className="rounded-lg border border-white/[0.08]/80 bg-[#141516] px-3 py-2">
                 <p className="text-[10px] text-[#62666d]">Docker</p>
                 <p className="mt-0.5 text-[12px] text-sky-300">本地容器分攤</p>
               </div>
-              <div className="rounded-lg border border-[#23252a]/80 bg-[#141516] px-3 py-2">
+              <div className="rounded-lg border border-white/[0.08]/80 bg-[#141516] px-3 py-2">
                 <p className="text-[10px] text-[#62666d]">阿里雲</p>
                 <p className="mt-0.5 text-[12px] text-orange-300">BSS 帳目分攤</p>
               </div>
@@ -617,7 +617,7 @@ export default function RoleSettingsPanel({
             </div>
           </div>
 
-          <div className="rounded-xl border border-[#23252a] bg-[#0f1011] p-3">
+          <div className="apple-card p-3">
             <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[#8a8f98]">SLA／告警</h4>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <Field label="SLA 延遲 ms" hint="0=不檢查">
@@ -720,7 +720,7 @@ export function CreateRoleModal({ catalog, agents, cloneFrom, onClose, onCreate 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-[#23252a] bg-[#0f1011] p-4">
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto apple-card p-4">
         <div className="mb-3 flex items-center justify-between">
           <h3 className="text-sm font-semibold">{cloneFrom ? `複製「${cloneFrom.name}」` : '新增自定義角色'}</h3>
           <button type="button" className="text-[12px] text-[#8a8f98]" onClick={onClose}>
@@ -740,8 +740,8 @@ export function CreateRoleModal({ catalog, agents, cloneFrom, onClose, onCreate 
                   onClick={() => applyPreset(p)}
                   className={`rounded border px-2 py-1 text-[11px] ${
                     presetId === p.id
-                      ? 'border-[#5e6ad2]/40 bg-[#5e6ad2]/15 text-[#828fff]'
-                      : 'border-[#23252a] text-[#8a8f98]'
+                      ? 'border-[#007AFF]/40 bg-[#007AFF]/15 text-[#64D2FF]'
+                      : 'border-white/[0.08] text-[#8a8f98]'
                   }`}
                 >
                   {p.name}
@@ -876,13 +876,13 @@ export function CreateRoleModal({ catalog, agents, cloneFrom, onClose, onCreate 
           <input className={inputCls} placeholder="標籤，逗號分隔" value={tags} onChange={(e) => setTags(e.target.value)} />
         </div>
         <div className="mt-3 flex justify-end gap-2">
-          <button type="button" className="rounded border border-[#23252a] px-3 py-1.5 text-[12px] text-[#8a8f98]" onClick={onClose}>
+          <button type="button" className="rounded border border-white/[0.08] px-3 py-1.5 text-[12px] text-[#8a8f98]" onClick={onClose}>
             取消
           </button>
           <button
             type="button"
             disabled={busy || !name.trim()}
-            className="rounded border border-[#5e6ad2]/40 bg-[#5e6ad2]/15 px-3 py-1.5 text-[12px] text-[#828fff] disabled:opacity-40"
+            className="rounded border border-[#007AFF]/40 bg-[#007AFF]/15 px-3 py-1.5 text-[12px] text-[#64D2FF] disabled:opacity-40"
             onClick={async () => {
               setBusy(true);
               setError(null);

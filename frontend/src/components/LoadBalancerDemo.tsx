@@ -21,7 +21,7 @@ type FlyingOrb = {
   color: string;
 };
 
-const ORB_COLORS = ['#007AFF', '#30D158', '#FF9F0A', '#64D2FF', '#FF375F', '#BF5AF2'];
+const ORB_COLORS = ['#007AFF', '#34C759', '#FF9500', '#64D2FF', '#FF3B30', '#BF5AF2'];
 
 function stageIndexFromPhase(
   backends: AnimStageBackend[],

@@ -49,7 +49,7 @@ export default function EventsPanel() {
   }, {});
 
   return (
-    <div className="flex-1 space-y-4 overflow-auto bg-[#010102] p-4 text-[#f7f8f8]">
+    <div className="flex-1 space-y-4 overflow-auto apple-canvas p-4 text-[#f7f8f8]">
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-sm font-medium">容器事件時間線</h3>
@@ -57,7 +57,7 @@ export default function EventsPanel() {
         </div>
         <button
           onClick={() => void refresh()}
-          className="rounded-md border border-[#23252a] bg-[#0f1011] px-2 py-1 text-[11px] text-[#8a8f98] hover:text-[#f7f8f8]"
+          className="rounded-xl border border-white/[0.08] bg-[#1C1C1E] px-2 py-1 text-[11px] text-[#8a8f98] hover:text-[#f7f8f8]"
         >
           {loading ? '同步中' : '重新整理'}
         </button>
@@ -76,7 +76,7 @@ export default function EventsPanel() {
           { label: '停止', value: counts.stop ?? 0 },
           { label: '重啟', value: counts.restart ?? 0 },
         ].map((kpi) => (
-          <div key={kpi.label} className="rounded-lg border border-[#23252a] bg-[#0f1011] px-3 py-2.5">
+          <div key={kpi.label} className="apple-card apple-card--tight !p-0 px-3 py-2.5">
             <p className="text-[10px] uppercase tracking-wider text-[#62666d]">{kpi.label}</p>
             <p className="mt-1 font-mono text-lg">{kpi.value}</p>
           </div>
@@ -84,18 +84,18 @@ export default function EventsPanel() {
       </div>
 
       {events.length === 0 ? (
-        <div className="rounded-lg border border-[#23252a] bg-[#0f1011] px-4 py-16 text-center">
+        <div className="apple-card apple-card--tight !p-0 px-4 py-16 text-center">
           <p className="text-sm text-[#8a8f98]">尚無容器事件</p>
           <p className="mt-1 text-[11px] text-[#62666d]">
             在「實例管理」對容器執行啟動 / 停止 / 重啟後，會寫入 events.jsonl。
           </p>
         </div>
       ) : (
-        <div className="relative space-y-0 rounded-lg border border-[#23252a] bg-[#0f1011] p-3">
+        <div className="relative space-y-0 apple-card apple-card--tight !p-0 p-3">
           {events.map((e, i) => (
             <div key={`${e.ts}-${e.service}-${i}`} className="relative flex gap-3 py-2 pl-4">
               <span className="absolute left-0 top-3 h-full w-px bg-[#23252a]" />
-              <span className="absolute left-[-3px] top-3.5 h-1.5 w-1.5 rounded-full bg-[#5e6ad2]" />
+              <span className="absolute left-[-3px] top-3.5 h-1.5 w-1.5 rounded-full bg-[#007AFF]" />
               <span className={`h-fit shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase ${tone(e.type)}`}>
                 {e.type}
               </span>

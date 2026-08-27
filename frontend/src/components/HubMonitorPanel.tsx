@@ -62,7 +62,7 @@ export default function HubMonitorPanel() {
   const maxLatency = Math.max(1, ...models.map((m) => Number(m.latency_ewma_ms) || 0));
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-[#010102] p-4 text-[#f7f8f8]">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto apple-canvas p-4 text-[#f7f8f8]">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-sm font-semibold">AI Hub 編排監控</h2>
@@ -73,7 +73,7 @@ export default function HubMonitorPanel() {
         </div>
         <button
           onClick={() => void refresh()}
-          className="rounded-md border border-[#23252a] bg-[#0f1011] px-2 py-1 text-[11px] text-[#8a8f98] hover:text-[#f7f8f8]"
+          className="rounded-xl border border-white/[0.08] bg-[#1C1C1E] px-2 py-1 text-[11px] text-[#8a8f98] hover:text-[#f7f8f8]"
         >
           {loading ? '同步中' : '重新整理'}
         </button>
@@ -86,15 +86,15 @@ export default function HubMonitorPanel() {
       )}
 
       <div className="mb-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
-        <div className="rounded-lg border border-[#23252a] bg-[#0f1011] px-3 py-2.5">
+        <div className="apple-card apple-card--tight !p-0 px-3 py-2.5">
           <p className="text-[10px] uppercase tracking-wider text-[#62666d]">語義快取命中率</p>
           <p className="mt-1 font-mono text-lg">{hitPct}%</p>
           <div className="mt-2 h-1 overflow-hidden rounded-full bg-[#141516]">
-            <div className="h-full bg-[#5e6ad2]" style={{ width: `${hitPct}%` }} />
+            <div className="h-full bg-[#007AFF]" style={{ width: `${hitPct}%` }} />
           </div>
           <p className="mt-1 text-[10px] text-[#62666d]">目標 &gt; {targetPct}%</p>
         </div>
-        <div className="rounded-lg border border-[#23252a] bg-[#0f1011] px-3 py-2.5">
+        <div className="apple-card apple-card--tight !p-0 px-3 py-2.5">
           <p className="text-[10px] uppercase tracking-wider text-[#62666d]">今日預算</p>
           <p className="mt-1 font-mono text-lg">
             {fmtUsd(budget?.spent_today_usd)}
@@ -105,17 +105,17 @@ export default function HubMonitorPanel() {
               className="h-full"
               style={{
                 width: `${spentPct}%`,
-                background: spentPct >= 90 ? '#e5484d' : '#5e6ad2',
+                background: spentPct >= 90 ? '#e5484d' : '#007AFF',
               }}
             />
           </div>
         </div>
-        <div className="rounded-lg border border-[#23252a] bg-[#0f1011] px-3 py-2.5">
+        <div className="apple-card apple-card--tight !p-0 px-3 py-2.5">
           <p className="text-[10px] uppercase tracking-wider text-[#62666d]">呼叫日誌</p>
           <p className="mt-1 font-mono text-lg">{data?.call_log_count ?? 0}</p>
           <p className="mt-1 text-[10px] text-[#62666d]">上游 {data?.upstream_calls ?? 0} 次</p>
         </div>
-        <div className="rounded-lg border border-[#23252a] bg-[#0f1011] px-3 py-2.5">
+        <div className="apple-card apple-card--tight !p-0 px-3 py-2.5">
           <p className="text-[10px] uppercase tracking-wider text-[#62666d]">熔斷 Open</p>
           <p className="mt-1 font-mono text-lg">
             {models.filter((m) => m.circuit.state === 'OPEN').length}
@@ -124,7 +124,7 @@ export default function HubMonitorPanel() {
         </div>
       </div>
 
-      <section className="mb-4 rounded-lg border border-[#23252a] bg-[#0f1011] p-3">
+      <section className="mb-4 apple-card apple-card--tight !p-0 p-3">
         <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[#62666d]">
           故障轉移鏈
         </p>
@@ -132,7 +132,7 @@ export default function HubMonitorPanel() {
           {(routing.default_chain).map(
             (id, i, arr) => (
               <span key={id} className="flex items-center gap-1.5">
-                <span className="rounded-full border border-[#23252a] bg-[#141516] px-2 py-0.5 text-[#d0d6e0]">
+                <span className="rounded-full border border-white/[0.08] bg-[#141516] px-2 py-0.5 text-[#d0d6e0]">
                   {id}
                 </span>
                 {i < arr.length - 1 && <span className="text-[#62666d]">→</span>}
@@ -147,10 +147,10 @@ export default function HubMonitorPanel() {
         </p>
       </section>
 
-      <div className="mb-4 overflow-x-auto rounded-lg border border-[#23252a] bg-[#0f1011]">
+      <div className="mb-4 overflow-x-auto apple-card apple-card--tight !p-0">
         <table className="w-full min-w-[880px] text-left">
           <thead>
-            <tr className="border-b border-[#23252a] text-[10px] uppercase tracking-wider text-[#62666d]">
+            <tr className="border-b border-white/[0.08] text-[10px] uppercase tracking-wider text-[#62666d]">
               <th className="px-3 py-2 font-medium">模型</th>
               <th className="px-3 py-2 font-medium">目前 API</th>
               <th className="px-3 py-2 font-medium">智能分</th>
@@ -166,7 +166,7 @@ export default function HubMonitorPanel() {
             {models.map((m) => (
               <tr
                 key={m.id}
-                className={`border-b border-[#23252a] last:border-0 ${
+                className={`border-b border-white/[0.08] last:border-0 ${
                   m.available_in_pool === false ? 'opacity-40' : ''
                 }`}
               >
@@ -186,7 +186,7 @@ export default function HubMonitorPanel() {
                   <div className="flex items-center gap-2">
                     <div className="h-1.5 w-20 overflow-hidden rounded-full bg-[#141516]">
                       <div
-                        className="h-full bg-[#5e6ad2]"
+                        className="h-full bg-[#007AFF]"
                         style={{
                           width: `${Math.min(100, ((Number(m.latency_ewma_ms) || 0) / maxLatency) * 100)}%`,
                         }}
@@ -222,7 +222,7 @@ export default function HubMonitorPanel() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <section className="rounded-lg border border-[#23252a] bg-[#0f1011] p-3">
+        <section className="apple-card apple-card--tight !p-0 p-3">
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[#62666d]">
             呼叫日誌
           </p>
@@ -252,7 +252,7 @@ export default function HubMonitorPanel() {
           )}
         </section>
 
-        <section className="rounded-lg border border-[#23252a] bg-[#0f1011] p-3">
+        <section className="apple-card apple-card--tight !p-0 p-3">
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[#62666d]">
             Agent 任務
           </p>

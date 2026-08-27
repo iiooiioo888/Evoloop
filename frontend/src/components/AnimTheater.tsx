@@ -44,21 +44,21 @@ const PIPELINE_NODES = [
   { id: 'sense', label: '感知', color: '#007AFF' },
   { id: 'route', label: '路由', color: '#64D2FF' },
   { id: 'gen', label: '生成', color: '#BF5AF2' },
-  { id: 'eval', label: '評估', color: '#FF9F0A' },
-  { id: 'reflect', label: '反思', color: '#FF375F' },
-  { id: 'out', label: '輸出', color: '#30D158' },
+  { id: 'eval', label: '評估', color: '#FF9500' },
+  { id: 'reflect', label: '反思', color: '#FF3B30' },
+  { id: 'out', label: '輸出', color: '#34C759' },
 ];
 
-const ROLE_COLORS = ['#007AFF', '#64D2FF', '#FF9F0A', '#BF5AF2', '#FF375F', '#30D158', '#5E5CE6'];
+const ROLE_COLORS = ['#007AFF', '#64D2FF', '#FF9500', '#BF5AF2', '#FF3B30', '#34C759', '#5E5CE6'];
 
 function LiveBadge({ live }: { live: boolean }) {
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-[9px] ${
-        live ? 'bg-[#30D158]/15 text-[#30D158]' : 'bg-white/5 text-[#8E8E93]'
+        live ? 'bg-[#34C759]/15 text-[#34C759]' : 'bg-white/5 text-[#8E8E93]'
       }`}
     >
-      <span className={`h-1.5 w-1.5 rounded-full ${live ? 'bg-[#30D158]' : 'bg-[#636366]'}`} />
+      <span className={`h-1.5 w-1.5 rounded-full ${live ? 'bg-[#34C759]' : 'bg-[#636366]'}`} />
       {live ? 'LIVE' : 'IDLE'}
     </span>
   );
@@ -159,7 +159,7 @@ function PipelineScene({
               {i < PIPELINE_NODES.length - 1 && (
                 <div
                   className={`absolute left-[55%] top-[18px] h-0.5 ${compact ? 'w-[70%]' : 'w-[80%]'}`}
-                  style={{ background: done ? '#30D15899' : 'rgba(255,255,255,0.1)' }}
+                  style={{ background: done ? '#34C75999' : 'rgba(255,255,255,0.1)' }}
                 />
               )}
               <div
@@ -167,8 +167,8 @@ function PipelineScene({
                   compact ? 'h-9 w-full max-w-[48px]' : 'h-11 w-full max-w-[72px]'
                 }`}
                 style={{
-                  borderColor: active ? n.color : done ? '#30D15866' : 'rgba(255,255,255,0.1)',
-                  background: active ? `${n.color}22` : done ? '#30D15814' : 'rgba(255,255,255,0.04)',
+                  borderColor: active ? n.color : done ? '#34C75966' : 'rgba(255,255,255,0.1)',
+                  background: active ? `${n.color}22` : done ? '#34C75914' : 'rgba(255,255,255,0.04)',
                   boxShadow: active ? `0 0 0 2px ${n.color}33` : undefined,
                 }}
               >
@@ -279,7 +279,7 @@ function CompanyScene({
               <div
                 className={`rounded-lg border px-2 py-1 text-[10px] ${
                   reviewers.length
-                    ? `border-[#FF375F]/40 bg-[#FF375F]/10 text-[#FF375F] ${pulseOk ? 'anim-node-pulse' : ''}`
+                    ? `border-[#FF3B30]/40 bg-[#FF3B30]/10 text-[#FF3B30] ${pulseOk ? 'anim-node-pulse' : ''}`
                     : 'border-white/10 text-[#636366]'
                 }`}
               >
@@ -288,7 +288,7 @@ function CompanyScene({
               <div
                 className={`rounded-lg border px-2 py-1 text-[10px] ${
                   synths.length
-                    ? `border-[#30D158]/40 bg-[#30D158]/10 text-[#30D158] ${pulseOk ? 'anim-node-pulse' : ''}`
+                    ? `border-[#34C759]/40 bg-[#34C759]/10 text-[#34C759] ${pulseOk ? 'anim-node-pulse' : ''}`
                     : 'border-white/10 text-[#636366]'
                 }`}
               >
@@ -395,14 +395,14 @@ function BudgetScene({
             />
           </div>
         </div>
-        <div className="rounded-2xl border border-[#FF9F0A]/25 bg-[#FF9F0A]/08 p-2">
-          <p className="text-[10px] text-[#FF9F0A]">雲資源</p>
+        <div className="rounded-2xl border border-[#FF9500]/25 bg-[#FF9500]/08 p-2">
+          <p className="text-[10px] text-[#FF9500]">雲資源</p>
           <p className={`font-mono ${compact ? 'text-lg' : 'text-2xl'} text-white`}>
             {b.totalUsd > 0 ? `${b.cloudPct}%` : '—'}
           </p>
           <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white/10">
             <div
-              className="h-full rounded-full bg-[#FF9F0A] transition-[width] duration-500"
+              className="h-full rounded-full bg-[#FF9500] transition-[width] duration-500"
               style={{ width: `${b.cloudPct}%` }}
             />
           </div>
@@ -414,7 +414,7 @@ function BudgetScene({
         [0, 1].map((i) => (
           <Packet
             key={`${burst}-${i}`}
-            color={i % 2 === 0 ? '#007AFF' : '#FF9F0A'}
+            color={i % 2 === 0 ? '#007AFF' : '#FF9500'}
             label={i % 2 === 0 ? '$api' : '$云'}
             style={{
               bottom: 28 + i * 12,
@@ -465,11 +465,11 @@ function OpcScene({
         <div className="flex flex-col items-center gap-1">
           <div
             className={`h-0.5 ${compact ? 'w-10' : 'w-16'}`}
-            style={{ background: edgeHit ? '#30D158' : reachable ? '#FF9F0A' : '#636366' }}
+            style={{ background: edgeHit ? '#34C759' : reachable ? '#FF9500' : '#636366' }}
           />
           <span
             className="rounded-full px-1.5 py-0.5 text-[8px] text-white"
-            style={{ background: edgeHit ? '#30D158' : reachable ? '#FF9F0A' : '#636366' }}
+            style={{ background: edgeHit ? '#34C759' : reachable ? '#FF9500' : '#636366' }}
           >
             {edgeHit ? 'edge' : reachable ? 'miss' : 'idle'}
           </span>
@@ -477,15 +477,15 @@ function OpcScene({
         <div
           className={`rounded-2xl border px-3 py-3 text-center ${
             edgeHit
-              ? 'border-[#30D158]/40 bg-[#30D158]/10'
+              ? 'border-[#34C759]/40 bg-[#34C759]/10'
               : reachable
-                ? 'border-[#FF9F0A]/40 bg-[#FF9F0A]/10'
+                ? 'border-[#FF9500]/40 bg-[#FF9500]/10'
                 : 'border-white/10'
           }`}
         >
           <p
             className="text-[10px]"
-            style={{ color: edgeHit ? '#30D158' : reachable ? '#FF9F0A' : '#8E8E93' }}
+            style={{ color: edgeHit ? '#34C759' : reachable ? '#FF9500' : '#8E8E93' }}
           >
             {edgeHit ? '邊緣' : '雲端'}
           </p>

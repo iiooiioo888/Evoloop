@@ -30,7 +30,7 @@ import RoleSettingsPanel, { CreateRoleModal, draftToPayload, type RoleSettingsDr
 import { EVENT_LABELS, ITEM_STATUS_META, roleLabel } from './TaskPanel';
 
 const KIND_META: Record<string, { label: string; cls: string }> = {
-  assigned: { label: '指派', cls: 'bg-[#5e6ad2]/15 text-[#828fff]' },
+  assigned: { label: '指派', cls: 'bg-[#007AFF]/15 text-[#64D2FF]' },
   review: { label: '審查', cls: 'bg-purple-500/15 text-purple-300' },
   coordinate: { label: '協調', cls: 'bg-amber-500/15 text-amber-300' },
   synthesize: { label: '整合', cls: 'bg-cyan-500/15 text-cyan-300' },
@@ -84,46 +84,50 @@ function Kpi({
 }) {
   const valueCls =
     accent === 'green'
-      ? 'text-emerald-300'
+      ? 'text-[#34C759]'
       : accent === 'blue'
-        ? 'text-sky-300'
+        ? 'text-[#007AFF]'
         : accent === 'orange'
-          ? 'text-orange-300'
+          ? 'text-[#FF9500]'
           : accent === 'amber'
-            ? 'text-amber-300'
+            ? 'text-[#FF9500]'
             : accent === 'violet'
-              ? 'text-[#828fff]'
+              ? 'text-[#64D2FF]'
               : accent === 'red'
-                ? 'text-red-300'
-                : 'text-[#f7f8f8]';
+                ? 'text-[#FF3B30]'
+                : 'text-[#F5F5F7]';
   return (
-    <div className="rounded-lg border border-[#23252a] bg-[#0f1011] px-3 py-2.5">
-      <p className="text-[10px] uppercase tracking-wider text-[#62666d]">{label}</p>
-      <p className={`mt-1 font-mono text-lg ${valueCls}`}>{value}</p>
-      {hint && <p className="mt-0.5 text-[11px] text-[#8a8f98]">{hint}</p>}
+    <div className="apple-card apple-card--tight apple-card--pad">
+      <p className="apple-title">{label}</p>
+      <p className={`apple-data mt-2 text-[18px] ${valueCls}`}>{value}</p>
+      {hint && <p className="mt-1.5 text-[11px] font-normal text-[#8E8E93]">{hint}</p>}
     </div>
   );
 }
 
-/** 分組卡片容器：標題 + 內容區 */
+/** 分組卡片容器：標題固定 + 內容可捲 */
 function CardSection({
   title,
   hint,
   children,
   className = '',
+  scroll = false,
 }: {
   title: string;
   hint?: string;
   children: ReactNode;
   className?: string;
+  scroll?: boolean;
 }) {
   return (
-    <section className={`rounded-xl border border-[#23252a] bg-[#0f1011]/80 p-3 ${className}`}>
-      <div className="mb-2.5 flex items-baseline justify-between gap-2">
-        <h4 className="text-[11px] font-semibold uppercase tracking-wider text-[#8a8f98]">{title}</h4>
-        {hint && <span className="text-[10px] text-[#62666d]">{hint}</span>}
+    <section className={`apple-card ${className}`}>
+      <div className="apple-card__head">
+        <h4 className="apple-title">{title}</h4>
+        {hint && <span className="text-[10px] font-normal text-[#636366]">{hint}</span>}
       </div>
-      {children}
+      <div className={`apple-card__body ${scroll ? '' : 'apple-card__body--static'}`}>
+        {children}
+      </div>
     </section>
   );
 }
@@ -182,7 +186,7 @@ function WorkItemCard({
     <button
       type="button"
       onClick={onToggle}
-      className={`w-full rounded-lg border border-[#23252a] bg-[#0f1011] px-3 py-2 text-left ${
+      className={`w-full apple-card apple-card--tight !p-0 px-3 py-2 text-left ${
         onToggle ? 'hover:border-[#34343a]' : ''
       }`}
     >
@@ -202,7 +206,7 @@ function WorkItemCard({
         </p>
       )}
       {expanded && (
-        <div className="mt-2 space-y-1.5 border-t border-[#23252a] pt-2">
+        <div className="mt-2 space-y-1.5 border-t border-white/[0.08] pt-2">
           {item.description && <p className="text-[11px] leading-relaxed text-[#d0d6e0]">{item.description}</p>}
           {item.output_preview && (
             <pre className="max-h-32 overflow-auto whitespace-pre-wrap rounded bg-[#141516] px-2 py-1 font-mono text-[10px] text-[#d0d6e0]">
@@ -230,7 +234,7 @@ function WorkItemCard({
 
 function EventRow({ event }: { event: AgentEvent }) {
   return (
-    <div className="flex gap-2 border-b border-[#23252a] py-1.5 last:border-0">
+    <div className="flex gap-2 border-b border-white/[0.08] py-1.5 last:border-0">
       <span className="w-24 shrink-0 font-mono text-[10px] text-[#62666d]">{fmtWhen(event.ts)}</span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-[11px] text-[#d0d6e0]">{eventLabel(event.event)}</p>
@@ -258,7 +262,7 @@ function RoleChips({
           key={id}
           type="button"
           onClick={() => onOpen(id)}
-          className="rounded border border-[#23252a] px-2 py-1 text-[11px] text-[#8a8f98] hover:border-[#5e6ad2]/40 hover:text-[#828fff]"
+          className="rounded border border-white/[0.08] px-2 py-1 text-[11px] text-[#8a8f98] hover:border-[#007AFF]/40 hover:text-[#64D2FF]"
         >
           {roleLabel(id)}
         </button>
@@ -290,7 +294,7 @@ function RoleMonitorExtras({ agent }: { agent: RoleAgent }) {
   if (agent.id === 'synthesizer') {
     const outputs = agent.work_items.filter((i) => i.kind === 'synthesize' && i.output_preview);
     return (
-      <div className="rounded-lg border border-[#23252a] bg-[#0f1011] px-3 py-2">
+      <div className="apple-card apple-card--tight !p-0 px-3 py-2">
         <p className="text-[10px] uppercase tracking-wider text-[#62666d]">最近整合產出</p>
         {outputs.length === 0 ? (
           <p className="mt-1 text-[11px] text-[#62666d]">尚無整合結果</p>
@@ -511,12 +515,12 @@ function AgentDeskCard({
     <button
       type="button"
       onClick={onOpen}
-      className={`flex h-full min-h-[220px] flex-col rounded-xl border bg-[#0f1011] p-3 text-left transition-colors hover:border-[#34343a] ${
+      className={`flex h-full min-h-[220px] flex-col apple-card p-4 text-left transition-colors hover:border-white/15 ${
         agent.status === 'busy'
           ? 'border-[#4cc38a]/30'
           : agent.status === 'error'
             ? 'border-red-500/30'
-            : 'border-[#23252a]'
+            : 'border-white/[0.08]'
       }`}
     >
       <div className="mb-2 flex items-start justify-between gap-2">
@@ -549,7 +553,7 @@ function AgentDeskCard({
       {showCost !== false && (
         <div className="mb-2 grid grid-cols-3 gap-1">
           <div className="rounded bg-[#141516] px-1.5 py-1 text-center">
-            <p className="font-mono text-[10px] text-[#828fff]">{fmtUsd(agent.api_cost_usd ?? 0)}</p>
+            <p className="font-mono text-[10px] text-[#64D2FF]">{fmtUsd(agent.api_cost_usd ?? 0)}</p>
             <p className="text-[8px] text-[#62666d]">API</p>
           </div>
           <div className="rounded bg-[#141516] px-1.5 py-1 text-center">
@@ -591,7 +595,7 @@ function AgentDeskCard({
 
       <div className="min-h-0 flex-1 space-y-1">
         {preview.length === 0 ? (
-          <p className="rounded border border-dashed border-[#23252a] px-2 py-4 text-center text-[11px] text-[#62666d]">
+          <p className="rounded border border-dashed border-white/[0.08] px-2 py-4 text-center text-[11px] text-[#62666d]">
             待命 · 尚無工作項
           </p>
         ) : (
@@ -798,8 +802,8 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
   const reports = selected?.direct_reports ?? [];
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#010102] text-[#f7f8f8]">
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[#23252a] px-4 py-3">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden apple-canvas text-[#f7f8f8]">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-white/[0.08] px-4 py-3">
         <div>
           <h2 className="text-sm font-semibold">
             {layout === 'desk' && selected
@@ -817,12 +821,12 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex rounded-md border border-[#23252a] bg-[#0f1011] p-0.5">
+          <div className="flex rounded-xl border border-white/[0.08] bg-[#1C1C1E] p-0.5">
             <button
               type="button"
               onClick={() => setLayout('catalog')}
               className={`rounded px-2 py-1 text-[11px] ${
-                layout === 'catalog' ? 'bg-[#5e6ad2]/20 text-[#828fff]' : 'text-[#8a8f98]'
+                layout === 'catalog' ? 'bg-[#007AFF]/20 text-[#64D2FF]' : 'text-[#8a8f98]'
               }`}
             >
               目錄
@@ -831,7 +835,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
               type="button"
               onClick={() => setLayout('desk')}
               className={`rounded px-2 py-1 text-[11px] ${
-                layout === 'desk' ? 'bg-[#5e6ad2]/20 text-[#828fff]' : 'text-[#8a8f98]'
+                layout === 'desk' ? 'bg-[#007AFF]/20 text-[#64D2FF]' : 'text-[#8a8f98]'
               }`}
             >
               工作台
@@ -840,7 +844,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
               type="button"
               onClick={() => setLayout('floor')}
               className={`rounded px-2 py-1 text-[11px] ${
-                layout === 'floor' ? 'bg-[#5e6ad2]/20 text-[#828fff]' : 'text-[#8a8f98]'
+                layout === 'floor' ? 'bg-[#007AFF]/20 text-[#64D2FF]' : 'text-[#8a8f98]'
               }`}
             >
               樓層
@@ -852,15 +856,15 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="搜尋角色／職責／提示詞"
-                className="w-40 rounded-md border border-[#23252a] bg-[#0f1011] px-2 py-1 text-[11px] text-[#f7f8f8]"
+                className="w-40 rounded-xl border border-white/[0.08] bg-[#1C1C1E] px-2 py-1 text-[11px] text-[#f7f8f8]"
               />
               <button
                 type="button"
                 onClick={() => setFilter((v) => (v === 'all' ? 'active' : 'all'))}
                 className={`rounded-md border px-2 py-1 text-[11px] ${
                   filter === 'active'
-                    ? 'border-[#5e6ad2]/40 bg-[#5e6ad2]/15 text-[#828fff]'
-                    : 'border-[#23252a] bg-[#0f1011] text-[#8a8f98]'
+                    ? 'border-[#007AFF]/40 bg-[#007AFF]/15 text-[#64D2FF]'
+                    : 'border-white/[0.08] bg-[#1C1C1E] text-[#8a8f98]'
                 }`}
               >
                 {filter === 'active' ? '僅顯示有工作' : '顯示全部角色'}
@@ -873,14 +877,14 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
               setCloneFrom(null);
               setCreating(true);
             }}
-            className="rounded-md border border-[#5e6ad2]/40 bg-[#5e6ad2]/15 px-2 py-1 text-[11px] text-[#828fff]"
+            className="rounded-md border border-[#007AFF]/40 bg-[#007AFF]/15 px-2 py-1 text-[11px] text-[#64D2FF]"
           >
             新增角色
           </button>
           <button
             type="button"
             onClick={() => void refresh()}
-            className="rounded-md border border-[#23252a] bg-[#0f1011] px-2 py-1 text-[11px] text-[#8a8f98] hover:text-[#f7f8f8]"
+            className="rounded-xl border border-white/[0.08] bg-[#1C1C1E] px-2 py-1 text-[11px] text-[#8a8f98] hover:text-[#f7f8f8]"
           >
             重新整理
           </button>
@@ -922,7 +926,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
 
       {layout === 'floor' && (
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
-          <div className="mb-3 rounded-lg border border-[#5e6ad2]/25 bg-[#5e6ad2]/8 px-3 py-2 text-[11px] text-[#a8b0ff]">
+          <div className="mb-3 rounded-lg border border-[#007AFF]/25 bg-[#007AFF]/8 px-3 py-2 text-[11px] text-[#a8b0ff]">
             樓層卡片為輔助視圖 · 名冊入口與「▣ 總覽／📊 控制面版」等同層，位於左側外圍。
           </div>
           {grouped.map((group) => (
@@ -948,14 +952,14 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
 
       {layout === 'catalog' && (
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
-          <div className="mb-3 rounded-lg border border-[#5e6ad2]/25 bg-[#5e6ad2]/8 px-3 py-2 text-[11px] text-[#a8b0ff]">
+          <div className="mb-3 rounded-lg border border-[#007AFF]/25 bg-[#007AFF]/8 px-3 py-2 text-[11px] text-[#a8b0ff]">
             完整 {agents.length} 位角色名冊已統一在左側外圍「◈ 角色 Agent」。此處為輔助目錄；日常切換請用左側列表。
           </div>
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="rounded border border-[#23252a] bg-[#0f1011] px-2 py-1 text-[11px] text-[#d0d6e0]"
+              className="rounded border border-white/[0.08] bg-[#1C1C1E] px-2 py-1 text-[11px] text-[#d0d6e0]"
             >
               <option value="all">全部分類</option>
               {(data?.catalog_meta?.categories ?? Object.entries(CATEGORY_LABEL).map(([id, label]) => ({ id, label }))).map((c) => (
@@ -970,7 +974,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                 type="button"
                 onClick={() => setRosterFilter(key)}
                 className={`rounded px-2 py-1 text-[11px] ${
-                  rosterFilter === key ? 'bg-[#5e6ad2]/20 text-[#828fff]' : 'text-[#8a8f98]'
+                  rosterFilter === key ? 'bg-[#007AFF]/20 text-[#64D2FF]' : 'text-[#8a8f98]'
                 }`}
               >
                 {key === 'all' ? '全部' : key === 'custom' ? '自定義' : key === 'disabled' ? '停用' : '值班'}
@@ -979,7 +983,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
             <select
               value={data?.monitor_prefs?.sort_by || 'level'}
               onChange={(e) => void updateAgentMonitorPrefs({ sort_by: e.target.value }).then(() => refresh())}
-              className="rounded border border-[#23252a] bg-[#0f1011] px-2 py-1 text-[11px] text-[#d0d6e0]"
+              className="rounded border border-white/[0.08] bg-[#1C1C1E] px-2 py-1 text-[11px] text-[#d0d6e0]"
             >
               <option value="level">依層級</option>
               <option value="name">依名稱</option>
@@ -994,24 +998,24 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                 {data?.monitor_prefs?.group_by === 'category' ? group.label : `L${group.level} ${group.label}`}
                 <span className="ml-2 font-mono">{group.agents.length}</span>
               </p>
-              <div className="overflow-hidden rounded-lg border border-[#23252a]">
+              <div className="overflow-hidden rounded-lg border border-white/[0.08]">
                 {group.agents.map((agent) => {
                   const meta = AGENT_STATUS_META[agent.status] ?? AGENT_STATUS_META.idle;
                   const open = agentOpenCount(agent);
                   return (
                     <div
                       key={agent.id}
-                      className={`flex flex-wrap items-start gap-3 border-b border-[#23252a] px-3 py-2 last:border-0 ${
+                      className={`flex flex-wrap items-start gap-3 border-b border-white/[0.08] px-3 py-2 last:border-0 ${
                         data?.monitor_prefs?.highlight_alerts !== false && (agent.alerts?.length ?? 0) > 0
                           ? 'bg-amber-500/5'
-                          : 'bg-[#0f1011]'
+                          : 'bg-[#1C1C1E]'
                       }`}
                     >
                       <button type="button" className="min-w-[180px] flex-1 text-left" onClick={() => openDesk(agent.id)}>
                         <p className="flex items-center gap-2 text-[13px] text-[#f7f8f8]">
                           <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
                           {agent.name}
-                          {agent.is_custom ? <span className="text-[10px] text-[#828fff]">自定</span> : null}
+                          {agent.is_custom ? <span className="text-[10px] text-[#64D2FF]">自定</span> : null}
                           {agent.enabled === false ? <span className="text-[10px] text-red-300">停用</span> : null}
                           {agent.on_call ? <span className="text-[10px] text-amber-200">值班</span> : null}
                           {agent.require_human_approval ? <span className="text-[10px] text-[#8a8f98]">需核准</span> : null}
@@ -1036,7 +1040,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                       <div className="flex shrink-0 gap-1">
                         <button
                           type="button"
-                          className="rounded border border-[#23252a] px-2 py-1 text-[10px] text-[#8a8f98]"
+                          className="rounded border border-white/[0.08] px-2 py-1 text-[10px] text-[#8a8f98]"
                           onClick={() => {
                             openDesk(agent.id);
                             setDeskTab('settings');
@@ -1046,7 +1050,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                         </button>
                         <button
                           type="button"
-                          className="rounded border border-[#23252a] px-2 py-1 text-[10px] text-[#8a8f98]"
+                          className="rounded border border-white/[0.08] px-2 py-1 text-[10px] text-[#8a8f98]"
                           onClick={() => {
                             openDesk(agent.id);
                             setDeskTab('monitor');
@@ -1056,7 +1060,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                         </button>
                         <button
                           type="button"
-                          className="rounded border border-[#23252a] px-2 py-1 text-[10px] text-[#8a8f98]"
+                          className="rounded border border-white/[0.08] px-2 py-1 text-[10px] text-[#8a8f98]"
                           onClick={() => {
                             const pins = data?.monitor_prefs?.pin_role_ids ?? [];
                             const next = pins.includes(agent.id)
@@ -1069,7 +1073,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                         </button>
                         <button
                           type="button"
-                          className="rounded border border-[#23252a] px-2 py-1 text-[10px] text-[#8a8f98]"
+                          className="rounded border border-white/[0.08] px-2 py-1 text-[10px] text-[#8a8f98]"
                           onClick={() => void updateAgentSettings(agent.id, { enabled: agent.enabled === false }).then(() => refresh())}
                         >
                           {agent.enabled === false ? '啟用' : '停用'}
@@ -1088,7 +1092,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
         <div className="flex min-h-0 flex-1 overflow-hidden">
           {/* 角色名冊統一在左側 SidePanel；此處僅保留工作台內容 */}
           <section className="flex min-w-0 flex-1 flex-col overflow-hidden">
-            <div className="shrink-0 border-b border-[#23252a] px-4 py-3">
+            <div className="shrink-0 border-b border-white/[0.08] px-4 py-3">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
@@ -1099,7 +1103,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                     <select
                       value={selected.id}
                       onChange={(e) => openDesk(e.target.value)}
-                      className="rounded border border-[#23252a] bg-[#0f1011] px-2 py-0.5 text-[11px] text-[#d0d6e0]"
+                      className="rounded border border-white/[0.08] bg-[#1C1C1E] px-2 py-0.5 text-[11px] text-[#d0d6e0]"
                       title="快速切換角色（完整名冊在左側外圍）"
                     >
                       {agents.map((a) => (
@@ -1127,13 +1131,13 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                       {selected.templates.map((tpl) => (
                         <span
                           key={tpl}
-                          className="rounded border border-[#23252a] px-1.5 py-0.5 text-[10px] text-[#8a8f98]"
+                          className="rounded border border-white/[0.08] px-1.5 py-0.5 text-[10px] text-[#8a8f98]"
                         >
                           {tpl}
                         </span>
                       ))}
                       {(selected.tags ?? []).map((tag) => (
-                        <span key={tag} className="rounded border border-[#5e6ad2]/30 px-1.5 py-0.5 text-[10px] text-[#828fff]">
+                        <span key={tag} className="rounded border border-[#007AFF]/30 px-1.5 py-0.5 text-[10px] text-[#64D2FF]">
                           {tag}
                         </span>
                       ))}
@@ -1179,7 +1183,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                     type="button"
                     onClick={() => setDeskTab(key)}
                     className={`rounded px-2 py-1 text-[11px] ${
-                      deskTab === key ? 'bg-[#5e6ad2]/20 text-[#828fff]' : 'text-[#8a8f98] hover:text-[#d0d6e0]'
+                      deskTab === key ? 'bg-[#007AFF]/20 text-[#64D2FF]' : 'text-[#8a8f98] hover:text-[#d0d6e0]'
                     }`}
                   >
                     {label}
@@ -1252,7 +1256,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
             {deskTab === 'org' && (
               <div className="min-h-0 flex-1 overflow-y-auto p-4">
                 <div className="space-y-3">
-                  <div className="rounded-lg border border-[#23252a] bg-[#0f1011] px-3 py-2">
+                  <div className="apple-card apple-card--tight !p-0 px-3 py-2">
                     <p className="text-[10px] uppercase tracking-wider text-[#62666d]">匯報對象</p>
                     {selected.reporting_to ? (
                       <RoleChips ids={[selected.reporting_to]} onOpen={openDesk} />
@@ -1260,15 +1264,15 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                       <p className="text-[11px] text-[#8a8f98]">無上級（決策層）</p>
                     )}
                   </div>
-                  <div className="rounded-lg border border-[#23252a] bg-[#0f1011] px-3 py-2">
+                  <div className="apple-card apple-card--tight !p-0 px-3 py-2">
                     <p className="mb-1 text-[10px] uppercase tracking-wider text-[#62666d]">直屬下級 · {reports.length}</p>
                     <RoleChips ids={reports} onOpen={openDesk} />
                   </div>
-                  <div className="rounded-lg border border-[#23252a] bg-[#0f1011] px-3 py-2">
+                  <div className="apple-card apple-card--tight !p-0 px-3 py-2">
                     <p className="mb-1 text-[10px] uppercase tracking-wider text-[#62666d]">可委派 · {selected.can_delegate_to.length}</p>
                     <RoleChips ids={selected.can_delegate_to} onOpen={openDesk} />
                   </div>
-                  <div className="rounded-lg border border-[#23252a] bg-[#0f1011] px-3 py-2">
+                  <div className="apple-card apple-card--tight !p-0 px-3 py-2">
                     <p className="mb-1 text-[10px] uppercase tracking-wider text-[#62666d]">組織模板</p>
                     {(data?.catalog_meta?.org_templates ?? []).map((tpl) => (
                       <p key={tpl.id} className="text-[11px] text-[#d0d6e0]">
@@ -1286,19 +1290,19 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                   <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[#62666d]">角色監控</p>
                   <RoleMonitorExtras agent={selected} />
                 </div>
-                <div className="mt-4 rounded-lg border border-[#23252a] bg-[#0f1011] px-3 py-2">
+                <div className="mt-4 apple-card apple-card--tight !p-0 px-3 py-2">
                   <p className="text-[10px] uppercase tracking-wider text-[#62666d]">監控偏好</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     <button
                       type="button"
-                      className="rounded border border-[#23252a] px-2 py-1 text-[11px] text-[#8a8f98]"
+                      className="rounded border border-white/[0.08] px-2 py-1 text-[11px] text-[#8a8f98]"
                       onClick={() => void updateAgentMonitorPrefs({ poll_interval_ms: pollMs === 5000 ? 8000 : 5000 }).then(() => refresh())}
                     >
                       輪詢 {pollMs / 1000}s
                     </button>
                     <button
                       type="button"
-                      className="rounded border border-[#23252a] px-2 py-1 text-[11px] text-[#8a8f98]"
+                      className="rounded border border-white/[0.08] px-2 py-1 text-[11px] text-[#8a8f98]"
                       onClick={() =>
                         void updateAgentMonitorPrefs({ show_idle: !(data?.monitor_prefs?.show_idle ?? true) }).then(() => refresh())
                       }
@@ -1307,7 +1311,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                     </button>
                     <button
                       type="button"
-                      className="rounded border border-[#23252a] px-2 py-1 text-[11px] text-[#8a8f98]"
+                      className="rounded border border-white/[0.08] px-2 py-1 text-[11px] text-[#8a8f98]"
                       onClick={() =>
                         void updateAgentMonitorPrefs({ show_disabled: !(data?.monitor_prefs?.show_disabled ?? true) }).then(() => refresh())
                       }
@@ -1316,7 +1320,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                     </button>
                     <button
                       type="button"
-                      className="rounded border border-[#23252a] px-2 py-1 text-[11px] text-[#8a8f98]"
+                      className="rounded border border-white/[0.08] px-2 py-1 text-[11px] text-[#8a8f98]"
                       onClick={() =>
                         void updateAgentMonitorPrefs({
                           show_custom_only: !(data?.monitor_prefs?.show_custom_only ?? false),
@@ -1327,7 +1331,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                     </button>
                     <button
                       type="button"
-                      className="rounded border border-[#23252a] px-2 py-1 text-[11px] text-[#8a8f98]"
+                      className="rounded border border-white/[0.08] px-2 py-1 text-[11px] text-[#8a8f98]"
                       onClick={() =>
                         void updateAgentMonitorPrefs({
                           group_by: data?.monitor_prefs?.group_by === 'category' ? 'level' : 'category',
@@ -1338,7 +1342,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                     </button>
                     <button
                       type="button"
-                      className="rounded border border-[#23252a] px-2 py-1 text-[11px] text-[#8a8f98]"
+                      className="rounded border border-white/[0.08] px-2 py-1 text-[11px] text-[#8a8f98]"
                       onClick={() =>
                         void updateAgentMonitorPrefs({ compact_cards: !(data?.monitor_prefs?.compact_cards ?? false) }).then(() => refresh())
                       }
@@ -1347,7 +1351,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                     </button>
                     <button
                       type="button"
-                      className="rounded border border-[#23252a] px-2 py-1 text-[11px] text-[#8a8f98]"
+                      className="rounded border border-white/[0.08] px-2 py-1 text-[11px] text-[#8a8f98]"
                       onClick={() =>
                         void updateAgentMonitorPrefs({
                           show_prompt_preview: !(data?.monitor_prefs?.show_prompt_preview ?? true),
@@ -1358,7 +1362,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                     </button>
                     <button
                       type="button"
-                      className="rounded border border-[#23252a] px-2 py-1 text-[11px] text-[#8a8f98]"
+                      className="rounded border border-white/[0.08] px-2 py-1 text-[11px] text-[#8a8f98]"
                       onClick={() =>
                         void updateAgentMonitorPrefs({
                           highlight_alerts: !(data?.monitor_prefs?.highlight_alerts ?? true),
@@ -1369,7 +1373,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                     </button>
                     <button
                       type="button"
-                      className="rounded border border-[#23252a] px-2 py-1 text-[11px] text-[#8a8f98]"
+                      className="rounded border border-white/[0.08] px-2 py-1 text-[11px] text-[#8a8f98]"
                       onClick={() =>
                         void updateAgentMonitorPrefs({
                           auto_open_busy: !(data?.monitor_prefs?.auto_open_busy ?? false),
@@ -1381,7 +1385,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                     <select
                       value={data?.monitor_prefs?.sort_by || 'level'}
                       onChange={(e) => void updateAgentMonitorPrefs({ sort_by: e.target.value }).then(() => refresh())}
-                      className="rounded border border-[#23252a] bg-[#0f1011] px-2 py-1 text-[11px] text-[#d0d6e0]"
+                      className="rounded border border-white/[0.08] bg-[#1C1C1E] px-2 py-1 text-[11px] text-[#d0d6e0]"
                     >
                       <option value="level">排序：層級</option>
                       <option value="name">排序：名稱</option>
@@ -1392,7 +1396,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                     <select
                       value={data?.monitor_prefs?.default_layout || 'desk'}
                       onChange={(e) => void updateAgentMonitorPrefs({ default_layout: e.target.value }).then(() => refresh())}
-                      className="rounded border border-[#23252a] bg-[#0f1011] px-2 py-1 text-[11px] text-[#d0d6e0]"
+                      className="rounded border border-white/[0.08] bg-[#1C1C1E] px-2 py-1 text-[11px] text-[#d0d6e0]"
                     >
                       <option value="desk">預設視圖：工作台（名冊在左側）</option>
                       <option value="catalog">預設視圖：輔助目錄</option>
@@ -1401,7 +1405,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                     <select
                       value={data?.monitor_prefs?.default_desk_tab || 'tasks'}
                       onChange={(e) => void updateAgentMonitorPrefs({ default_desk_tab: e.target.value }).then(() => refresh())}
-                      className="rounded border border-[#23252a] bg-[#0f1011] px-2 py-1 text-[11px] text-[#d0d6e0]"
+                      className="rounded border border-white/[0.08] bg-[#1C1C1E] px-2 py-1 text-[11px] text-[#d0d6e0]"
                     >
                       <option value="tasks">預設分頁：任務</option>
                       <option value="monitor">預設分頁：監控</option>
@@ -1410,7 +1414,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                     </select>
                     <button
                       type="button"
-                      className="rounded border border-[#23252a] px-2 py-1 text-[11px] text-[#8a8f98]"
+                      className="rounded border border-white/[0.08] px-2 py-1 text-[11px] text-[#8a8f98]"
                       onClick={() =>
                         void updateAgentMonitorPrefs({
                           show_on_call_only: !(data?.monitor_prefs?.show_on_call_only ?? false),
@@ -1421,7 +1425,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                     </button>
                     <button
                       type="button"
-                      className="rounded border border-[#23252a] px-2 py-1 text-[11px] text-[#8a8f98]"
+                      className="rounded border border-white/[0.08] px-2 py-1 text-[11px] text-[#8a8f98]"
                       onClick={() =>
                         void updateAgentMonitorPrefs({
                           sound_on_alert: !(data?.monitor_prefs?.sound_on_alert ?? false),
@@ -1432,7 +1436,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                     </button>
                     <button
                       type="button"
-                      className="rounded border border-[#23252a] px-2 py-1 text-[11px] text-[#8a8f98]"
+                      className="rounded border border-white/[0.08] px-2 py-1 text-[11px] text-[#8a8f98]"
                       onClick={() =>
                         void updateAgentMonitorPrefs({
                           show_cost_in_cards: !(data?.monitor_prefs?.show_cost_in_cards ?? true),
@@ -1444,7 +1448,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                     <select
                       value={String(data?.monitor_prefs?.filter_min_level ?? 0)}
                       onChange={(e) => void updateAgentMonitorPrefs({ filter_min_level: Number(e.target.value) }).then(() => refresh())}
-                      className="rounded border border-[#23252a] bg-[#0f1011] px-2 py-1 text-[11px] text-[#d0d6e0]"
+                      className="rounded border border-white/[0.08] bg-[#1C1C1E] px-2 py-1 text-[11px] text-[#d0d6e0]"
                     >
                       <option value="0">最低層 L0</option>
                       <option value="1">最低層 L1</option>
@@ -1455,7 +1459,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                     <select
                       value={String(data?.monitor_prefs?.filter_max_level ?? 4)}
                       onChange={(e) => void updateAgentMonitorPrefs({ filter_max_level: Number(e.target.value) }).then(() => refresh())}
-                      className="rounded border border-[#23252a] bg-[#0f1011] px-2 py-1 text-[11px] text-[#d0d6e0]"
+                      className="rounded border border-white/[0.08] bg-[#1C1C1E] px-2 py-1 text-[11px] text-[#d0d6e0]"
                     >
                       <option value="0">最高層 L0</option>
                       <option value="1">最高層 L1</option>
@@ -1469,7 +1473,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
             )}
             {deskTab === 'tasks' && (
             <div className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden xl:grid-cols-[minmax(0,1.15fr)_minmax(280px,0.85fr)_minmax(260px,0.75fr)]">
-              <div className="flex min-h-0 flex-col overflow-hidden border-b border-[#23252a] xl:border-b-0 xl:border-r">
+              <div className="flex min-h-0 flex-col overflow-hidden border-b border-white/[0.08] xl:border-b-0 xl:border-r">
                 <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 px-4 py-2">
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-[#62666d]">
                     任務列表 · {visibleItems.length}/{selected.work_items.length}
@@ -1482,7 +1486,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                         onClick={() => setItemFilter(f.key)}
                         className={`rounded px-2 py-0.5 text-[10px] ${
                           itemFilter === f.key
-                            ? 'bg-[#5e6ad2]/20 text-[#828fff]'
+                            ? 'bg-[#007AFF]/20 text-[#64D2FF]'
                             : 'text-[#8a8f98] hover:text-[#d0d6e0]'
                         }`}
                       >
@@ -1492,7 +1496,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                     <button
                       type="button"
                       onClick={() => setBoardMode((v) => (v === 'list' ? 'kanban' : 'list'))}
-                      className="ml-1 rounded border border-[#23252a] px-2 py-0.5 text-[10px] text-[#8a8f98]"
+                      className="ml-1 rounded border border-white/[0.08] px-2 py-0.5 text-[10px] text-[#8a8f98]"
                     >
                       {boardMode === 'list' ? '看板' : '列表'}
                     </button>
@@ -1502,7 +1506,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                 <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
                   {boardMode === 'list' ? (
                     visibleItems.length === 0 ? (
-                      <div className="rounded-lg border border-dashed border-[#23252a] px-4 py-10 text-center">
+                      <div className="rounded-lg border border-dashed border-white/[0.08] px-4 py-10 text-center">
                         <p className="text-[13px] text-[#d0d6e0]">尚無{itemFilter === 'all' ? '' : '符合條件的'}工作項</p>
                         <p className="mt-1 text-[11px] text-[#62666d]">
                           此 Agent 待命。公司任務分解後，指派給「{selected.name}」的工作會出現在此列表。
@@ -1530,7 +1534,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                       {KANBAN.map((col) => {
                         const list = visibleItems.filter((i) => col.statuses.includes(i.status));
                         return (
-                          <div key={col.key} className="flex min-h-0 flex-col rounded-lg border border-[#23252a] bg-[#0a0b0c] p-2">
+                          <div key={col.key} className="flex min-h-0 flex-col rounded-lg border border-white/[0.08] bg-[#0a0b0c] p-2">
                             <p className="mb-2 flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-[#62666d]">
                               {col.label}
                               <span className="font-mono">{list.length}</span>
@@ -1563,10 +1567,10 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                 </div>
               </div>
 
-              <div className="min-h-0 space-y-3 overflow-y-auto border-b border-[#23252a] p-3 xl:border-b-0 xl:border-r">
+              <div className="min-h-0 space-y-3 overflow-y-auto border-b border-white/[0.08] p-3 xl:border-b-0 xl:border-r">
                 {now && (
-                  <div className="rounded-xl border border-[#5e6ad2]/30 bg-[#5e6ad2]/10 px-3 py-2.5">
-                    <p className="text-[10px] uppercase tracking-wider text-[#828fff]">目前任務 · 即時</p>
+                  <div className="rounded-xl border border-[#007AFF]/30 bg-[#007AFF]/10 px-3 py-2.5">
+                    <p className="text-[10px] uppercase tracking-wider text-[#64D2FF]">目前任務 · 即時</p>
                     <p className="mt-0.5 text-[13px] text-[#f7f8f8]">{now.title}</p>
                     <p className="text-[11px] text-[#8a8f98]">{now.task_query || now.task_id}</p>
                     {now.description && (
@@ -1681,7 +1685,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                   </ul>
                   <button
                     type="button"
-                    className="mt-2 text-[11px] text-[#828fff]"
+                    className="mt-2 text-[11px] text-[#64D2FF]"
                     onClick={() => setDeskTab('settings')}
                   >
                     編輯完整角色設定

@@ -1,7 +1,7 @@
 /** HubView — AI Hub 多模型編排操作台。
  *
  * 對齊 docs/AI_HUB_DETAILED_DESIGN.md：同步推論 + Agent 任務輪詢。
- * Linear tokens：canvas #010102 / surface-1 #0f1011 / accent #5e6ad2。
+ * Linear tokens：canvas #010102 / surface-1 #0f1011 / accent #007AFF。
  */
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -121,9 +121,9 @@ export default function HubView({ embedded = false }: { embedded?: boolean }) {
   const usableModels = (catalog?.models ?? []).filter((m) => m.available_in_pool !== false);
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[#010102] text-[#f7f8f8]">
+    <div className="flex h-full min-h-0 flex-col apple-canvas text-[#f7f8f8]">
       {!embedded && (
-        <div className="border-b border-[#23252a] px-5 py-3">
+        <div className="border-b border-white/[0.08] px-5 py-3">
           <h1 className="text-sm font-semibold tracking-tight">AI Hub 多模型編排</h1>
           <p className="mt-0.5 text-[11px] text-[#8a8f98]">
             {catalog?.pool_lock?.lock_message
@@ -133,11 +133,11 @@ export default function HubView({ embedded = false }: { embedded?: boolean }) {
       )}
 
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-0 lg:grid-cols-[minmax(280px,360px)_1fr]">
-        <section className="overflow-y-auto border-b border-[#23252a] p-4 lg:border-b-0 lg:border-r">
+        <section className="overflow-y-auto border-b border-white/[0.08] p-4 lg:border-b-0 lg:border-r">
           <div className="mb-3 flex gap-1 rounded-lg bg-[#141516] p-1">
             <button
               className={`flex-1 rounded-md px-2 py-1.5 text-xs ${
-                mode === 'chat' ? 'bg-[#5e6ad2] text-white' : 'text-[#8a8f98]'
+                mode === 'chat' ? 'bg-[#007AFF] text-white' : 'text-[#8a8f98]'
               }`}
               onClick={() => {
                 setMode('chat');
@@ -148,7 +148,7 @@ export default function HubView({ embedded = false }: { embedded?: boolean }) {
             </button>
             <button
               className={`flex-1 rounded-md px-2 py-1.5 text-xs ${
-                mode === 'agent' ? 'bg-[#5e6ad2] text-white' : 'text-[#8a8f98]'
+                mode === 'agent' ? 'bg-[#007AFF] text-white' : 'text-[#8a8f98]'
               }`}
               onClick={() => {
                 setMode('agent');
@@ -163,7 +163,7 @@ export default function HubView({ embedded = false }: { embedded?: boolean }) {
           <select
             value={strategy}
             onChange={(e) => setStrategy(e.target.value)}
-            className="mb-3 w-full rounded-md border border-[#23252a] bg-[#0f1011] px-2 py-1.5 text-xs"
+            className="mb-3 w-full rounded-xl border border-white/[0.08] bg-[#1C1C1E] px-2 py-1.5 text-xs"
           >
             {STRATEGIES.map((s) => (
               <option key={s.value} value={s.value}>
@@ -176,7 +176,7 @@ export default function HubView({ embedded = false }: { embedded?: boolean }) {
           <select
             value={region}
             onChange={(e) => setRegion(e.target.value)}
-            className="mb-3 w-full rounded-md border border-[#23252a] bg-[#0f1011] px-2 py-1.5 text-xs"
+            className="mb-3 w-full rounded-xl border border-white/[0.08] bg-[#1C1C1E] px-2 py-1.5 text-xs"
           >
             {REGIONS.map((r) => (
               <option key={r.value} value={r.value}>
@@ -191,7 +191,7 @@ export default function HubView({ embedded = false }: { embedded?: boolean }) {
               <select
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
-                className="mb-3 w-full rounded-md border border-[#23252a] bg-[#0f1011] px-2 py-1.5 text-xs"
+                className="mb-3 w-full rounded-xl border border-white/[0.08] bg-[#1C1C1E] px-2 py-1.5 text-xs"
               >
                 {(usableModels.length ? usableModels : [{ id: 'gpt-5.6-sol' }]).map((m) => (
                   <option key={m.id} value={m.id}>
@@ -232,13 +232,13 @@ export default function HubView({ embedded = false }: { embedded?: boolean }) {
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             rows={6}
-            className="mb-3 w-full resize-y rounded-md border border-[#23252a] bg-[#0f1011] px-2 py-1.5 text-xs leading-relaxed"
+            className="mb-3 w-full resize-y rounded-xl border border-white/[0.08] bg-[#1C1C1E] px-2 py-1.5 text-xs leading-relaxed"
           />
 
           <button
             onClick={onSubmit}
             disabled={busy || !prompt.trim()}
-            className="w-full rounded-md bg-[#5e6ad2] px-3 py-2 text-xs font-medium text-white disabled:opacity-50"
+            className="w-full rounded-md bg-[#007AFF] px-3 py-2 text-xs font-medium text-white disabled:opacity-50"
           >
             {busy ? '編排中…' : mode === 'chat' ? '送出推論' : '建立 Agent 任務'}
           </button>
@@ -252,7 +252,7 @@ export default function HubView({ embedded = false }: { embedded?: boolean }) {
                 {catalog.models.map((m) => (
                   <li
                     key={m.id}
-                    className={`flex items-center justify-between rounded border border-[#23252a] bg-[#0f1011] px-2 py-1 text-[11px] ${
+                    className={`flex items-center justify-between rounded border border-white/[0.08] bg-[#1C1C1E] px-2 py-1 text-[11px] ${
                       m.available_in_pool === false ? 'opacity-40' : ''
                     }`}
                   >
@@ -306,7 +306,7 @@ export default function HubView({ embedded = false }: { embedded?: boolean }) {
           )}
 
           {agentTask?.result?.tool_traces && agentTask.result.tool_traces.length > 0 && (
-            <div className="mb-3 rounded-lg border border-[#23252a] bg-[#0f1011] p-3">
+            <div className="mb-3 apple-card apple-card--tight !p-0 p-3">
               <p className="mb-2 text-[11px] font-medium text-[#8a8f98]">工具追蹤</p>
               {agentTask.result.tool_traces.map((t, i) => (
                 <pre
@@ -321,7 +321,7 @@ export default function HubView({ embedded = false }: { embedded?: boolean }) {
             </div>
           )}
 
-          <div className="min-h-[160px] flex-1 rounded-lg border border-[#23252a] bg-[#0f1011] p-4">
+          <div className="min-h-[160px] flex-1 apple-card apple-card--tight !p-0 p-4">
             {content ? (
               <p className="whitespace-pre-wrap text-sm leading-relaxed text-[#d0d6e0]">{content}</p>
             ) : (
@@ -339,7 +339,7 @@ export default function HubView({ embedded = false }: { embedded?: boolean }) {
 
 function Meta({ label, value }: { label: string; value: string }) {
   return (
-    <span className="rounded-full border border-[#23252a] bg-[#141516] px-2.5 py-0.5 text-[#8a8f98]">
+    <span className="rounded-full border border-white/[0.08] bg-[#141516] px-2.5 py-0.5 text-[#8a8f98]">
       {label} <span className="text-[#f7f8f8]">{value}</span>
     </span>
   );

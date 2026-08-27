@@ -1,7 +1,18 @@
 /**
- * ChatMonitorCards — 對話頁監控卡片共用元件。
+ * ChatMonitorCards — 對話／監控共用卡片（Apple 控制中心語彙）。
+ * 標題 Bold、數據 Regular；狀態燈柔光圓點；色票 #007AFF / #34C759 / #FF9500 / #FF3B30。
  */
 import type { ReactNode } from 'react';
+
+const ACCENT_CLS: Record<string, string> = {
+  green: 'text-[#34C759]',
+  amber: 'text-[#FF9500]',
+  blue: 'text-[#007AFF]',
+  orange: 'text-[#FF9500]',
+  violet: 'text-[#64D2FF]',
+  red: 'text-[#FF3B30]',
+  cyan: 'text-[#64D2FF]',
+};
 
 export function TopKpi({
   label,
@@ -18,13 +29,15 @@ export function TopKpi({
 }) {
   return (
     <div
-      className={`anim-card-rise min-w-0 rounded-xl border border-gray-800 bg-gray-900/70 px-3 py-2.5 transition-shadow duration-300 ${
-        pulse ? 'ring-1 ring-emerald-500/30 live-kpi-pulse' : ''
+      className={`apple-card apple-card--tight apple-card--pad transition-shadow duration-300 ${
+        pulse ? 'ring-1 ring-[#34C759]/30' : ''
       }`}
     >
-      <p className="text-[10px] uppercase tracking-wider text-gray-500">{label}</p>
-      <p className={`mt-0.5 truncate font-mono text-lg ${accent || 'text-gray-100'}`}>{value}</p>
-      {hint && <p className="truncate text-[10px] text-gray-600">{hint}</p>}
+      <p className="apple-title">{label}</p>
+      <p className={`apple-data mt-2 truncate text-[22px] leading-none ${accent || 'text-[#F5F5F7]'}`}>
+        {value}
+      </p>
+      {hint && <p className="mt-2 truncate text-[11px] font-normal text-[#8E8E93]">{hint}</p>}
     </div>
   );
 }
@@ -40,27 +53,13 @@ export function MiniKpi({
   hint?: string;
   accent?: 'green' | 'amber' | 'blue' | 'orange' | 'violet' | 'red' | 'cyan';
 }) {
-  const valueCls =
-    accent === 'green'
-      ? 'text-emerald-300'
-      : accent === 'amber'
-        ? 'text-amber-300'
-        : accent === 'blue'
-          ? 'text-sky-300'
-          : accent === 'orange'
-            ? 'text-orange-300'
-            : accent === 'violet'
-              ? 'text-[#828fff]'
-              : accent === 'red'
-                ? 'text-red-300'
-                : accent === 'cyan'
-                  ? 'text-cyan-300'
-                  : 'text-gray-100';
   return (
-    <div className="anim-card-rise rounded-lg border border-gray-800 bg-gray-950/60 px-2.5 py-2 transition-colors duration-200 hover:border-gray-700">
-      <p className="text-[9px] uppercase tracking-wider text-gray-500">{label}</p>
-      <p className={`mt-0.5 font-mono text-sm ${valueCls}`}>{value}</p>
-      {hint && <p className="mt-0.5 truncate text-[10px] text-gray-600">{hint}</p>}
+    <div className="apple-card apple-card--tight apple-card--pad transition-colors duration-200 hover:border-white/15">
+      <p className="apple-title !text-[10px]">{label}</p>
+      <p className={`apple-data mt-1.5 text-[15px] ${accent ? ACCENT_CLS[accent] : 'text-[#F5F5F7]'}`}>
+        {value}
+      </p>
+      {hint && <p className="mt-1 truncate text-[10px] font-normal text-[#636366]">{hint}</p>}
     </div>
   );
 }
@@ -70,32 +69,41 @@ export function MonitorSection({
   hint,
   badge,
   children,
+  scroll = false,
+  maxHeight,
 }: {
   title: string;
   hint?: string;
   badge?: string;
   children: ReactNode;
+  scroll?: boolean;
+  maxHeight?: string;
 }) {
   return (
-    <section className="anim-card-rise rounded-xl border border-gray-800 bg-gray-900/70 p-3">
-      <div className="mb-2 flex items-baseline justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <h4 className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">{title}</h4>
+    <section
+      className="apple-card"
+      style={scroll && maxHeight ? { maxHeight } : undefined}
+    >
+      <div className="apple-card__head">
+        <div className="flex min-w-0 items-center gap-2">
+          <h4 className="apple-title">{title}</h4>
           {badge && (
             <span
-              className={`rounded-full px-1.5 py-0.5 text-[9px] ${
+              className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold tracking-wide ${
                 badge === 'LIVE'
-                  ? 'live-badge bg-emerald-500/15 text-emerald-300'
-                  : 'bg-gray-800 text-gray-500'
+                  ? 'bg-[#34C759]/15 text-[#34C759]'
+                  : 'bg-white/5 text-[#8E8E93]'
               }`}
             >
               {badge}
             </span>
           )}
         </div>
-        {hint && <span className="text-[10px] text-gray-600">{hint}</span>}
+        {hint && <span className="shrink-0 text-[10px] font-normal text-[#636366]">{hint}</span>}
       </div>
-      {children}
+      <div className={`apple-card__body ${scroll ? '' : 'apple-card__body--static'}`}>
+        {children}
+      </div>
     </section>
   );
 }
@@ -109,15 +117,15 @@ export function HealthPill({
   ok: boolean | null;
   detail?: string;
 }) {
-  const dot =
-    ok === null ? 'bg-gray-500' : ok ? 'bg-emerald-400 animate-pulse' : 'bg-red-400';
-  const text = ok === null ? 'text-gray-400' : ok ? 'text-emerald-300' : 'text-red-300';
+  const dotCls =
+    ok === null ? 'apple-dot' : ok ? 'apple-dot apple-dot--ok' : 'apple-dot apple-dot--err';
+  const text = ok === null ? 'text-[#8E8E93]' : ok ? 'text-[#34C759]' : 'text-[#FF3B30]';
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-gray-800/80 bg-gray-950/40 px-2 py-1.5">
-      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${dot}`} />
+    <div className="apple-inset flex items-center gap-2.5 px-3 py-2">
+      <span className={dotCls} />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[11px] text-gray-300">{label}</p>
-        {detail && <p className={`truncate text-[10px] ${text}`}>{detail}</p>}
+        <p className="truncate text-[12px] font-bold text-[#F5F5F7]">{label}</p>
+        {detail && <p className={`truncate text-[11px] font-normal ${text}`}>{detail}</p>}
       </div>
     </div>
   );
@@ -130,16 +138,17 @@ export function LiveTicker({
 }) {
   if (items.length === 0) return null;
   return (
-    <div className="shrink-0 overflow-hidden border-t border-gray-800/80 bg-gray-950/60">
-      <div className="flex items-center gap-3 px-3 py-1.5">
-        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-emerald-400/80">
+    <div className="apple-chrome shrink-0 overflow-hidden border-t">
+      <div className="flex items-center gap-3 px-4 py-2">
+        <span className="inline-flex items-center gap-1.5 shrink-0 text-[10px] font-bold uppercase tracking-wider text-[#34C759]">
+          <span className="apple-dot apple-dot--live" />
           LIVE
         </span>
         <div className="min-w-0 flex-1 overflow-x-auto">
-          <div className="flex gap-4 whitespace-nowrap">
+          <div className="flex gap-5 whitespace-nowrap">
             {items.map((it) => (
-              <span key={it.key} className={`text-[11px] ${it.accent || 'text-gray-400'}`}>
-                {it.ts && <span className="mr-1 font-mono text-gray-600">{it.ts}</span>}
+              <span key={it.key} className={`text-[11px] font-normal ${it.accent || 'text-[#AEAEB2]'}`}>
+                {it.ts && <span className="mr-1 font-mono text-[#636366]">{it.ts}</span>}
                 {it.text}
               </span>
             ))}
@@ -151,10 +160,10 @@ export function LiveTicker({
 }
 
 const ROADMAP_TONE: Record<string, string> = {
-  P0: 'border-[#5e6ad2]/40 bg-[#5e6ad2]/10',
-  P1: 'border-emerald-500/30 bg-emerald-500/5',
-  P2: 'border-amber-500/30 bg-amber-500/5',
-  P3: 'border-gray-700 bg-gray-950/60',
+  P0: 'border-[#007AFF]/35 bg-[#007AFF]/10',
+  P1: 'border-[#34C759]/30 bg-[#34C759]/08',
+  P2: 'border-[#FF9500]/30 bg-[#FF9500]/08',
+  P3: 'border-white/10 bg-white/[0.03]',
 };
 
 function roadmapStatusText(enabled: boolean, status: string): string {
@@ -184,89 +193,78 @@ export function RoadmapChip({
   const active = enabled && status !== 'disabled';
   return (
     <div
-      className={`rounded-lg border px-2 py-1.5 ${tone} ${active ? '' : 'opacity-60'}`}
+      className={`rounded-2xl border px-3 py-2 ${tone} ${active ? '' : 'opacity-55'}`}
       title={benefit}
     >
       <div className="flex items-center justify-between gap-1">
-        <span className="text-[9px] font-bold text-gray-400">{priority}</span>
-        <span className={`text-[9px] ${active ? 'text-emerald-300/90' : 'text-gray-500'}`}>
+        <span className="text-[9px] font-bold text-[#8E8E93]">{priority}</span>
+        <span className={`text-[9px] font-normal ${active ? 'text-[#34C759]' : 'text-[#636366]'}`}>
           {roadmapStatusText(enabled, status)}
         </span>
       </div>
-      <p className={`truncate ${compact ? 'text-[10px]' : 'text-[11px]'} text-gray-200`}>{label}</p>
+      <p className={`mt-1 truncate font-bold ${compact ? 'text-[11px]' : 'text-[12px]'} text-[#F5F5F7]`}>
+        {label}
+      </p>
       {metric && (
-        <p className="mt-0.5 truncate font-mono text-[9px] text-gray-500">{metric}</p>
+        <p className="apple-data mt-1 truncate text-[10px] text-[#636366]">{metric}</p>
       )}
       {benefit && !compact && !metric && (
-        <p className="mt-0.5 truncate text-[9px] text-gray-500">{benefit}</p>
+        <p className="mt-1 truncate text-[10px] font-normal text-[#636366]">{benefit}</p>
       )}
     </div>
   );
 }
-
-const PRIORITY_BADGE: Record<string, string> = {
-  P0: 'bg-[#5e6ad2]/20 text-[#828fff] border-[#5e6ad2]/40',
-  P1: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/30',
-  P2: 'bg-amber-500/10 text-amber-200 border-amber-500/30',
-  P3: 'bg-gray-800/60 text-gray-400 border-gray-700',
-};
 
 export function RoadmapTable({
   items,
   compact,
 }: {
   items: Array<{
-    priority: string;
     id: string;
+    priority: string;
     label: string;
-    benefit: string;
+    benefit?: string;
     enabled: boolean;
     status: string;
     metric?: string;
   }>;
   compact?: boolean;
 }) {
-  if (items.length === 0) return null;
+  if (!items.length) return null;
+  if (compact) {
+    return (
+      <div className="mb-3 grid grid-cols-2 gap-2">
+        {items.map((it) => (
+          <RoadmapChip key={it.id} {...it} compact metric={it.metric} />
+        ))}
+      </div>
+    );
+  }
   return (
-    <div className="overflow-hidden rounded-lg border border-gray-800">
+    <div className="overflow-x-auto rounded-2xl border border-white/[0.08]">
       <table className="w-full text-left">
-        <thead className={`bg-gray-950/80 text-gray-500 ${compact ? 'text-[9px]' : 'text-[10px]'} uppercase tracking-wider`}>
+        <thead className="bg-black/25 text-[10px] font-bold uppercase tracking-wider text-[#8E8E93]">
           <tr>
-            <th className="px-2 py-1.5 font-medium w-12">優先級</th>
-            <th className="px-2 py-1.5 font-medium">優化項</th>
-            <th className="hidden px-2 py-1.5 font-medium sm:table-cell">預期收益</th>
-            <th className="px-2 py-1.5 font-medium w-20">狀態</th>
-            {items.some((i) => i.metric) && (
-              <th className="hidden px-2 py-1.5 font-medium lg:table-cell">即時指標</th>
-            )}
+            <th className="px-3 py-2">優先</th>
+            <th className="px-3 py-2">項目</th>
+            <th className="px-3 py-2">狀態</th>
           </tr>
         </thead>
-        <tbody className={compact ? 'text-[10px]' : 'text-[11px]'}>
-          {items.map((item) => {
-            const active = item.enabled && item.status !== 'disabled';
-            const badge = PRIORITY_BADGE[item.priority] ?? PRIORITY_BADGE.P3;
-            return (
-              <tr key={item.id} className={`border-t border-gray-800/80 ${active ? '' : 'opacity-60'}`}>
-                <td className="px-2 py-1.5">
-                  <span className={`inline-block rounded border px-1 py-0.5 text-[9px] font-bold ${badge}`}>
-                    {item.priority}
-                  </span>
-                </td>
-                <td className="px-2 py-1.5 text-gray-200">{item.label}</td>
-                <td className="hidden px-2 py-1.5 text-gray-500 sm:table-cell">{item.benefit}</td>
-                <td className="px-2 py-1.5">
-                  <span className={active ? 'text-emerald-300' : 'text-gray-500'}>
-                    {roadmapStatusText(item.enabled, item.status)}
-                  </span>
-                </td>
-                {items.some((i) => i.metric) && (
-                  <td className="hidden px-2 py-1.5 font-mono text-gray-500 lg:table-cell">
-                    {item.metric ?? '—'}
-                  </td>
+        <tbody>
+          {items.map((it) => (
+            <tr key={it.id} className="border-t border-white/[0.06]">
+              <td className="apple-data px-3 py-2.5 text-[11px] text-[#007AFF]">{it.priority}</td>
+              <td className="px-3 py-2.5 text-[12px] font-bold text-[#F5F5F7]">
+                {it.label}
+                {it.benefit && (
+                  <span className="mt-0.5 block text-[11px] font-normal text-[#636366]">{it.benefit}</span>
                 )}
-              </tr>
-            );
-          })}
+              </td>
+              <td className="px-3 py-2.5 text-[11px] font-normal text-[#8E8E93]">
+                {roadmapStatusText(it.enabled, it.status)}
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
     </div>

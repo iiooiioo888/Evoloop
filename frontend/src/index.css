@@ -1,5 +1,27 @@
 @import 'tailwindcss';
 
+/* ---- Apple 控制中心設計語彙（全系統共用） ---- */
+:root {
+  /* 官方色票 */
+  --apple-blue: #007aff;
+  --apple-blue-soft: #64d2ff;
+  --apple-green: #34c759;
+  --apple-orange: #ff9500;
+  --apple-red: #ff3b30;
+  --apple-gray: #8e8e93;
+  --apple-label: #f5f5f7;
+  --apple-secondary: #aeaeb2;
+  --apple-tertiary: #636366;
+  --apple-hairline: rgba(255, 255, 255, 0.08);
+  --apple-fill: rgba(255, 255, 255, 0.04);
+  --apple-surface-top: rgba(58, 58, 60, 0.78);
+  --apple-surface-bot: rgba(44, 44, 46, 0.88);
+  --apple-canvas: #1c1c1e;
+  --apple-canvas-elevated: #2c2c2e;
+  --apple-canvas-bot: #000000;
+  --apple-light: #f5f5f7;
+}
+
 /* 全域深色主題基礎樣式 */
 html,
 body,
@@ -9,18 +31,243 @@ body,
 
 body {
   margin: 0;
-  background-color: #030712;
-  /* 頂部微弱藍光漸層，增加層次感 */
-  background-image: radial-gradient(
-    1000px 500px at 50% -10%,
-    rgba(59, 130, 246, 0.07),
-    transparent
-  );
-  color: #f3f4f6;
+  background-color: var(--apple-canvas);
+  background-image:
+    radial-gradient(ellipse 110% 60% at 50% -12%, rgba(0, 122, 255, 0.08), transparent 52%),
+    linear-gradient(180deg, var(--apple-canvas-elevated) 0%, var(--apple-canvas) 38%, var(--apple-canvas-bot) 100%);
+  color: var(--apple-light);
   font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang TC',
-    'Microsoft JhengHei', sans-serif;
+    -apple-system,
+    BlinkMacSystemFont,
+    'SF Pro Display',
+    'SF Pro Text',
+    'Segoe UI',
+    'PingFang TC',
+    'Microsoft JhengHei',
+    sans-serif;
+  font-weight: 400;
   -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.01em;
+}
+
+/* 頁面畫布／頂欄／側欄 */
+.apple-canvas {
+  background:
+    radial-gradient(ellipse 110% 70% at 50% -16%, rgba(0, 122, 255, 0.06), transparent 55%),
+    linear-gradient(180deg, var(--apple-canvas-elevated) 0%, var(--apple-canvas) 48%, var(--apple-canvas-bot) 100%);
+  color: var(--apple-light);
+}
+
+.apple-chrome {
+  background: rgba(28, 28, 30, 0.94);
+  border-color: var(--apple-hairline) !important;
+  backdrop-filter: blur(22px) saturate(1.3);
+  -webkit-backdrop-filter: blur(22px) saturate(1.3);
+}
+
+/* 磨砂懸浮卡片：留白優先，圓角柔和；標題固定、內容可捲 */
+.apple-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-radius: 18px;
+  border: 1px solid var(--apple-hairline);
+  background: linear-gradient(165deg, var(--apple-surface-top) 0%, var(--apple-surface-bot) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.28),
+    0 10px 32px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(28px) saturate(1.35);
+  -webkit-backdrop-filter: blur(28px) saturate(1.35);
+  color: var(--apple-light);
+  padding: 0;
+  overflow: hidden;
+}
+
+.apple-card--tight {
+  border-radius: 14px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 6px 18px rgba(0, 0, 0, 0.22);
+}
+
+.apple-card--flat {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.apple-card--pad {
+  padding: 16px 18px;
+}
+
+.apple-card--tight.apple-card--pad {
+  padding: 12px 14px;
+}
+
+.apple-card__head {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 16px 10px;
+}
+
+.apple-card--tight .apple-card__head {
+  padding: 12px 14px 8px;
+}
+
+.apple-card__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px 16px 16px;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  /* 上下淡出，避免內容貼邊 */
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 10px,
+    #000 calc(100% - 12px),
+    transparent 100%
+  );
+}
+
+.apple-card--tight .apple-card__body {
+  padding: 2px 14px 14px;
+}
+
+.apple-card__body--static {
+  overflow: visible;
+  mask-image: none;
+}
+
+.apple-card__body::-webkit-scrollbar {
+  width: 5px;
+}
+.apple-card__body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+}
+.apple-card__body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 卡片柵格：留白 > 內容密度 */
+.apple-card-grid {
+  display: grid;
+  gap: 16px;
+  align-items: stretch;
+}
+
+.apple-card-grid--dense {
+  gap: 12px;
+}
+
+.apple-inset {
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--apple-fill);
+}
+
+/* 字重：標題 Bold、數據 Regular */
+.apple-title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--apple-gray);
+}
+
+.apple-heading {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--apple-light);
+}
+
+.apple-data {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  color: var(--apple-light);
+  font-variant-numeric: tabular-nums;
+}
+
+.apple-muted {
+  color: var(--apple-secondary);
+  font-weight: 400;
+}
+
+.apple-accent {
+  color: var(--apple-blue);
+}
+
+/* 柔和發光狀態圓點（禁止尖角） */
+.apple-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  flex-shrink: 0;
+  background: var(--apple-gray);
+  box-shadow: 0 0 0 2px rgba(142, 142, 147, 0.18), 0 0 10px rgba(142, 142, 147, 0.35);
+}
+
+.apple-dot--live,
+.apple-dot--ok {
+  background: var(--apple-green);
+  box-shadow: 0 0 0 2px rgba(52, 199, 89, 0.2), 0 0 12px rgba(52, 199, 89, 0.45);
+}
+
+.apple-dot--warn {
+  background: var(--apple-orange);
+  box-shadow: 0 0 0 2px rgba(255, 149, 0, 0.2), 0 0 12px rgba(255, 149, 0, 0.45);
+}
+
+.apple-dot--err {
+  background: var(--apple-red);
+  box-shadow: 0 0 0 2px rgba(255, 59, 48, 0.2), 0 0 12px rgba(255, 59, 48, 0.45);
+}
+
+.apple-dot--info {
+  background: var(--apple-blue);
+  box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.2), 0 0 12px rgba(0, 122, 255, 0.45);
+}
+
+.apple-btn-active {
+  border-color: rgba(0, 122, 255, 0.45) !important;
+  background: rgba(0, 122, 255, 0.16) !important;
+  color: var(--apple-blue-soft) !important;
+  border-radius: 10px;
+}
+
+/* 圖表容器：留白 > 繪圖區，僅必要刻度 */
+.apple-chart {
+  padding: 18px 16px 14px;
+}
+
+.apple-chart-plot {
+  margin-top: 12px;
+  min-height: 88px;
+}
+
+.apple-chart-axis {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--apple-tertiary);
+}
+
+.apple-chart-grid {
+  stroke: rgba(255, 255, 255, 0.06);
+  stroke-width: 1;
 }
 
 /* 深色細滾動條 */
@@ -208,56 +455,167 @@ body {
   animation: node-ring 1.8s ease-out infinite;
 }
 
-/* ---- Apple 控制中心式 Live Board ---- */
+/* ---- Apple 控制中心式 Live Board（沿用全域 apple-*） ---- */
 .lb-board {
-  --lb-blue: #007aff;
-  --lb-green: #30d158;
-  --lb-orange: #ff9f0a;
-  --lb-red: #ff453a;
-  --lb-gray: #8e8e93;
+  --lb-blue: var(--apple-blue);
+  --lb-green: var(--apple-green);
+  --lb-orange: var(--apple-orange);
+  --lb-red: var(--apple-red);
+  --lb-gray: var(--apple-gray);
   background:
     radial-gradient(ellipse 120% 80% at 50% -20%, rgba(0, 122, 255, 0.08), transparent 55%),
-    linear-gradient(180deg, #2c2c2e 0%, #1c1c1e 42%, #000000 100%);
-  font-family:
-    -apple-system,
-    BlinkMacSystemFont,
-    'SF Pro Display',
-    'SF Pro Text',
-    'Segoe UI',
-    sans-serif;
-  color: #f5f5f7;
+    linear-gradient(180deg, var(--apple-canvas-elevated) 0%, var(--apple-canvas) 42%, var(--apple-canvas-bot) 100%);
+  color: var(--apple-light);
 }
 
 .lb-frost-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: linear-gradient(
-    165deg,
-    rgba(58, 58, 60, 0.72) 0%,
-    rgba(44, 44, 46, 0.82) 100%
-  );
+  border: 1px solid var(--apple-hairline);
+  background: linear-gradient(165deg, var(--apple-surface-top) 0%, var(--apple-surface-bot) 100%);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.1),
     inset 0 -1px 0 rgba(0, 0, 0, 0.35),
     0 8px 28px rgba(0, 0, 0, 0.35);
   backdrop-filter: blur(28px) saturate(1.35);
   -webkit-backdrop-filter: blur(28px) saturate(1.35);
-  padding: 14px 16px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.lb-frost-card > .lb-card-head {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 16px 18px 10px;
+}
+
+.lb-frost-card > .lb-card-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 2px 18px 18px;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 8px,
+    #000 calc(100% - 10px),
+    transparent 100%
+  );
+}
+
+.lb-frost-card > .lb-card-body--static {
+  overflow: visible;
+  mask-image: none;
+}
+
+.lb-frost-card > .lb-card-body::-webkit-scrollbar {
+  width: 5px;
+}
+.lb-frost-card > .lb-card-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
 }
 
 .lb-card-title {
   margin: 0;
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  font-weight: 700;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #8e8e93;
+  color: var(--apple-gray);
 }
 
-/* ---- 交互動畫劇場（對話欄 dock） ---- */
+.lb-board-scroll {
+  scroll-behavior: smooth;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.lb-board-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.lb-board-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+}
+
+.lb-board-grid {
+  display: grid;
+  gap: 16px;
+  align-items: stretch;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 1024px) {
+  .lb-board-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .lb-board-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 20px;
+  }
+}
+
+.lb-board-grid > .lb-span-2 {
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 1280px) {
+  .lb-board-grid > .lb-span-2 {
+    grid-column: span 2;
+  }
+}
+
+.lb-dock-grid {
+  display: grid;
+  gap: 12px;
+  align-items: stretch;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (min-width: 1024px) {
+  .lb-dock-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.lb-dock-grid > .lb-span-2 {
+  grid-column: span 2;
+}
+
+/* ---- 對話欄 dock：外層不雙重捲，卡片內部捲 ---- */
 .anim-theater-dock {
-  max-height: min(42vh, 320px);
-  overflow: auto;
+  max-height: min(46vh, 360px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.anim-theater-dock .lb-board {
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.anim-theater-dock .lb-board-scroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .anim-theater-dock .anim-theater {
@@ -530,7 +888,7 @@ body {
 }
 
 .lb-slider {
-  accent-color: #5e6ad2;
+  accent-color: #007aff;
   height: 4px;
 }
 

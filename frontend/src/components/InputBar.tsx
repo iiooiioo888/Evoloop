@@ -133,7 +133,7 @@ export default function InputBar({ disabled, onSend }: InputBarProps) {
             disabled={disabled}
             className={`ml-auto flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] transition-colors disabled:opacity-50 ${
               showAdvanced
-                ? 'border-[#5e6ad2]/60 bg-[#5e6ad2]/10 text-[#828fff]'
+                ? 'border-[#007AFF]/60 bg-[#007AFF]/10 text-[#64D2FF]'
                 : 'border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600'
             }`}
             title="進階控制選項：預算、並行數、迭代上限等"
@@ -144,7 +144,7 @@ export default function InputBar({ disabled, onSend }: InputBarProps) {
 
         {/* 進階控制選項面板 */}
         {showAdvanced && (
-          <div className="mb-2 rounded-lg border border-[#23252a] bg-[#0f1011] p-3">
+          <div className="mb-2 apple-card apple-card--tight !p-0 p-3">
             <p className="mb-2 text-[10px] font-medium uppercase tracking-wide text-[#62666d]">
               進階控制選項
             </p>
@@ -159,7 +159,7 @@ export default function InputBar({ disabled, onSend }: InputBarProps) {
                   onChange={(e) => setBudgetLimit(e.target.value)}
                   placeholder="預設"
                   disabled={disabled}
-                  className="w-full rounded-md border border-[#23252a] bg-[#010102] px-2 py-1.5 text-xs text-[#f7f8f8] placeholder-[#3e3e44] focus:border-[#5e6ad2] focus:outline-none disabled:opacity-50"
+                  className="w-full rounded-md border border-white/[0.08] apple-canvas px-2 py-1.5 text-xs text-[#f7f8f8] placeholder-[#3e3e44] focus:border-[#007AFF] focus:outline-none disabled:opacity-50"
                 />
               </div>
               <div>
@@ -172,7 +172,7 @@ export default function InputBar({ disabled, onSend }: InputBarProps) {
                   onChange={(e) => setMaxParallel(e.target.value)}
                   placeholder="預設"
                   disabled={disabled}
-                  className="w-full rounded-md border border-[#23252a] bg-[#010102] px-2 py-1.5 text-xs text-[#f7f8f8] placeholder-[#3e3e44] focus:border-[#5e6ad2] focus:outline-none disabled:opacity-50"
+                  className="w-full rounded-md border border-white/[0.08] apple-canvas px-2 py-1.5 text-xs text-[#f7f8f8] placeholder-[#3e3e44] focus:border-[#007AFF] focus:outline-none disabled:opacity-50"
                 />
               </div>
               <div>
@@ -185,7 +185,7 @@ export default function InputBar({ disabled, onSend }: InputBarProps) {
                   onChange={(e) => setMaxIterations(e.target.value)}
                   placeholder="預設"
                   disabled={disabled}
-                  className="w-full rounded-md border border-[#23252a] bg-[#010102] px-2 py-1.5 text-xs text-[#f7f8f8] placeholder-[#3e3e44] focus:border-[#5e6ad2] focus:outline-none disabled:opacity-50"
+                  className="w-full rounded-md border border-white/[0.08] apple-canvas px-2 py-1.5 text-xs text-[#f7f8f8] placeholder-[#3e3e44] focus:border-[#007AFF] focus:outline-none disabled:opacity-50"
                 />
               </div>
               <div>
@@ -198,7 +198,7 @@ export default function InputBar({ disabled, onSend }: InputBarProps) {
                   onChange={(e) => setMaxReviewRounds(e.target.value)}
                   placeholder="預設"
                   disabled={disabled}
-                  className="w-full rounded-md border border-[#23252a] bg-[#010102] px-2 py-1.5 text-xs text-[#f7f8f8] placeholder-[#3e3e44] focus:border-[#5e6ad2] focus:outline-none disabled:opacity-50"
+                  className="w-full rounded-md border border-white/[0.08] apple-canvas px-2 py-1.5 text-xs text-[#f7f8f8] placeholder-[#3e3e44] focus:border-[#007AFF] focus:outline-none disabled:opacity-50"
                 />
               </div>
               <div>
@@ -212,7 +212,7 @@ export default function InputBar({ disabled, onSend }: InputBarProps) {
                   onChange={(e) => setPassThreshold(e.target.value)}
                   placeholder="預設"
                   disabled={disabled}
-                  className="w-full rounded-md border border-[#23252a] bg-[#010102] px-2 py-1.5 text-xs text-[#f7f8f8] placeholder-[#3e3e44] focus:border-[#5e6ad2] focus:outline-none disabled:opacity-50"
+                  className="w-full rounded-md border border-white/[0.08] apple-canvas px-2 py-1.5 text-xs text-[#f7f8f8] placeholder-[#3e3e44] focus:border-[#007AFF] focus:outline-none disabled:opacity-50"
                 />
               </div>
             </div>

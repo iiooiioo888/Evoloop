@@ -53,7 +53,7 @@ export default function CheckpointsPanel() {
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-[#010102] p-4 text-[#f7f8f8]">
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto apple-canvas p-4 text-[#f7f8f8]">
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h2 className="text-sm font-semibold">斷點檢查點</h2>
@@ -63,7 +63,7 @@ export default function CheckpointsPanel() {
         </div>
         <button
           onClick={() => void refresh()}
-          className="rounded-md border border-[#23252a] bg-[#0f1011] px-2 py-1 text-[11px] text-[#8a8f98] hover:text-[#f7f8f8]"
+          className="rounded-xl border border-white/[0.08] bg-[#1C1C1E] px-2 py-1 text-[11px] text-[#8a8f98] hover:text-[#f7f8f8]"
         >
           {loading ? '同步中' : '重新整理'}
         </button>
@@ -75,44 +75,44 @@ export default function CheckpointsPanel() {
         </div>
       )}
       {notice && (
-        <div className="mb-3 rounded-md border border-[#5e6ad2]/30 bg-[#5e6ad2]/10 px-3 py-2 text-xs text-[#828fff]">
+        <div className="mb-3 rounded-md border border-[#007AFF]/30 bg-[#007AFF]/10 px-3 py-2 text-xs text-[#64D2FF]">
           {notice}
         </div>
       )}
 
       <div className="mb-4 grid grid-cols-2 gap-2 lg:grid-cols-4">
-        <div className="rounded-lg border border-[#23252a] bg-[#0f1011] px-3 py-2.5">
+        <div className="apple-card apple-card--tight !p-0 px-3 py-2.5">
           <p className="text-[10px] uppercase tracking-wider text-[#62666d]">可恢復</p>
           <p className="mt-1 font-mono text-lg">{items.length}</p>
         </div>
-        <div className="rounded-lg border border-[#23252a] bg-[#0f1011] px-3 py-2.5">
+        <div className="apple-card apple-card--tight !p-0 px-3 py-2.5">
           <p className="text-[10px] uppercase tracking-wider text-[#62666d]">工作項合計</p>
           <p className="mt-1 font-mono text-lg">
             {items.reduce((sum, c) => sum + (c.work_item_count ?? 0), 0)}
           </p>
         </div>
-        <div className="rounded-lg border border-[#23252a] bg-[#0f1011] px-3 py-2.5">
+        <div className="apple-card apple-card--tight !p-0 px-3 py-2.5">
           <p className="text-[10px] uppercase tracking-wider text-[#62666d]">最近階段</p>
           <p className="mt-1 truncate font-mono text-sm">{items[0]?.phase || '—'}</p>
         </div>
-        <div className="rounded-lg border border-[#23252a] bg-[#0f1011] px-3 py-2.5">
+        <div className="apple-card apple-card--tight !p-0 px-3 py-2.5">
           <p className="text-[10px] uppercase tracking-wider text-[#62666d]">最近儲存</p>
           <p className="mt-1 truncate font-mono text-[11px]">{items[0] ? fmtTime(items[0].saved_at) : '—'}</p>
         </div>
       </div>
 
       {items.length === 0 ? (
-        <div className="rounded-lg border border-[#23252a] bg-[#0f1011] px-4 py-16 text-center">
+        <div className="apple-card apple-card--tight !p-0 px-4 py-16 text-center">
           <p className="text-sm text-[#8a8f98]">尚無可恢復檢查點</p>
           <p className="mt-1 text-[11px] text-[#62666d]">
             公司任務執行中會自動寫入 checkpoint_*.json，中斷後可在此續跑。
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-[#23252a] bg-[#0f1011]">
+        <div className="overflow-x-auto apple-card apple-card--tight !p-0">
           <table className="w-full min-w-[720px] text-left">
             <thead>
-              <tr className="border-b border-[#23252a] text-[10px] uppercase tracking-wider text-[#62666d]">
+              <tr className="border-b border-white/[0.08] text-[10px] uppercase tracking-wider text-[#62666d]">
                 <th className="px-3 py-2 font-medium">任務</th>
                 <th className="px-3 py-2 font-medium">目標</th>
                 <th className="px-3 py-2 font-medium">階段</th>
@@ -124,8 +124,8 @@ export default function CheckpointsPanel() {
             </thead>
             <tbody>
               {items.map((c) => (
-                <tr key={c.task_id} className="border-b border-[#23252a] last:border-0">
-                  <td className="px-3 py-2 font-mono text-[11px] text-[#828fff]">
+                <tr key={c.task_id} className="border-b border-white/[0.08] last:border-0">
+                  <td className="px-3 py-2 font-mono text-[11px] text-[#64D2FF]">
                     {c.task_id.slice(0, 12)}
                   </td>
                   <td className="max-w-[240px] truncate px-3 py-2 text-xs text-[#d0d6e0]">
@@ -141,7 +141,7 @@ export default function CheckpointsPanel() {
                     <button
                       onClick={() => void onResume(c.task_id)}
                       disabled={resuming === c.task_id}
-                      className="rounded-md bg-[#5e6ad2] px-2 py-1 text-[11px] text-white disabled:opacity-50"
+                      className="rounded-md bg-[#007AFF] px-2 py-1 text-[11px] text-white disabled:opacity-50"
                     >
                       {resuming === c.task_id ? '恢復中…' : '續跑'}
                     </button>
