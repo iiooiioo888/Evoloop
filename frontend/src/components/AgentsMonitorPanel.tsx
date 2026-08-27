@@ -807,18 +807,16 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
         <div>
           <h2 className="text-sm font-semibold">
             {layout === 'desk' && selected
-              ? `${selected.name} Agent`
+              ? `${selected.name}`
               : layout === 'catalog'
-                ? `角色目錄 · ${agents.length}`
-                : '角色 Agent 樓層'}
+                ? `目錄 · ${agents.length}`
+                : '樓層'}
           </h2>
-          <p className="mt-0.5 text-[11px] text-[#8a8f98]">
-            {layout === 'desk' && selected
-              ? `L${selected.level} ${selected.level_label} · 名冊在左側外圍「◈ 角色 Agent」· 本區為工作台`
-              : layout === 'catalog'
-                ? '輔助總覽（主名冊仍在左側外圍）· 點擊進入工作台或編輯角色設定'
-                : '樓層卡片為輔助視圖 · 完整名冊與分頁同層在左側外圍'}
-          </p>
+          {layout === 'desk' && selected && (
+            <p className="mt-0.5 text-[11px] text-[#8E8E93]">
+              L{selected.level} {selected.level_label}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <div className="flex rounded-xl border border-white/[0.08] bg-[#1C1C1E] p-0.5">

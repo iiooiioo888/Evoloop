@@ -1,0 +1,39 @@
+{
+  "nav": {
+    "chat": "Chat",
+    "monitor": "Monitor",
+    "traces": "Traces"
+  },
+  "monitor": {
+    "live": "Live",
+    "agents": "Agents",
+    "pipeline": "Pipeline",
+    "opc": "OPC",
+    "lab": "Lab",
+    "ops": "Ops",
+    "memory": "Memory",
+    "liveIdle": "Idle",
+    "liveActive": "Live",
+    "roster": "Roster",
+    "searchRoles": "Search roles"
+  },
+  "errors": {
+    "opcGuard": "OPC guard blocked a write",
+    "llmFailed": "Model call failed",
+    "partialSources": "Some monitor sources unreachable",
+    "network": "Network error"
+  },
+  "lab": {
+    "dspy": "DSPy",
+    "mcp": "MCP Tools",
+    "ab": "A/B Eval",
+    "before": "Before",
+    "after": "After"
+  },
+  "common": {
+    "refresh": "Refresh",
+    "open": "Open",
+    "retry": "Retry",
+    "dismiss": "Dismiss"
+  }
+}

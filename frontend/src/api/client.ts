@@ -454,6 +454,91 @@ export class TaskWebSocket {
   }
 }
 
+/** 監控中心 Hub WebSocket：週期推送彙總快照。 */
+export class MonitorHubWebSocket {
+  private ws: WebSocket | null = null;
+  private onSnapshot: (snap: Record<string, unknown>) => void;
+  private onClose?: () => void;
+  private heartbeat: ReturnType<typeof setInterval> | null = null;
+
+  constructor(
+    onSnapshot: (snap: Record<string, unknown>) => void,
+    onClose?: () => void,
+  ) {
+    this.onSnapshot = onSnapshot;
+    this.onClose = onClose;
+  }
+
+  connect(): void {
+    try {
+      this.ws = new WebSocket(wsUrl('/monitor/ws'));
+    } catch {
+      this.onClose?.();
+      return;
+    }
+
+    this.ws.onopen = () => {
+      this.heartbeat = setInterval(() => this.ping(), 15000);
+    };
+
+    this.ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data) as {
+          event?: string;
+          data?: Record<string, unknown>;
+        };
+        if (msg.event === 'snapshot' && msg.data) {
+          this.onSnapshot(msg.data);
+        } else if (msg.event !== 'pong') {
+          this.onSnapshot(msg as Record<string, unknown>);
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    this.ws.onclose = () => {
+      if (this.heartbeat) {
+        clearInterval(this.heartbeat);
+        this.heartbeat = null;
+      }
+      this.onClose?.();
+    };
+
+    this.ws.onerror = () => {
+      this.ws?.close();
+    };
+  }
+
+  ping(): void {
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send('ping');
+    }
+  }
+
+  close(): void {
+    if (this.heartbeat) {
+      clearInterval(this.heartbeat);
+      this.heartbeat = null;
+    }
+    if (this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send('close');
+    }
+    this.ws?.close();
+  }
+
+  get connected(): boolean {
+    return this.ws?.readyState === WebSocket.OPEN;
+  }
+}
+
+/** 一次性拉取監控彙總快照（REST 降級）。 */
+export async function fetchMonitorHubSnapshot(): Promise<Record<string, unknown>> {
+  const resp = await fetch(apiUrl('/monitor/hub-snapshot'));
+  if (!resp.ok) throw new Error(`監控快照失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
 // ==================== 記憶庫管理 ====================
 
 /** 記憶項目 */

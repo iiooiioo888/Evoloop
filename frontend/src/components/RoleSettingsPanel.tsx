@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { AgentCatalogMeta, RoleAgent, RolePreset } from '../types';
 import { CATEGORY_LABEL, ROUTING_LABEL, TIER_LABEL } from '../lib/agentUi';
+import PromptEditor from './PromptEditor';
 
 export interface RoleSettingsDraft {
   name: string;
@@ -491,12 +492,11 @@ export default function RoleSettingsPanel({
 
       {section === 'prompt' && (
         <div className="space-y-3">
-          <Field label="系統提示詞（角色設定）">
-            <textarea
-              rows={10}
-              className={`${inputCls} font-mono leading-relaxed`}
+          <Field label="系統提示詞（角色設定）" hint="Monaco · 語法高亮">
+            <PromptEditor
               value={draft.system_prompt}
-              onChange={(e) => setDraft({ ...draft, system_prompt: e.target.value })}
+              onChange={(v) => setDraft({ ...draft, system_prompt: v })}
+              height={280}
             />
           </Field>
           <Field label="職責" hint="一行一項">

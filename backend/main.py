@@ -206,6 +206,14 @@ async def monitor_optimization():
     return collect_optimization_monitor()
 
 
+@app.get("/monitor/hub-snapshot")
+async def monitor_hub_snapshot():
+    """監控中心彙總快照（REST 降級用，與 /monitor/ws 同結構）。"""
+    from backend.services.monitor_hub import collect_monitor_hub
+
+    return await asyncio.to_thread(collect_monitor_hub)
+
+
 @app.post("/config/test")
 async def test_config():
     """以当前配置實際呼叫 LLM 驗證連線。"""
@@ -646,6 +654,35 @@ async def task_websocket(websocket: WebSocket, task_id: str):
                 break
     finally:
         await task_broadcaster.unsubscribe(task_id, websocket)
+
+
+@app.websocket("/monitor/ws")
+async def monitor_hub_websocket(websocket: WebSocket):
+    """監控中心彙總推送：每 3 秒推送一次 hub-snapshot。
+
+    訊息格式：{"event": "snapshot"|"pong", "data": {...}}
+    """
+    from backend.services.monitor_hub import collect_monitor_hub
+
+    await websocket.accept()
+    try:
+        while True:
+            snap = await asyncio.to_thread(collect_monitor_hub)
+            await websocket.send_json({"event": "snapshot", "data": snap})
+
+            # 同時接受心跳；最多等待 3 秒再推下一幀
+            try:
+                data = await asyncio.wait_for(websocket.receive_text(), timeout=3.0)
+                if data == "close":
+                    break
+                if data == "ping":
+                    await websocket.send_json({"event": "pong", "data": {}})
+            except asyncio.TimeoutError:
+                continue
+            except WebSocketDisconnect:
+                break
+    except WebSocketDisconnect:
+        pass
 
 
 # ==================== 記憶庫管理 API ====================

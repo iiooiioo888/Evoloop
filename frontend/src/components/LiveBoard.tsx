@@ -1,9 +1,6 @@
 /**
- * LiveBoard — 大螢幕即時監控面板（Apple 控制中心 × Health 圖表風格）。
- *
- * - 全頁柵格一次呈現，無場景輪播／自動下一步
- * - 僅由 Agent／路由／OPC／帳單真實狀態驅動
- * - 無活動時畫面靜止（無 idle 掃描、無定時走位）
+ * LiveBoard — 大螢幕即時監控（Apple 控制中心風格）。
+ * 單一柵格、真實狀態驅動；無 KPI 重複列、無場景輪播。
  */
 import { useMemo } from 'react';
 import type { ReactNode } from 'react';
@@ -34,12 +31,6 @@ const GRAY = '#8E8E93';
 
 export type LiveBoardDensity = 'page' | 'dock';
 
-function statusTone(ok: boolean, warn = false): string {
-  if (ok) return GREEN;
-  if (warn) return ORANGE;
-  return GRAY;
-}
-
 function FrostCard({
   title,
   accessory,
@@ -52,7 +43,6 @@ function FrostCard({
   accessory?: ReactNode;
   className?: string;
   bodyClassName?: string;
-  /** true：內容區獨立捲動；false：隨頁面一起排版 */
   scroll?: boolean;
   children: ReactNode;
 }) {
@@ -82,7 +72,14 @@ function StatusDot({ color, label }: { color: string; label: string }) {
             : 'apple-dot';
   return (
     <span className="inline-flex items-center gap-2 text-[10px] font-normal text-[#AEAEB2]">
-      <span className={tone} style={tone === 'apple-dot' ? { background: color, boxShadow: `0 0 0 2px ${color}33, 0 0 12px ${color}66` } : undefined} />
+      <span
+        className={tone}
+        style={
+          tone === 'apple-dot'
+            ? { background: color, boxShadow: `0 0 0 2px ${color}33, 0 0 12px ${color}66` }
+            : undefined
+        }
+      />
       {label}
     </span>
   );
@@ -94,7 +91,7 @@ function RingMetric({
   label,
   color,
   sub,
-  size = 88,
+  size = 80,
 }: {
   value: number;
   max?: number;
@@ -108,7 +105,7 @@ function RingMetric({
   const c = 2 * Math.PI * r;
   const dash = (pct / 100) * c;
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-center gap-2">
       <div className="relative" style={{ height: size, width: size }}>
         <svg viewBox="0 0 80 80" className="h-full w-full -rotate-90">
           <circle cx="40" cy="40" r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="6" />
@@ -124,82 +121,12 @@ function RingMetric({
             className="transition-[stroke-dasharray] duration-500 ease-out"
           />
         </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="apple-data text-[17px] text-white">{pct}%</span>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="apple-data text-[16px] text-white">{pct}%</span>
         </div>
       </div>
-      <p className="mt-2 text-[12px] font-bold text-[#F5F5F7]">{label}</p>
-      {sub && <p className="apple-data mt-0.5 text-[10px] text-[#8E8E93]">{sub}</p>}
-    </div>
-  );
-}
-
-/** 靜態折線：依真實權重／負載繪製，不隨時間自動推進 */
-function Sparkline({
-  values,
-  color = BLUE,
-  height = 48,
-}: {
-  values: number[];
-  color?: string;
-  height?: number;
-}) {
-  if (values.length < 2) {
-    return <div className="flex h-12 items-center justify-center text-[11px] text-[#636366]">—</div>;
-  }
-  const max = Math.max(...values, 0.001);
-  const min = Math.min(...values, 0);
-  const span = Math.max(max - min, 0.001);
-  const w = 240;
-  const h = height;
-  const pts = values
-    .map((v, i) => {
-      const x = (i / (values.length - 1)) * w;
-      const y = h - ((v - min) / span) * (h - 8) - 4;
-      return `${x},${y}`;
-    })
-    .join(' ');
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="h-12 w-full" preserveAspectRatio="none">
-      <polyline
-        fill="none"
-        stroke={color}
-        strokeWidth="2"
-        strokeLinejoin="round"
-        strokeLinecap="round"
-        points={pts}
-        opacity={0.95}
-      />
-    </svg>
-  );
-}
-
-function KpiTile({
-  label,
-  value,
-  hint,
-  tone,
-}: {
-  label: string;
-  value: string;
-  hint: string;
-  tone: string;
-}) {
-  return (
-    <div className="lb-frost-card">
-      <div className="lb-card-head !pb-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <span
-            className="apple-dot"
-            style={{ background: tone, boxShadow: `0 0 0 2px ${tone}33, 0 0 12px ${tone}66` }}
-          />
-          <p className="apple-title">{label}</p>
-        </div>
-      </div>
-      <div className="lb-card-body lb-card-body--static !pt-0">
-        <p className="apple-data text-[24px] leading-none text-white sm:text-[28px]">{value}</p>
-        <p className="mt-2 truncate text-[11px] font-normal text-[#AEAEB2]">{hint}</p>
-      </div>
+      <p className="text-[12px] font-bold text-[#F5F5F7]">{label}</p>
+      {sub && <p className="apple-data text-[10px] text-[#8E8E93]">{sub}</p>}
     </div>
   );
 }
@@ -215,9 +142,8 @@ function PipelineCard({ feed, dock }: { feed: AnimLiveFeed; dock?: boolean }) {
       accessory={
         <StatusDot color={liveIdx != null ? BLUE : GRAY} label={phase ? String(phase) : '待命'} />
       }
-      className={dock ? 'min-h-0' : 'min-h-[168px]'}
     >
-      <div className={`flex flex-1 items-center gap-1 ${dock ? 'pt-1 pb-1' : 'pt-2 pb-1'} sm:gap-2`}>
+      <div className={`flex items-center gap-1 ${dock ? 'py-1' : 'py-3'} sm:gap-2`}>
         {PIPELINE.map((n, i) => {
           const active = liveIdx != null && i === liveIdx;
           const done = liveIdx != null && i < liveIdx;
@@ -225,13 +151,13 @@ function PipelineCard({ feed, dock }: { feed: AnimLiveFeed; dock?: boolean }) {
             <div key={n.id} className="relative flex min-w-0 flex-1 flex-col items-center">
               {i < PIPELINE.length - 1 && (
                 <div
-                  className={`absolute left-[52%] ${dock ? 'top-[12px]' : 'top-[14px]'} h-[2px] w-[96%]`}
+                  className={`absolute left-[52%] ${dock ? 'top-[11px]' : 'top-[13px]'} h-[2px] w-[96%]`}
                   style={{ background: done ? GREEN : 'rgba(255,255,255,0.1)' }}
                 />
               )}
               <div
-                className={`relative z-[1] flex items-center justify-center rounded-full transition-colors duration-300 ${
-                  dock ? 'h-6 w-6' : 'h-7 w-7 sm:h-8 sm:w-8'
+                className={`relative z-[1] flex items-center justify-center rounded-full ${
+                  dock ? 'h-6 w-6' : 'h-7 w-7'
                 }`}
                 style={{
                   background: active ? BLUE : done ? `${GREEN}33` : 'rgba(255,255,255,0.06)',
@@ -239,14 +165,14 @@ function PipelineCard({ feed, dock }: { feed: AnimLiveFeed; dock?: boolean }) {
                 }}
               >
                 <span
-                  className="text-[9px] font-semibold sm:text-[10px]"
+                  className="text-[9px] font-semibold"
                   style={{ color: active ? '#fff' : done ? GREEN : GRAY }}
                 >
                   {i + 1}
                 </span>
               </div>
               <span
-                className={`mt-1.5 font-medium ${dock ? 'text-[9px]' : 'text-[10px] sm:text-[11px]'}`}
+                className={`mt-2 font-medium ${dock ? 'text-[9px]' : 'text-[10px]'}`}
                 style={{ color: active ? '#fff' : '#8E8E93' }}
               >
                 {n.label}
@@ -255,18 +181,13 @@ function PipelineCard({ feed, dock }: { feed: AnimLiveFeed; dock?: boolean }) {
           );
         })}
       </div>
-      {!dock && feed.resolvedPath && (
-        <p className="mt-3 font-mono text-[10px] text-[#636366]">路徑 {feed.resolvedPath}</p>
-      )}
     </FrostCard>
   );
 }
 
 function CompanyCard({ feed, dock }: { feed: AnimLiveFeed; dock?: boolean }) {
-  const busy = useMemo(() => pickBusyAgents(feed.agents, dock ? 4 : 6), [feed.agents, dock]);
+  const busy = useMemo(() => pickBusyAgents(feed.agents, dock ? 4 : 5), [feed.agents, dock]);
   const active = useMemo(() => pickActiveAgents(feed.agents, 6), [feed.agents]);
-  const open = feed.summary?.work_items_open ?? 0;
-  const company = feed.summary?.running_company_tasks ?? 0;
 
   return (
     <FrostCard
@@ -277,16 +198,14 @@ function CompanyCard({ feed, dock }: { feed: AnimLiveFeed; dock?: boolean }) {
           label={active.length ? `${active.length} 執行` : busy.length ? `${busy.length} 佇列` : '空閒'}
         />
       }
-      className={dock ? 'min-h-0 max-h-[200px]' : 'min-h-[168px] max-h-[280px]'}
-      scroll
+      className={dock ? 'max-h-[180px]' : 'max-h-[240px]'}
+      scroll={busy.length > (dock ? 3 : 4)}
     >
       {busy.length === 0 ? (
-        <div className="flex h-full min-h-[72px] items-center justify-center text-[12px] text-[#636366]">
-          無忙碌角色
-        </div>
+        <p className="py-6 text-center text-[12px] text-[#636366]">無忙碌角色</p>
       ) : (
-        <div className="space-y-3">
-          {busy.slice(0, dock ? 4 : 8).map((a) => {
+        <div className="space-y-4">
+          {busy.map((a) => {
             const hot = active.some((x) => x.id === a.id);
             const pct = Math.min(
               100,
@@ -298,9 +217,7 @@ function CompanyCard({ feed, dock }: { feed: AnimLiveFeed; dock?: boolean }) {
                   className="apple-dot shrink-0"
                   style={{
                     background: hot ? GREEN : a.status === 'error' ? RED : ORANGE,
-                    boxShadow: hot
-                      ? `0 0 0 2px ${GREEN}33, 0 0 12px ${GREEN}66`
-                      : undefined,
+                    boxShadow: hot ? `0 0 0 2px ${GREEN}33, 0 0 12px ${GREEN}66` : undefined,
                   }}
                 />
                 <div className="min-w-0 flex-1">
@@ -321,11 +238,6 @@ function CompanyCard({ feed, dock }: { feed: AnimLiveFeed; dock?: boolean }) {
               </div>
             );
           })}
-          {!dock && (
-            <p className="apple-data pt-1 text-[10px] text-[#636366]">
-              開放 {open} · 公司任務 {company}
-            </p>
-          )}
         </div>
       )}
     </FrostCard>
@@ -334,7 +246,6 @@ function CompanyCard({ feed, dock }: { feed: AnimLiveFeed; dock?: boolean }) {
 
 function BudgetCard({ feed, dock }: { feed: AnimLiveFeed; dock?: boolean }) {
   const b = budgetPct(feed.summary);
-  const today = feed.billing?.today_total;
 
   return (
     <FrostCard
@@ -346,27 +257,22 @@ function BudgetCard({ feed, dock }: { feed: AnimLiveFeed; dock?: boolean }) {
         />
       }
     >
-      <div className={`flex items-center justify-around gap-2 ${dock ? 'py-0' : 'py-1'}`}>
+      <div className={`flex items-center justify-around ${dock ? 'py-1' : 'py-2'}`}>
         <RingMetric
           value={b.apiPct}
           label="API"
           color={BLUE}
-          size={dock ? 64 : 88}
+          size={dock ? 60 : 80}
           sub={b.totalUsd > 0 ? `$${b.apiUsd.toFixed(3)}` : '—'}
         />
         <RingMetric
           value={b.cloudPct}
           label="雲資源"
           color={ORANGE}
-          size={dock ? 64 : 88}
+          size={dock ? 60 : 80}
           sub={b.totalUsd > 0 ? `$${b.cloudUsd.toFixed(3)}` : '—'}
         />
       </div>
-      {!dock && today != null && (
-        <p className="mt-1 text-center font-mono text-[10px] text-[#636366]">
-          雲今日 ${today.toFixed(3)}
-        </p>
-      )}
     </FrostCard>
   );
 }
@@ -383,25 +289,22 @@ function OpcCard({ feed }: { feed: AnimLiveFeed }) {
   return (
     <FrostCard
       title="OPC"
-      accessory={<StatusDot color={tone} label={fresh ? '邊緣命中' : reachable ? '連線' : '離線'} />}
+      accessory={<StatusDot color={tone} label={fresh ? '邊緣' : reachable ? '連線' : '離線'} />}
     >
-      <div className="grid grid-cols-3 gap-2 py-1">
+      <div className="grid grid-cols-3 gap-4 py-2">
         {[
           { label: '連線', value: reachable ? 'ON' : 'OFF', c: reachable ? GREEN : GRAY },
           { label: '讀取', value: String(readings), c: readings > 0 ? BLUE : GRAY },
           { label: '攔截', value: String(blocked), c: blocked > 0 ? RED : GRAY },
         ].map((cell) => (
-          <div key={cell.label} className="apple-inset px-2 py-3.5 text-center">
+          <div key={cell.label} className="text-center">
             <p className="apple-title !normal-case !tracking-normal">{cell.label}</p>
-            <p className="apple-data mt-1.5 text-lg" style={{ color: cell.c }}>
+            <p className="apple-data mt-2 text-[20px]" style={{ color: cell.c }}>
               {cell.value}
             </p>
           </div>
         ))}
       </div>
-      {edge?.edge_ttl_sec != null && (
-        <p className="mt-2 font-mono text-[10px] text-[#636366]">TTL {edge.edge_ttl_sec}s</p>
-      )}
     </FrostCard>
   );
 }
@@ -414,38 +317,26 @@ function RouterCard({ feed, dock }: { feed: AnimLiveFeed; dock?: boolean }) {
     (b) => phase.includes(b.id.toLowerCase()) || phase.includes(b.label.toLowerCase()),
   );
   const maxW = Math.max(...backends.map((b) => b.weight), 1);
-  const spark = backends.map((b) => b.weight);
 
   return (
     <FrostCard
-      title="任務 → 模型"
+      title="路由"
       accessory={
         <StatusDot
           color={hotIdx >= 0 ? BLUE : GRAY}
-          label={routing?.total ? `路由 ${routing.total}` : `${backends.length} 環節`}
+          label={routing?.total ? `${routing.total}` : `${backends.length}`}
         />
       }
-      className={dock ? 'min-h-0' : 'min-h-[220px]'}
       bodyClassName="apple-chart"
     >
-      {!dock && (
-        <div className="mb-3 rounded-xl bg-white/[0.03] px-3 py-2">
-          <Sparkline values={spark} color={BLUE} height={40} />
-        </div>
-      )}
-      <div className={`flex items-end gap-3 sm:gap-4 ${dock ? 'h-[96px]' : 'h-[128px]'}`}>
+      <div className={`flex items-end gap-3 ${dock ? 'h-[88px]' : 'h-[120px]'} sm:gap-4`}>
         {backends.map((b, i) => {
           const hot = i === hotIdx;
-          const h = (dock ? 20 : 28) + (b.weight / maxW) * (dock ? 56 : 80);
+          const h = (dock ? 18 : 24) + (b.weight / maxW) * (dock ? 52 : 76);
           return (
             <div key={b.id} className="flex min-w-0 flex-1 flex-col items-center justify-end">
-              {!dock && (
-                <p className="mb-1 max-w-full truncate px-0.5 text-center font-mono text-[9px] text-[#8E8E93]">
-                  {b.model === '—' ? b.tier : b.model}
-                </p>
-              )}
               <div
-                className="relative w-full overflow-hidden rounded-t-lg transition-[height,background] duration-400"
+                className="w-full rounded-t-lg transition-[height,background] duration-400"
                 style={{
                   height: h,
                   background: hot
@@ -455,7 +346,7 @@ function RouterCard({ feed, dock }: { feed: AnimLiveFeed; dock?: boolean }) {
                 }}
               />
               <p
-                className="mt-1 truncate text-[10px] font-medium"
+                className="mt-2 truncate text-[10px] font-medium"
                 style={{ color: hot ? BLUE : '#AEAEB2' }}
               >
                 {b.label}
@@ -469,7 +360,7 @@ function RouterCard({ feed, dock }: { feed: AnimLiveFeed; dock?: boolean }) {
 }
 
 function EventsCard({ feed, dock }: { feed: AnimLiveFeed; dock?: boolean }) {
-  const lines = useMemo(() => buildReportLines(feed.agents, dock ? 4 : 8), [feed.agents, dock]);
+  const lines = useMemo(() => buildReportLines(feed.agents, dock ? 4 : 6), [feed.agents, dock]);
 
   return (
     <FrostCard
@@ -477,34 +368,27 @@ function EventsCard({ feed, dock }: { feed: AnimLiveFeed; dock?: boolean }) {
       accessory={
         <StatusDot color={lines.length ? GREEN : GRAY} label={lines.length ? `${lines.length}` : '無'} />
       }
-      className={dock ? 'min-h-0 max-h-[220px]' : 'min-h-[200px] max-h-[320px]'}
-      scroll
+      className={dock ? 'max-h-[200px]' : 'max-h-[260px]'}
+      scroll={lines.length > (dock ? 3 : 4)}
     >
       {lines.length === 0 ? (
-        <div className="flex h-full min-h-[88px] items-center justify-center text-[12px] text-[#636366]">
-          等待 Agent 事件
-        </div>
+        <p className="py-8 text-center text-[12px] text-[#636366]">等待事件</p>
       ) : (
-        <ul className="space-y-2.5">
+        <ul className="divide-y divide-white/[0.06]">
           {lines.map((s) => (
-            <li key={s.id} className="apple-inset flex items-start gap-2.5 px-3 py-2.5">
+            <li key={s.id} className="flex items-start gap-3 py-3 first:pt-0 last:pb-0">
               <span
-                className="apple-dot mt-1 shrink-0"
+                className="apple-dot mt-1.5 shrink-0"
                 style={{
                   background: s.accent ?? BLUE,
                   boxShadow: `0 0 0 2px ${(s.accent ?? BLUE)}33, 0 0 10px ${(s.accent ?? BLUE)}55`,
                 }}
               />
               <div className="min-w-0 flex-1">
-                <p
-                  className="truncate text-[11px] font-bold"
-                  style={{ color: s.accent ?? BLUE }}
-                >
+                <p className="truncate text-[11px] font-bold" style={{ color: s.accent ?? BLUE }}>
                   {s.role}
                 </p>
-                <p className="mt-0.5 text-[12px] font-normal leading-relaxed text-[#F5F5F7]">
-                  {s.line}
-                </p>
+                <p className="mt-0.5 text-[12px] font-normal leading-snug text-[#F5F5F7]">{s.line}</p>
               </div>
             </li>
           ))}
@@ -522,13 +406,6 @@ export default function LiveBoard({
   density?: LiveBoardDensity;
 }) {
   const dock = density === 'dock';
-  const active = useMemo(() => pickActiveAgents(feed.agents, 99), [feed.agents]);
-  const phase = feed.streamPhase || feed.taskPhase;
-  const b = budgetPct(feed.summary);
-  const opcOk = Boolean(
-    feed.optimization?.opc_edge?.cache_fresh ||
-      (feed.opc?.live?.reachable && feed.opc?.live?.health?.opc_connected),
-  );
   const updated = feed.updatedAt
     ? new Date(feed.updatedAt).toLocaleTimeString('zh-TW', {
         hour: '2-digit',
@@ -545,55 +422,13 @@ export default function LiveBoard({
     >
       <div
         className={`lb-board-scroll min-h-0 flex-1 overflow-y-auto ${
-          dock ? 'px-3 py-3' : 'px-5 py-5 sm:px-7 sm:py-6'
+          dock ? 'px-3 py-3' : 'px-6 py-6 sm:px-8 sm:py-7'
         }`}
       >
-        <div className={`flex flex-wrap items-center justify-between gap-2 ${dock ? 'mb-3' : 'mb-5'}`}>
-          <div className="flex items-center gap-3">
-            <StatusDot color={feed.live ? GREEN : GRAY} label={feed.live ? 'LIVE' : 'IDLE'} />
-            {updated && <span className="font-mono text-[10px] text-[#636366]">{updated}</span>}
-          </div>
-          {!dock && <span className="text-[11px] text-[#636366]">5s 輪詢</span>}
+        <div className={`flex items-center gap-3 ${dock ? 'mb-3' : 'mb-6'}`}>
+          <StatusDot color={feed.live ? GREEN : GRAY} label={feed.live ? 'LIVE' : 'IDLE'} />
+          {updated && <span className="font-mono text-[10px] text-[#636366]">{updated}</span>}
         </div>
-
-        {!dock && (
-          <div className="mb-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <KpiTile
-              label="管線相位"
-              value={phase ? String(phase).slice(0, 12) : '—'}
-              hint={feed.resolvedPath || (feed.runningTasks ? `${feed.runningTasks} 任務` : '待命')}
-              tone={phase ? BLUE : GRAY}
-            />
-            <KpiTile
-              label="忙碌角色"
-              value={String(active.length || feed.summary?.roles_busy || 0)}
-              hint={`開放工作項 ${feed.summary?.work_items_open ?? 0}`}
-              tone={active.length ? GREEN : GRAY}
-            />
-            <KpiTile
-              label="累計費用"
-              value={b.totalUsd > 0 ? `$${b.totalUsd.toFixed(3)}` : '—'}
-              hint={
-                feed.billing?.today_total != null
-                  ? `雲今日 $${feed.billing.today_total.toFixed(3)}`
-                  : 'API + 雲'
-              }
-              tone={b.totalUsd > 0 ? ORANGE : GRAY}
-            />
-            <KpiTile
-              label="OPC"
-              value={opcOk ? 'ONLINE' : 'OFF'}
-              hint={
-                feed.optimization?.opc_edge?.cache_fresh
-                  ? '邊緣快取新鮮'
-                  : feed.opc?.guard?.sim_enabled
-                    ? '模擬'
-                    : '等待連線'
-              }
-              tone={statusTone(opcOk, Boolean(feed.opc?.guard?.sim_enabled))}
-            />
-          </div>
-        )}
 
         {dock ? (
           <div className="lb-dock-grid">

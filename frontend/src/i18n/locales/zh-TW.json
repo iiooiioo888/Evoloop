@@ -1,0 +1,39 @@
+{
+  "nav": {
+    "chat": "對話",
+    "monitor": "監控",
+    "traces": "執行軌跡"
+  },
+  "monitor": {
+    "live": "即時",
+    "agents": "角色",
+    "pipeline": "管線",
+    "opc": "OPC",
+    "lab": "實驗室",
+    "ops": "運維",
+    "memory": "記憶",
+    "liveIdle": "待命",
+    "liveActive": "即時",
+    "roster": "名冊",
+    "searchRoles": "搜尋角色／職責"
+  },
+  "errors": {
+    "opcGuard": "OPC 安全護欄已攔截寫入",
+    "llmFailed": "模型呼叫失敗",
+    "partialSources": "部分監控來源不可達",
+    "network": "網路連線失敗"
+  },
+  "lab": {
+    "dspy": "DSPy 優化",
+    "mcp": "MCP 工具",
+    "ab": "A/B 評估",
+    "before": "優化前",
+    "after": "優化後"
+  },
+  "common": {
+    "refresh": "重新整理",
+    "open": "開啟",
+    "retry": "重試",
+    "dismiss": "關閉"
+  }
+}

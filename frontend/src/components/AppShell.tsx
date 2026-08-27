@@ -14,17 +14,15 @@ import StatusBar from './StatusBar';
 import TopBar from './TopBar';
 
 export type ViewKey = 'chat' | 'monitor' | 'traces';
+/** 精簡後的監控主分頁（次要功能收入 ops / lab）。 */
 export type MonitorTab =
-  | 'overview'
+  | 'live'
   | 'agents'
-  | 'dashboard'
+  | 'pipeline'
   | 'opc'
-  | 'hub'
-  | 'llm'
-  | 'cloud'
-  | 'memory'
-  | 'checkpoints'
-  | 'balancer';
+  | 'lab'
+  | 'ops'
+  | 'memory';
 
 export interface AppShellProps {
   /** 当前活跃视图 */

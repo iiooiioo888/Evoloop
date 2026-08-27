@@ -3,7 +3,9 @@ import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import type { ChatMessage } from '../types';
 import { cancelTask, resumeTask, sendFeedback } from '../api/client';
+import { ReflectionRadar } from './ReflectionCharts';
 import TaskPanel from './TaskPanel';
+import ErrorState from './ui/ErrorState';
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -99,7 +101,9 @@ export default function MessageBubble({ message, sessionId, onOpenTask, onOpenTr
             />
           )}
           {cancelError && (
-            <p className="mt-1 text-xs text-red-300">⚠️ {cancelError}</p>
+            <div className="mt-2">
+              <ErrorState kind="generic" message={cancelError} compact />
+            </div>
           )}
           {message.content ? (
             isUser ? (
@@ -145,6 +149,12 @@ export default function MessageBubble({ message, sessionId, onOpenTask, onOpenTr
             </span>
           )}
         </div>
+
+        {message.meta?.multiDim && !message.streaming && (
+          <div className="mt-1 w-full max-w-md">
+            <ReflectionRadar multiDim={message.meta.multiDim} height={180} />
+          </div>
+        )}
 
         {/* 操作列：AI 訊息且非生成中 */}
         {!isUser && !message.streaming && (message.content || message.taskState) && (

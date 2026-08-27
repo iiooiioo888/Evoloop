@@ -553,7 +553,7 @@ body {
 
 .lb-board-grid {
   display: grid;
-  gap: 16px;
+  gap: 20px;
   align-items: stretch;
   grid-template-columns: 1fr;
 }
@@ -561,14 +561,14 @@ body {
 @media (min-width: 1024px) {
   .lb-board-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 18px;
+    gap: 22px;
   }
 }
 
 @media (min-width: 1280px) {
   .lb-board-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 20px;
+    gap: 24px;
   }
 }
 

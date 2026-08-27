@@ -13,6 +13,7 @@ import InputBar from './InputBar';
 import type { SendOptions } from './InputBar';
 import LiveBoard from './LiveBoard';
 import MessageList from './MessageList';
+import ErrorState from './ui/ErrorState';
 
 interface ChatViewProps {
   messages: ChatMessage[];
@@ -44,9 +45,9 @@ export default function ChatView({
   onSuggest,
 }: ChatViewProps) {
   const monitor = useChatLiveMonitor();
-  const [railOpen, setRailOpen] = useState(true);
-  /** LiveBoard 與訊息同欄停靠，不橫跨右側監控 */
-  const [boardOpen, setBoardOpen] = useState(true);
+  const [railOpen, setRailOpen] = useState(false);
+  /** LiveBoard 與訊息同欄停靠；預設收合，有活動再展開 */
+  const [boardOpen, setBoardOpen] = useState(false);
 
   const s = monitor.agents?.summary;
   const streaming = messages.some((m) => m.streaming);
@@ -106,146 +107,81 @@ export default function ChatView({
   }, [sending, streaming, messages, monitor.agents?.agents]);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="shrink-0 border-b border-gray-800 bg-gray-950/50 px-3 py-2.5 lg:px-4">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-400">對話工作台</p>
-            <p className="text-[10px] text-gray-600">
-              KPI · LiveBoard · 右側監控
-              {sending || streaming ? ' · 生成中' : ''}
-              {runningTasks > 0 ? ` · ${runningTasks} 任務進行中` : ''}
-              {liveFeed.live ? ' · LIVE' : ''}
-            </p>
+    <div className="flex min-h-0 flex-1 flex-col apple-canvas">
+      <div className="shrink-0 border-b border-white/[0.06] px-4 py-3">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-3">
+            <span
+              className={liveFeed.live || streaming || sending ? 'apple-dot apple-dot--ok' : 'apple-dot'}
+              style={
+                liveFeed.live || streaming || sending
+                  ? undefined
+                  : { background: '#8E8E93', boxShadow: '0 0 0 2px #8E8E9333' }
+              }
+            />
+            <div>
+              <p className="apple-heading text-[15px]">對話</p>
+              <p className="mt-0.5 text-[10px] text-[#636366]">
+                {sending || streaming
+                  ? '生成中'
+                  : runningTasks > 0
+                    ? `${runningTasks} 任務進行中`
+                    : liveFeed.live
+                      ? 'LIVE'
+                      : '待命'}
+              </p>
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => setBoardOpen((v) => !v)}
-              className="rounded-xl border border-white/[0.08] px-2.5 py-1 text-[11px] text-[#8E8E93] hover:border-[#007AFF]/40 hover:text-[#64D2FF]"
+              className="rounded-full border border-white/[0.08] px-3 py-1 text-[11px] font-bold text-[#AEAEB2] hover:text-[#F5F5F7]"
             >
               {boardOpen ? '收合動態' : '展開動態'}
             </button>
             <button
               type="button"
               onClick={() => setRailOpen((v) => !v)}
-              className="rounded-lg border border-gray-800 px-2.5 py-1 text-[11px] text-gray-400 hover:border-blue-500/40 hover:text-blue-300 lg:hidden"
+              className="rounded-full border border-white/[0.08] px-3 py-1 text-[11px] font-bold text-[#AEAEB2] hover:text-[#F5F5F7]"
             >
-              {railOpen ? '隱藏監控' : '顯示監控'}
+              {railOpen ? '隱藏側欄' : '監控側欄'}
             </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-12">
-          <TopKpi label="本對話訊息" value={String(messages.length)} hint={`任務卡 ${taskMsgs}`} />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <TopKpi label="訊息" value={String(messages.length)} hint={`任務 ${taskMsgs}`} />
           <TopKpi
-            label="忙碌 Agent"
+            label="忙碌"
             value={String(s?.roles_busy ?? 0)}
             hint={`等待 ${s?.roles_waiting ?? 0}`}
-            accent="text-emerald-300"
+            accent="text-[#34C759]"
             pulse={(s?.roles_busy ?? 0) > 0}
           />
           <TopKpi
-            label="開放工作"
-            value={String(s?.work_items_open ?? 0)}
-            hint={`角色 ${s?.roles_total ?? 0}`}
-            accent="text-[#64D2FF]"
-          />
-          <TopKpi
-            label="公司任務"
-            value={String(s?.running_company_tasks ?? 0)}
-            hint={`合計 ${s?.company_tasks ?? 0}`}
-            accent="text-sky-300"
-            pulse={(s?.running_company_tasks ?? 0) > 0}
+            label="費用"
+            value={fmtUsd(s?.total_cost_usd ?? 0)}
+            hint="API＋雲"
+            accent="text-[#007AFF]"
           />
           <TopKpi
             label="告警"
             value={String(s?.alerts_open ?? 0)}
-            hint={`異常 ${s?.roles_disabled ?? 0}`}
-            accent={(s?.alerts_open ?? 0) > 0 ? 'text-amber-300' : 'text-gray-100'}
-          />
-          <TopKpi
-            label="記憶庫"
-            value={String(monitor.memoryCount)}
-            hint="向量條目"
-            accent="text-cyan-300"
-          />
-          <TopKpi
-            label="API 用量"
-            value={fmtUsd(s?.total_api_cost_usd ?? 0)}
-            hint="LLM token"
-            accent="text-[#64D2FF]"
-          />
-          <TopKpi
-            label="Docker"
-            value={fmtUsd(s?.total_docker_cost_usd ?? 0)}
-            hint="容器分攤"
-            accent="text-sky-300"
-          />
-          <TopKpi
-            label="阿里雲"
-            value={fmtUsd(s?.total_aliyun_cost_usd ?? 0)}
-            hint="BSS 帳目"
-            accent="text-orange-300"
-          />
-          <TopKpi
-            label="Agent 合計"
-            value={fmtUsd(s?.total_cost_usd ?? 0)}
-            hint="API＋雲"
-            accent="text-amber-300"
-          />
-          <TopKpi
-            label="雲 CPU"
-            value={monitor.cloudLatest.cpu > 0 ? `${monitor.cloudLatest.cpu.toFixed(0)}%` : '—'}
-            hint={`${monitor.cloudLatest.memMb.toFixed(0)} MB`}
-            accent="text-blue-300"
-          />
-          <TopKpi
-            label="LLM"
-            value={monitor.llmOps?.configured ? (monitor.llmOps.ops?.stale ? 'Stale' : 'OK') : '—'}
-            hint={monitor.llmOps?.model?.split('/').pop() ?? '未配置'}
-            accent={monitor.llmOps?.configured && !monitor.llmOps.ops?.stale ? 'text-emerald-300' : 'text-gray-400'}
-          />
-          <TopKpi
-            label="LLM 快取"
-            value={`${Math.round((monitor.optimization?.llm_cache.hit_rate ?? 0) * 100)}%`}
-            hint={`trace ${monitor.optimization?.trace.trace_count ?? 0}`}
-            accent="text-emerald-300"
-          />
-          <TopKpi
-            label="路由門檻"
-            value={
-              monitor.optimization?.routing_feedback.adaptive_length_threshold != null
-                ? String(monitor.optimization.routing_feedback.adaptive_length_threshold)
-                : '—'
-            }
-            hint="P0 任務-模型匹配"
-            accent="text-[#64D2FF]"
+            accent={(s?.alerts_open ?? 0) > 0 ? 'text-[#FF9500]' : 'text-[#F5F5F7]'}
           />
         </div>
       </div>
 
       {error && (
-        <div className="shrink-0 border-b border-red-800 bg-red-900/40 px-4 py-2">
-          <div className="flex items-center justify-between gap-3 text-sm">
-            <span className="text-red-200">⚠️ {error}</span>
-            <div className="flex shrink-0 gap-2">
-              {lastQuery && (
-                <button
-                  onClick={onRetry}
-                  className="rounded-md bg-red-700 px-3 py-1 text-xs font-medium text-white hover:bg-red-600"
-                >
-                  重试
-                </button>
-              )}
-              <button
-                onClick={onDismissError}
-                className="rounded-md px-2 py-1 text-xs text-red-300 hover:bg-red-800/50"
-              >
-                关闭
-              </button>
-            </div>
-          </div>
+        <div className="shrink-0 px-4 py-2">
+          <ErrorState
+            kind={error.includes('OPC') || error.includes('護欄') ? 'opc_guard' : 'llm'}
+            message={error}
+            compact
+            onRetry={lastQuery ? onRetry : undefined}
+            onDismiss={onDismissError}
+          />
         </div>
       )}
 
@@ -267,7 +203,7 @@ export default function ChatView({
             monitor={monitor}
           />
           <InputBar disabled={sending} onSend={onSend} />
-          <LiveTicker items={tickerItems} />
+          {(tickerItems.length > 0 || streaming || sending) && <LiveTicker items={tickerItems} />}
         </div>
 
         {railOpen && (

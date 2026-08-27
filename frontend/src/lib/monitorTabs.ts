@@ -1,26 +1,40 @@
-/**
- * 監控中心分頁定義（單一資料源）。
- *
- * SidePanel 左側外圍導航與 MonitorView 共用，避免兩套入口分叉。
- */
-import type { MonitorTab } from '../components/AppShell';
-
-export type MonitorTabItem = { key: MonitorTab; icon: string; label: string };
-
-/** 順序即左側外圍導航順序（角色 Agent 與其他分頁同層）。 */
-export const MONITOR_TABS: MonitorTabItem[] = [
-  { key: 'overview', icon: '▣', label: '總覽' },
-  { key: 'agents', icon: '◈', label: '角色 Agent' },
-  { key: 'dashboard', icon: '📊', label: '控制面版' },
-  { key: 'opc', icon: '🏭', label: 'OPC 監控' },
-  { key: 'hub', icon: '🛰️', label: 'AI Hub' },
-  { key: 'llm', icon: '⚙', label: 'LLM 運維' },
-  { key: 'balancer', icon: '✨', label: '即時動態' },
-  { key: 'cloud', icon: '☁️', label: '雲控制台' },
-  { key: 'memory', icon: '🧠', label: '記憶庫' },
-  { key: 'checkpoints', icon: '💾', label: '檢查點' },
-];
-
-export function monitorTabLabel(tab: MonitorTab): string {
-  return MONITOR_TABS.find((item) => item.key === tab)?.label ?? tab;
-}
+/**
+ * 監控中心分頁定義（單一資料源）。
+ * 精簡為 7 個主分頁，次要功能收入「運維／實驗室」膠囊內。
+ */
+import type { MonitorTab } from '../components/AppShell';
+
+export type MonitorTabItem = { key: MonitorTab; icon: string; label: string };
+
+/** 左側外圍導航順序。 */
+export const MONITOR_TABS: MonitorTabItem[] = [
+  { key: 'live', icon: '◎', label: '即時' },
+  { key: 'agents', icon: '◈', label: '角色' },
+  { key: 'pipeline', icon: '⬡', label: '管線' },
+  { key: 'opc', icon: '⬡', label: 'OPC' },
+  { key: 'lab', icon: '✦', label: '實驗室' },
+  { key: 'ops', icon: '⚙', label: '運維' },
+  { key: 'memory', icon: '◌', label: '記憶' },
+];
+
+/** 舊分頁鍵 → 新分頁（相容本機狀態／書籤）。 */
+export const MONITOR_TAB_ALIASES: Record<string, MonitorTab> = {
+  overview: 'live',
+  balancer: 'live',
+  dashboard: 'pipeline',
+  hub: 'ops',
+  llm: 'ops',
+  cloud: 'ops',
+  checkpoints: 'ops',
+};
+
+export function normalizeMonitorTab(tab: string | null | undefined): MonitorTab {
+  if (!tab) return 'live';
+  if (MONITOR_TABS.some((t) => t.key === tab)) return tab as MonitorTab;
+  return MONITOR_TAB_ALIASES[tab] ?? 'live';
+}
+
+export function monitorTabLabel(tab: MonitorTab): string {
+  return MONITOR_TABS.find((item) => item.key === tab)?.label ?? tab;
+}
+
