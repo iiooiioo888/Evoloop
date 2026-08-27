@@ -19,6 +19,8 @@
 **線上預覽：** [https://iiooiioo888.github.io/Evoloop/](https://iiooiioo888.github.io/Evoloop/)  
 （靜態 UI；聊天、寫入與模型刷新需本地或 Docker 啟動完整服務）
 
+> **單一主線** · 分支僅 `master` · 最近文件更新：2026-08-27
+
 </div>
 
 ---
@@ -56,7 +58,7 @@ EvoLoop 不是普通的 AI 助手——它是具備**自我反思閉環**的**�
 | 🖥️ **監控中心** | 單一前端：角色 Agent／總覽／控制面版／OPC／AI Hub／LLM 運維／雲控制台／記憶／檢查點 |
 | 🎭 **角色目錄** | **80** 個內建角色（Level 0–4）+ 自定義角色 CRUD + 執行期設定覆蓋 |
 | 🔌 **模型池鎖定** | 依已存 API 鎖定可用模型；單一廠商只准該廠商；OpenRouter 等通用端點爬取 `/models` |
-| ☁️ **雲控制台** | 費用帳單、資源監控、告警中心、實例管理 |
+| ☁️ **雲控制台** | 費用帳單、資源監控、告警中心、Docker 實例管理 |
 | 🧠 **語義記憶** | 向量記憶庫 + LLM 語義快取，成功經驗沉澱為 few-shot |
 
 ```mermaid
@@ -79,7 +81,7 @@ graph LR
 
 ## ✨ 本版亮點
 
-本倉庫為**單一主線**（`master`），下列能力已落地：
+本倉庫為**單一主線**（僅 `master`），下列能力已落地：
 
 | 主題 | 你會得到什麼 |
 |------|-------------|
@@ -87,20 +89,28 @@ graph LR
 | **通用模型優化** | 只存 DeepSeek → 全系統只能用 DeepSeek；OpenRouter／Ollama／vLLM → 爬取 `/models` 寫入配置；定時檢查 + 手動刷新 + 健康快照 |
 | **GitHub / Pages** | 推送 `master` 跑 CI，並部署靜態 Demo → [iiooiioo888.github.io/Evoloop](https://iiooiioo888.github.io/Evoloop/) |
 
+### 最近更新（2026-08-27）
+
+- 前端與監控合拼為**唯一版本**（`AppShell` + `MonitorView`），不再維護平行舊／新介面
+- Hub、雲控制台、Docker 實例等皆併入監控中心子分頁
+- 模型池支援 DeepSeek／Qwen／Moonshot／智譜／MiMo／OpenAI／OpenRouter／Ollama 等鎖定與爬取
+- CI／Pages 僅追蹤 `master`；倉庫與 Demo 統一指向 [iiooiioo888/Evoloop](https://github.com/iiooiioo888/Evoloop)
+
 ---
 
 ## 🧩 單一版本說明
 
-專案已**合拼為單一主線版本**（僅 `master`）：
+專案已**合拼為單一主線版本**：
 
 | 項目 | 現況 |
 |------|------|
-| 前端 | 僅一套 IDE 風格 UI（`AppShell`）；不再維護平行「舊版／新版」介面 |
-| 監控 | Hub 併入**監控中心**子分頁；導航與降級資料單一來源（`monitorTabs` / `monitorFallbacks`） |
+| 分支 | 僅 `master`（舊 `main` 已合併停用） |
+| 前端 | 一套 IDE 風格 UI；主視圖僅 **聊天／監控中心／軌跡** |
+| 監控 | Hub 併入監控中心；導航與降級資料單一來源（`monitorTabs` / `monitorFallbacks`） |
 | CI / Pages | 推送 `master` → `test.yml` 測試 + `deploy-pages.yml` 部署 GitHub Pages |
 | 倉庫 | [iiooiioo888/Evoloop](https://github.com/iiooiioo888/Evoloop) → [GitHub Pages](https://iiooiioo888.github.io/Evoloop/) |
 
-> 舊 `main` 已合併停用，避免雙版本分叉。
+> 沒有「標準版／公司版／OPC 版」三套產品線，也沒有前後端雙 UI 分叉——複雜度路由與監控分頁都在同一條主線上。
 
 ---
 
@@ -145,7 +155,7 @@ Synthesizer 整合 → 外部反思回圈
 ```
 evoloop/
 ├── backend/                     # FastAPI + LangGraph
-│   ├── main.py                  #   /chat /tasks /monitor/* /config /cloud
+│   ├── main.py                  #   /chat /tasks /monitor/* /config /cloud /docker
 │   ├── core/
 │   │   ├── graph.py             #     統一模式圖 + 複雜度路由
 │   │   ├── nodes.py             #     生成 / 多維評估 / 分層反思 / 改進
@@ -164,6 +174,7 @@ evoloop/
 │   │   ├── agent_monitor.py     #     角色 Agent 監控聚合
 │   │   ├── llm_ops.py           #     模型目錄定時刷新迴圈
 │   │   ├── cloud_console.py     #     雲控制台聚合
+│   │   ├── docker_manager.py    #     容器狀態／啟停
 │   │   └── ...
 │   ├── data/role_catalog.json   #   角色目錄資料（可覆寫路徑）
 │   └── tests/                   #   251 測試
@@ -176,13 +187,14 @@ evoloop/
 │           ├── AgentsMonitorPanel.tsx
 │           ├── RoleSettingsPanel.tsx
 │           ├── LlmOpsPanel.tsx
-│           ├── HubPanel.tsx
+│           ├── HubPanel.tsx      #   Hub 操作台（內嵌於監控，非獨立產品線）
 │           └── ...
 ├── docs/                        # 知識庫
 ├── .github/workflows/
 │   ├── test.yml                 #   master CI
 │   └── deploy-pages.yml         #   GitHub Pages
 ├── docker-compose.yml
+├── LICENSE
 └── requirements.txt
 ```
 
@@ -267,9 +279,9 @@ evoloop/
 | **總覽** | 系統健康與各模組入口 |
 | **控制面版** | 任務與儀表板聚合 |
 | **OPC 監控** | 護欄、審計、即時標籤 |
-| **AI Hub** | 探針、熔斷、呼叫日誌、預算 |
+| **AI Hub** | 探針、熔斷、呼叫日誌、預算（操作台內嵌於本分頁） |
 | **LLM 運維** | 供應商鎖定、可用模型目錄、定時檢查、手動刷新、健康快照 |
-| **雲控制台** | 帳單、資源監控、告警 |
+| **雲控制台** | 帳單、資源監控、告警、**Docker 實例管理** |
 | **記憶庫** | 向量記憶檢視與清理 |
 | **檢查點** | 運行檢查點列表與恢復入口 |
 
@@ -289,6 +301,7 @@ evoloop/
 - `GET /monitor/opc` · `GET /monitor/hub` · `GET /monitor/llm-ops`
 - `POST /config/models/refresh` · `PUT /config/ops`
 - `GET/PUT /config` · `POST /config/test`
+- `GET /docker/*` · `GET/POST /cloud/*` — 實例與雲控制台
 
 ---
 
@@ -300,10 +313,23 @@ evoloop/
 
 | 情境 | 行為 |
 |------|------|
-| 只配置 DeepSeek（或 Qwen／Moonshot 等單一廠商） | Agent **只能**使用該廠商模型，不會落到無關的預設模型 |
-| OpenRouter／Ollama／vLLM 等通用端點 | `GET /models` 爬取可用目錄，寫入運行時配置 |
+| 只配置 DeepSeek（或 Qwen／Moonshot／智譜／MiMo 等單一廠商） | Agent **只能**使用該廠商模型，不會落到無關的預設模型 |
+| OpenRouter／Ollama／vLLM／OpenAI 相容通用端點 | `GET /models` 爬取可用目錄，寫入運行時配置 |
 | 角色偏好模型不在池內 | 自動 `clamp` 到池內第一個可用模型 |
 | Hub 目錄 | 與目前 API 可用池取交集（只存 DeepSeek 時 Hub 只顯示相容列） |
+| Claude／Anthropic | **禁止**進入可用池 |
+
+### 支援的供應商識別
+
+| 類型 | 範例端點／主機 | 行為 |
+|------|----------------|------|
+| DeepSeek | `api.deepseek.com` | 靜態廠商模型表鎖定 |
+| Qwen | `dashscope.aliyuncs.com` | 靜態鎖定 |
+| Moonshot / Kimi | `api.moonshot.cn` / `.ai` | 靜態鎖定 |
+| 智譜 GLM | `open.bigmodel.cn` | 靜態鎖定 |
+| OpenAI | `api.openai.com` | 靜態 + 可爬取 |
+| OpenRouter | `openrouter.ai` | 爬取 `/models` |
+| Ollama／通用 | 本地或相容 base URL | 爬取 `/models` |
 
 ### 運維能力
 
@@ -422,6 +448,8 @@ docker compose logs -f backend
 
 靜態站可瀏覽 UI；完整聊天／寫入請本地或 Docker 啟動後端（可設 `VITE_API_URL`）。
 
+手動觸發：GitHub → Actions → **Deploy to GitHub Pages** → Run workflow。
+
 ---
 
 ## ⚙️ 環境變數
@@ -538,6 +566,7 @@ pytest backend/tests/test_architecture.py
 | [開發指南](docs/development/guide.md) | 本地開發、擴展 |
 | [部署指南](docs/deployment/guide.md) | Docker、GitHub Pages |
 | [AGENTS.md](AGENTS.md) | Agent 約束與常用指令 |
+| [frontend/README.md](frontend/README.md) | 前端開發入口 |
 
 ---
 
@@ -554,9 +583,9 @@ Windows 暫存目錄權限問題。`pyproject.toml` 已設 `--basetemp=.pytest_t
 <details>
 <summary><b>Q: 支援哪些 LLM？只填 DeepSeek 會怎樣？</b></summary>
 
-透過 LiteLLM + 運行時配置。常見：OpenAI、DeepSeek、Qwen、Moonshot、OpenRouter、Ollama／vLLM 相容端點。
+透過 LiteLLM + 運行時配置。常見：OpenAI、DeepSeek、Qwen、Moonshot、智譜、OpenRouter、Ollama／vLLM 相容端點。
 
-**模型池規則：** 系統只依你保存的 API／端點開放可用模型。例如只存 DeepSeek → Agent 只能用 DeepSeek；OpenRouter → 爬取 `/models` 後寫入配置，Agent 只能從該目錄選用。
+**模型池規則：** 系統只依你保存的 API／端點開放可用模型。例如只存 DeepSeek → Agent 只能用 DeepSeek；OpenRouter → 爬取 `/models` 後寫入配置，Agent 只能從該目錄選用。Claude／Anthropic 不會進入可用池。
 </details>
 
 <details>

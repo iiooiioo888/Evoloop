@@ -1,7 +1,8 @@
 # 📚 EvoLoop 知識庫
 
 > 自我反思 × 多代理人公司 × 工業閉環 — 永不停止進化的 AI 系統  
-> 單一主線版本（`master`）· 倉庫：[iiooiioo888/Evoloop](https://github.com/iiooiioo888/Evoloop) · Demo：[GitHub Pages](https://iiooiioo888.github.io/Evoloop/)
+> 單一主線版本（僅 `master`）· 倉庫：[iiooiioo888/Evoloop](https://github.com/iiooiioo888/Evoloop) · Demo：[GitHub Pages](https://iiooiioo888.github.io/Evoloop/)  
+> 文件對齊日期：2026-08-27（監控中心／模型池運維／Pages 已併入主線）
 
 ## 目錄
 

@@ -1,32 +1,22 @@
-# React + TypeScript + Vite
+# EvoLoop Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+單一版本 React + Vite + TypeScript UI（IDE 風格 `AppShell`）。
 
-Currently, two official plugins are available:
+| 視圖 | 說明 |
+|------|------|
+| 聊天 | 對話、任務進度、設定 |
+| 監控中心 | 9 個子分頁（角色 Agent／總覽／控制面版／OPC／AI Hub／LLM 運維／雲／記憶／檢查點） |
+| 軌跡 | 任務執行軌跡 |
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## 開發
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```powershell
+npm install
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+預設 `http://localhost:5173`，API 代理至後端 `http://localhost:8000`。
+
+## GitHub Pages
+
+以 `VITE_BASE=/Evoloop/`、`VITE_GITHUB_PAGES=true` 建置；完整說明見根目錄 [README.md](../README.md)。
