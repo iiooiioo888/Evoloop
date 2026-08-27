@@ -113,7 +113,7 @@ export default function MessageList({
                 EvoLoop 對話工作台
               </h1>
               <p className="mx-auto mt-2 max-w-2xl text-sm leading-relaxed text-gray-500">
-                生成 → 評估 → 反思 → 優化。上方劇場停靠帶演示管線／協作／匯報；右側即時監控 Agent、API／雲預算與事件流。
+                生成 → 評估 → 反思 → 優化。上方劇場由真實 phase／Agent 狀態驅動（手動切場景）；右側即時監控 Agent、API／雲預算與事件流。
               </p>
               <div className="mx-auto mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-6">
                 {[

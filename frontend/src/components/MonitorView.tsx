@@ -27,7 +27,7 @@ import CloudConsoleView from './CloudConsoleView';
 import Dashboard from './Dashboard';
 import HubPanel from './HubPanel';
 import LlmOpsPanel from './LlmOpsPanel';
-import AnimTheater from './AnimTheater';
+import LiveBoard from './LiveBoard';
 import MemoryPanel from './MemoryPanel';
 import MonitorOverview from './MonitorOverview';
 import { monitorTabLabel, MONITOR_TABS } from '../lib/monitorTabs';
@@ -82,17 +82,7 @@ function BalancerTab() {
     [agents, optimization, opc, billing, llmOps],
   );
 
-  return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#010102] px-3 pb-3 pt-2 text-[#f7f8f8] sm:px-4 sm:pb-4">
-      <AnimTheater
-        variant="page"
-        autoPlay
-        initialScene="pipeline"
-        feed={liveFeed}
-        className="anim-card-rise min-h-0 flex-1 !rounded-none !border-0 !bg-transparent !p-0"
-      />
-    </div>
-  );
+  return <LiveBoard feed={liveFeed} />;
 }
 
 export default function MonitorView({

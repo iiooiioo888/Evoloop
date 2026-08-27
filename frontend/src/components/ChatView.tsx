@@ -127,7 +127,7 @@ export default function ChatView({
             <button
               type="button"
               onClick={() => setTheaterOpen((v) => !v)}
-              className="rounded-lg border border-gray-800 px-2.5 py-1 text-[11px] text-gray-400 hover:border-[#5e6ad2]/40 hover:text-[#828fff]"
+              className="rounded-xl border border-white/[0.08] px-2.5 py-1 text-[11px] text-[#8E8E93] hover:border-[#007AFF]/40 hover:text-[#64D2FF]"
             >
               {theaterOpen ? '收合動態' : '展開動態'}
             </button>
@@ -257,16 +257,16 @@ export default function ChatView({
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className="flex min-w-0 flex-1 flex-col">
           {theaterOpen && (
-            <div className="anim-theater-dock shrink-0 border-b border-gray-800/80 bg-gradient-to-b from-[#0c0d10] to-transparent px-3 py-2">
+            <div className="anim-theater-dock shrink-0 border-b border-white/[0.06] bg-gradient-to-b from-[#2c2c2e]/80 to-transparent px-3 py-2">
               <AnimTheater
                 variant="dock"
-                autoPlay
+                motion
                 initialScene="pipeline"
                 scene={theaterScene}
                 onSceneChange={setTheaterScene}
                 feed={liveFeed}
                 scenes={['pipeline', 'company', 'report', 'budget', 'opc', 'balancer']}
-                className="!border-gray-800/70 !bg-transparent"
+                className="!border-white/[0.08] !bg-[#1c1c1e]/70"
               />
             </div>
           )}

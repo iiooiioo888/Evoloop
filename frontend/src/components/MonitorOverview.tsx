@@ -35,7 +35,6 @@ import type {
 } from '../types';
 import type { MonitorTab } from './AppShell';
 import { RoadmapTable } from './ChatMonitorCards';
-import AnimTheater from './AnimTheater';
 
 interface MonitorOverviewProps {
   onOpenTab: (tab: MonitorTab, agentId?: string) => void;
@@ -240,7 +239,7 @@ export default function MonitorOverview({ onOpenTab }: MonitorOverviewProps) {
         <Kpi
           label="即時動態"
           value={liveFeed.live ? 'LIVE' : 'IDLE'}
-          hint="管線 · 協作 · 匯報 · 路由"
+          hint={liveFeed.streamPhase || liveFeed.taskPhase || '監控面板'}
           onClick={() => onOpenTab('balancer')}
         />
         <Kpi
@@ -276,16 +275,29 @@ export default function MonitorOverview({ onOpenTab }: MonitorOverviewProps) {
       </div>
 
       <div className="mb-4">
-        <Section title="即時動態" action="完整視圖" onAction={() => onOpenTab('balancer')}>
-          <AnimTheater
-            variant="full"
-            autoPlay
-            initialScene="pipeline"
-            feed={liveFeed}
-            hideBrand
-            scenes={['pipeline', 'company', 'report', 'budget']}
-            className="!border-gray-800/60"
-          />
+        <Section title="即時動態" action="開啟面板" onAction={() => onOpenTab('balancer')}>
+          <button
+            type="button"
+            onClick={() => onOpenTab('balancer')}
+            className="flex w-full items-center justify-between gap-3 rounded-2xl border border-white/[0.08] bg-[#1c1c1e] px-3.5 py-3 text-left hover:border-white/15"
+          >
+            <div className="min-w-0">
+              <p className="text-[13px] font-medium text-[#E5E5EA]">
+                {liveFeed.live ? 'LIVE' : 'IDLE'}
+                {liveFeed.streamPhase || liveFeed.taskPhase
+                  ? ` · ${liveFeed.streamPhase || liveFeed.taskPhase}`
+                  : ''}
+              </p>
+              <p className="mt-0.5 text-[11px] text-[#8E8E93]">
+                管線 · 協作 · 路由 · 預算 · OPC
+              </p>
+            </div>
+            <span
+              className={`h-2.5 w-2.5 shrink-0 rounded-full ${
+                liveFeed.live ? 'bg-[#30D158]' : 'bg-[#636366]'
+              }`}
+            />
+          </button>
         </Section>
       </div>
 

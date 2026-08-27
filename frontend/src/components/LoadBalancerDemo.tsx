@@ -2,8 +2,9 @@
  * StageRouterLive — 任務-模型匹配即時視圖（真實 stage_router）。
  *
  * 後端柱 = generate / evaluate / reflect… 真實環節
- * 權重 = tier（僅影響柱高顯示，不驅動假負載輪詢）
- * 光點 = 僅在 activePhase 對應到環節時發射一次（無定時／無加權序列自動下一步）
+ * 權重 = tier（僅影響柱高顯示）
+ * 光點 = 僅在 activePhase 真正切換時發射一次
+ * 禁止：定時輪詢、加權序列自動下一步、閒置掃描
  *
  * embedded：由 AnimTheater 承載場景列；本元件只渲染舞台＋底部狀態列。
  */
@@ -20,7 +21,7 @@ type FlyingOrb = {
   color: string;
 };
 
-const ORB_COLORS = ['#828fff', '#4cc38a', '#f59e0b', '#38bdf8', '#f472b6', '#a78bfa'];
+const ORB_COLORS = ['#007AFF', '#30D158', '#FF9F0A', '#64D2FF', '#FF375F', '#BF5AF2'];
 
 function stageIndexFromPhase(
   backends: AnimStageBackend[],
@@ -43,11 +44,9 @@ export default function StageRouterLive({
   live = false,
   embedded = false,
   activePhase,
-  /** @deprecated 改用 motion；保留相容 */
-  autoPlay,
 }: {
   variant?: LbVariant;
-  /** 為 false 時凍結飛球過渡，仍顯示靜態映射 */
+  /** 為 false 時不發射飛球，仍顯示靜態映射 */
   motion?: boolean;
   className?: string;
   backends?: AnimStageBackend[];
@@ -62,10 +61,7 @@ export default function StageRouterLive({
   embedded?: boolean;
   /** 當前 stream／task phase，用於點亮對應環節 */
   activePhase?: string | null;
-  autoPlay?: boolean;
 }) {
-  const allowMotion = autoPlay ?? motion;
-
   const backends = useMemo(
     () =>
       backendsProp?.length
@@ -116,7 +112,7 @@ export default function StageRouterLive({
       return next;
     });
 
-    if (!allowMotion || isFirstAlign) return;
+    if (!motion || isFirstAlign) return;
 
     orbSeq.current += 1;
     const id = orbSeq.current;
@@ -128,7 +124,7 @@ export default function StageRouterLive({
         color: ORB_COLORS[phaseIdx % ORB_COLORS.length],
       },
     ]);
-  }, [phaseIdx, allowMotion, backends.length]);
+  }, [phaseIdx, motion, backends.length]);
 
   useEffect(() => {
     if (!flying.length) return;
@@ -174,11 +170,11 @@ export default function StageRouterLive({
       )}
 
       <div
-        className={`lb-stage relative overflow-hidden rounded-lg border border-gray-800/80 bg-[#0a0a0b] ${stageH} ${
+        className={`lb-stage relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#1c1c1e]/95 ${stageH} ${
           isPage ? 'flex-1' : ''
         }`}
       >
-        <div className="pointer-events-none absolute inset-0 anim-grid-bg opacity-40" />
+        <div className="pointer-events-none absolute inset-0 anim-grid-bg opacity-30" />
 
         <div className="pointer-events-none absolute inset-0 z-[1]" aria-hidden>
           {backends.map((b, i) => {
@@ -202,7 +198,7 @@ export default function StageRouterLive({
                   height: thickness,
                   transform: `rotate(${angle}deg)`,
                   background:
-                    i === hotIdx ? 'rgba(94,106,210,0.55)' : 'rgba(94,106,210,0.22)',
+                    i === hotIdx ? 'rgba(0,122,255,0.55)' : 'rgba(0,122,255,0.18)',
                 }}
               />
             );
@@ -211,16 +207,16 @@ export default function StageRouterLive({
 
         <div className="absolute left-2 top-[36%] z-10 -translate-y-1/2">
           <div
-            className={`lb-dispatcher relative flex flex-col items-center justify-center rounded-lg border border-[#5e6ad2]/50 bg-[#5e6ad2]/15 ${
+            className={`lb-dispatcher relative flex flex-col items-center justify-center rounded-xl border border-[#007AFF]/50 bg-[#007AFF]/15 ${
               isCompact ? 'h-11 w-10' : 'h-14 w-12'
-            } ${phaseIdx != null ? 'anim-node-pulse' : ''}`}
+            } ${phaseIdx != null && live ? 'anim-node-pulse' : ''}`}
           >
-            <span className={`${isCompact ? 'text-[9px]' : 'text-[10px]'} text-[#828fff]`}>SR</span>
+            <span className={`${isCompact ? 'text-[9px]' : 'text-[10px]'} text-[#64D2FF]`}>SR</span>
             <span className="font-mono text-[9px] text-gray-400">{totalRoutes || '—'}</span>
           </div>
         </div>
 
-        {allowMotion &&
+        {motion &&
           flying.map((orb) => (
             <span
               key={`${orb.id}-${orb.target}`}
@@ -249,13 +245,13 @@ export default function StageRouterLive({
             return (
               <div key={b.id} className="flex min-w-0 flex-1 flex-col items-center justify-end">
                 {!isCompact && (
-                  <p className="mb-1 max-w-full truncate px-0.5 text-center font-mono text-[9px] text-[#828fff]">
+                  <p className="mb-1 max-w-full truncate px-0.5 text-center font-mono text-[9px] text-[#64D2FF]">
                     {b.model}
                   </p>
                 )}
                 <div
                   className={`lb-backend relative flex w-full flex-col justify-end overflow-hidden rounded-md border border-gray-700 bg-gray-900/80 ${
-                    hot ? 'lb-backend-ok' : ''
+                    hot && live ? 'lb-backend-ok' : ''
                   }`}
                   style={{
                     height: `${24 + b.weight * (isCompact ? 14 : isPage ? 28 : 22)}px`,

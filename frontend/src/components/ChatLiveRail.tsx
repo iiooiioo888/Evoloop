@@ -15,13 +15,13 @@ import type { ChatLiveMonitorState } from '../hooks/useChatLiveMonitor';
 import type { ChatMessage, RoleAgent } from '../types';
 import { HealthPill, MiniKpi, MonitorSection, RoadmapTable } from './ChatMonitorCards';
 
-const THEATER_SHORTCUTS: Array<{ key: AnimScene; icon: string; label: string }> = [
-  { key: 'pipeline', icon: '⟶', label: '管線' },
-  { key: 'company', icon: '🏢', label: '協作' },
-  { key: 'report', icon: '🎙️', label: '匯報' },
-  { key: 'budget', icon: '💰', label: '預算' },
-  { key: 'opc', icon: '🏭', label: 'OPC' },
-  { key: 'balancer', icon: '⚖️', label: '路由' },
+const THEATER_SHORTCUTS: Array<{ key: AnimScene; label: string }> = [
+  { key: 'pipeline', label: '管線' },
+  { key: 'company', label: '協作' },
+  { key: 'report', label: '事件' },
+  { key: 'budget', label: '預算' },
+  { key: 'opc', label: 'OPC' },
+  { key: 'balancer', label: '路由' },
 ];
 
 interface ChatLiveRailProps {
@@ -163,7 +163,7 @@ export default function ChatLiveRail({
           {error}
         </p>
       )}
-      <MonitorSection title="動態場景" hint="切換上方劇場" badge="LIVE">
+      <MonitorSection title="動態場景" hint="點選切換">
         <div className="grid grid-cols-3 gap-1.5">
           {THEATER_SHORTCUTS.map((s) => (
             <button
@@ -173,9 +173,8 @@ export default function ChatLiveRail({
                 onOpenTheaterScene?.(s.key);
                 onOpenTheater?.();
               }}
-              className="rounded-lg border border-gray-800 bg-gray-950/50 px-1.5 py-1.5 text-center text-[10px] text-gray-400 transition-colors hover:border-[#5e6ad2]/40 hover:text-[#828fff]"
+              className="rounded-xl border border-white/[0.08] bg-[#1c1c1e]/80 px-1.5 py-2 text-center text-[10px] font-medium text-[#8E8E93] transition-colors hover:border-[#007AFF]/40 hover:text-[#64D2FF]"
             >
-              <span className="mb-0.5 block text-sm leading-none">{s.icon}</span>
               {s.label}
             </button>
           ))}
