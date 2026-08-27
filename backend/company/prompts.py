@@ -354,6 +354,42 @@ SYNTHESIZER_MERGE = """請將以下多個工作項的交付物整合為一個統
 
 
 # ═══════════════════════════════════════════════════════════════
+# Reviewer + Synthesizer 合併（P1：單次 LLM 審查並整合）
+# ═══════════════════════════════════════════════════════════════
+
+REVIEW_SYNTH_MERGE_SYSTEM = (
+    "你同時擔任審查者與整合者：先檢查各交付物品質，再合併為連貫的最終產出。"
+    "若發現嚴重缺陷，在產出開頭以【品質備註】標明，但仍盡力交付可用版本。"
+)
+
+REVIEW_SYNTH_MERGE = """請審查並整合以下多個工作項的交付物。
+
+【公司目標】
+{goal}
+
+【各工作項交付物】
+{artifacts}
+
+【執行統計】
+總工作項：{total_items}
+完成工作項：{completed_items}
+審查輪數：{review_rounds}
+
+步驟：
+1. 快速審查各交付物完整性、準確性、一致性
+2. 合併為一個連貫的最終產出，解決矛盾與重複
+3. 加入執行摘要（概述、關鍵決策、建議）
+
+只輸出 JSON：
+{{
+  "quality_passed": <true/false>,
+  "quality_score": <0-10>,
+  "quality_notes": "<若 quality_passed=false 則必填>",
+  "final_output": "<整合後的最終產出全文>"
+}}"""
+
+
+# ═══════════════════════════════════════════════════════════════
 # Manager：最終審查與決策
 # ═══════════════════════════════════════════════════════════════
 
@@ -571,6 +607,10 @@ class PromptConfig:
     # ── Synthesizer：整合交付物 ──
     synthesizer_system: str = SYNTHESIZER_SYSTEM
     synthesizer_merge: str = SYNTHESIZER_MERGE
+
+    # ── Reviewer + Synthesizer 合併 ──
+    review_synth_merge_system: str = REVIEW_SYNTH_MERGE_SYSTEM
+    review_synth_merge: str = REVIEW_SYNTH_MERGE
 
     # ── 任務拆分模板 ──
     decompose_templates: dict[str, list[dict[str, Any]]] = field(

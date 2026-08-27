@@ -9,6 +9,8 @@ import logging
 
 from backend.core.evaluation import CrossModelEvaluator, get_evaluator
 from backend.core.llm import call_llm, parse_json_response
+from backend.core.pipeline_trace import log_node
+from backend.core.stage_router import resolve_stage_model
 from backend.core.state import EvoLoopState
 from backend.memory.vector_store import VectorMemoryStore
 from backend.prompts import templates
@@ -67,7 +69,9 @@ def generate_initial_answer(state: EvoLoopState) -> dict:
         history_context=truncate(_format_history(state.get("history", [])), 2000),
         memory_context=truncate(_format_memories(state.get("retrieved_memories", [])), 2000),
     )
-    answer = call_llm(prompt, system=templates.GENERATE_INITIAL_ANSWER_SYSTEM)
+    model = resolve_stage_model("generate")
+    answer = call_llm(prompt, system=templates.GENERATE_INITIAL_ANSWER_SYSTEM, model=model)
+    log_node(state, "generate_initial_answer", model=model)
     return {"initial_answer": answer, "current_answer": answer, "iteration": 0}
 
 
@@ -98,6 +102,7 @@ def evaluate_answer(state: EvoLoopState) -> dict:
 
     score = eval_result.overall
     evaluation = eval_result.to_dict()
+    log_node(state, "evaluate_answer", score=score, source=eval_result.source)
 
     # 向後相容：保留舊版 evaluation 格式
     legacy_evaluation = {
@@ -153,12 +158,14 @@ def reflect(state: EvoLoopState) -> dict:
             evaluation=eval_detail,
         )
 
-    raw = call_llm(prompt)
+    model = resolve_stage_model("reflect")
+    raw = call_llm(prompt, model=model)
     try:
         result = parse_json_response(raw)
     except json.JSONDecodeError:
         # LLM 未遵守 JSON 格式時，將全文視為根因分析
         result = {"critique": raw, "suggestion": ""}
+    log_node(state, "reflect", model=model, score=score)
     return {
         "critique": result.get("critique", ""),
         "suggestion": result.get("suggestion", ""),
@@ -173,8 +180,10 @@ def improve_answer(state: EvoLoopState) -> dict:
         critique=state.get("critique", ""),
         suggestion=state.get("suggestion", ""),
     )
-    improved = call_llm(prompt)
+    model = resolve_stage_model("improve")
+    improved = call_llm(prompt, model=model)
     iteration = state.get("iteration", 0) + 1
+    log_node(state, "improve_answer", model=model, iteration=iteration)
     reflections = list(state.get("reflections", []))
     reflections.append(
         {
@@ -223,6 +232,21 @@ def decide_final_answer(state: EvoLoopState) -> dict:
 
     if warnings:
         logger.warning("質量門警告：%s", "；".join(warnings))
+
+    # P2：路由自適應反饋 — 記錄最終品質供後續調整
+    try:
+        from backend.core.routing_feedback import record_outcome
+
+        route = "company" if state.get("company_result") else "simple"
+        record_outcome(
+            route=route,
+            query_length=len(state.get("query", "")),
+            score=float(state.get("score", 0.0)),
+            success=not warnings and float(state.get("score", 0.0)) >= 8.0,
+        )
+        log_node(state, "decide_final_answer", route=route, score=state.get("score", 0.0))
+    except Exception as exc:
+        logger.debug("路由反饋記錄跳過：%s", exc)
 
     return {"final_answer": answer, "quality_warnings": warnings}
 

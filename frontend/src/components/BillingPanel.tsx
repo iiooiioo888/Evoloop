@@ -1,12 +1,12 @@
 /**
  * BillingPanel — 雲端費用儀表盤。
  *
- * 顯示費用摘要卡片（今日/本月/預估）、各服務費用佔比條、
- * 以及按時計費費率表。
+ * 顯示 Docker 按時計費 + 阿里雲 BSS 帳目、各服務費用佔比。
+ * 卡片分組：總覽 / 組成 / 接入狀態 / 產品明細。
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { fetchCloudBilling } from '../api/client';
-import type { CloudBilling } from '../types';
+import type { CloudBilling, CloudServiceCost } from '../types';
 
 function formatCost(amount: number): string {
   if (amount < 0.01) return `$${amount.toFixed(4)}`;
@@ -14,10 +14,118 @@ function formatCost(amount: number): string {
   return `$${amount.toFixed(2)}`;
 }
 
+function StatCard({
+  label,
+  value,
+  hint,
+  accent,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  accent?: 'green' | 'amber' | 'blue' | 'orange' | 'violet';
+}) {
+  const valueCls =
+    accent === 'green'
+      ? 'text-green-300'
+      : accent === 'amber'
+        ? 'text-amber-300'
+        : accent === 'blue'
+          ? 'text-blue-300'
+          : accent === 'orange'
+            ? 'text-orange-300'
+            : accent === 'violet'
+              ? 'text-indigo-300'
+              : 'text-gray-100';
+  return (
+    <div className="rounded-xl border border-gray-800 bg-gray-900/80 p-4">
+      <p className="text-[11px] uppercase tracking-wider text-gray-500">{label}</p>
+      <p className={`mt-1 text-2xl font-bold ${valueCls}`}>{value}</p>
+      {hint && <p className="mt-0.5 text-[11px] text-gray-600">{hint}</p>}
+    </div>
+  );
+}
+
+function SectionCard({
+  title,
+  hint,
+  children,
+  action,
+}: {
+  title: string;
+  hint?: string;
+  children: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <section className="overflow-hidden rounded-xl border border-gray-800 bg-gray-900/80">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-800 px-4 py-3">
+        <div>
+          <h3 className="text-sm font-medium text-gray-200">{title}</h3>
+          {hint && <p className="mt-0.5 text-[11px] text-gray-500">{hint}</p>}
+        </div>
+        {action}
+      </div>
+      <div className="p-4">{children}</div>
+    </section>
+  );
+}
+
+function ServiceCostCard({ svc, maxCost }: { svc: CloudServiceCost; maxCost: number }) {
+  const pct = maxCost > 0 ? (svc.cost / maxCost) * 100 : 0;
+  const isAliyun = svc.source === 'aliyun';
+  return (
+    <div className="rounded-lg border border-gray-800/80 bg-gray-950/40 p-3">
+      <div className="mb-2 flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium text-gray-200">
+            {svc.product_name || svc.service}
+          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            <span
+              className={`rounded px-1.5 py-0.5 text-[10px] ${
+                isAliyun
+                  ? 'bg-orange-500/15 text-orange-300'
+                  : 'bg-blue-500/15 text-blue-300'
+              }`}
+            >
+              {isAliyun ? '阿里雲' : 'Docker'}
+            </span>
+            {!isAliyun && (
+              <span className="text-[11px] text-gray-500">
+                ${svc.rate.toFixed(3)}/h · {svc.uptime_hours}h
+              </span>
+            )}
+            {isAliyun && svc.pretax_amount_cny != null && (
+              <span className="text-[11px] text-gray-500">
+                ¥{Number(svc.pretax_amount_cny).toFixed(2)}
+              </span>
+            )}
+          </div>
+        </div>
+        <span className="shrink-0 font-mono text-sm font-semibold text-amber-300">
+          {formatCost(svc.cost)}
+        </span>
+      </div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-gray-800">
+        <div
+          className={`h-full rounded-full transition-all ${
+            isAliyun
+              ? 'bg-gradient-to-r from-orange-500 to-orange-300'
+              : 'bg-gradient-to-r from-blue-500 to-sky-300'
+          }`}
+          style={{ width: `${Math.max(pct, 2)}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export default function BillingPanel() {
   const [billing, setBilling] = useState<CloudBilling | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'docker' | 'aliyun'>('all');
 
   const refresh = useCallback(async () => {
     try {
@@ -37,6 +145,18 @@ export default function BillingPanel() {
     return () => clearInterval(timer);
   }, [refresh]);
 
+  const aliyun = billing?.aliyun;
+  const breakdown = billing?.breakdown;
+
+  const filteredServices = useMemo(() => {
+    const list = billing?.per_service ?? [];
+    if (sourceFilter === 'all') return list;
+    return list.filter((s) => (s.source || 'docker') === sourceFilter);
+  }, [billing?.per_service, sourceFilter]);
+
+  const dockerCount = billing?.per_service.filter((s) => (s.source || 'docker') !== 'aliyun').length ?? 0;
+  const aliyunCount = billing?.per_service.filter((s) => s.source === 'aliyun').length ?? 0;
+
   if (loading && !billing) {
     return (
       <div className="flex flex-1 items-center justify-center">
@@ -47,103 +167,195 @@ export default function BillingPanel() {
 
   return (
     <div className="flex-1 space-y-4 overflow-auto p-4">
-      {/* 費用摘要卡片 */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="rounded-lg border border-gray-800 bg-gray-900/80 p-4">
-          <p className="text-[11px] uppercase text-gray-500">今日費用</p>
-          <p className="mt-1 text-2xl font-bold text-green-300">
-            {billing ? formatCost(billing.today_total) : '--'}
-          </p>
-          <p className="mt-0.5 text-[11px] text-gray-600">實時累計</p>
-        </div>
-        <div className="rounded-lg border border-gray-800 bg-gray-900/80 p-4">
-          <p className="text-[11px] uppercase text-gray-500">本月費用</p>
-          <p className="mt-1 text-2xl font-bold text-amber-300">
-            {billing ? formatCost(billing.month_total) : '--'}
-          </p>
-          <p className="mt-0.5 text-[11px] text-gray-600">當月累計</p>
-        </div>
-        <div className="rounded-lg border border-gray-800 bg-gray-900/80 p-4">
-          <p className="text-[11px] uppercase text-gray-500">預估月度</p>
-          <p className="mt-1 text-2xl font-bold text-blue-300">
-            {billing ? formatCost(billing.month_projected) : '--'}
-          </p>
-          <p className="mt-0.5 text-[11px] text-gray-600">30 天推算</p>
-        </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          label="今日費用"
+          value={billing ? formatCost(billing.today_total) : '--'}
+          hint="Docker＋阿里雲"
+          accent="green"
+        />
+        <StatCard
+          label="本月費用"
+          value={billing ? formatCost(billing.month_total) : '--'}
+          hint="雲資源合計 USD"
+          accent="amber"
+        />
+        <StatCard
+          label="即時合計"
+          value={billing ? formatCost(billing.total_now) : '--'}
+          hint="目前累計雲資源"
+          accent="violet"
+        />
+        <StatCard
+          label="月度預估"
+          value={billing ? formatCost(billing.month_projected) : '--'}
+          hint="依 Docker 小時費率推估"
+          accent="blue"
+        />
       </div>
 
-      {/* 錯誤提示 */}
+      <SectionCard title="費用組成" hint="Agent 預算會計入 API（另計）＋下列雲資源">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <StatCard
+            label="Docker"
+            value={breakdown ? formatCost(breakdown.docker_usd) : '--'}
+            hint="本地容器按時計費"
+            accent="blue"
+          />
+          <StatCard
+            label="阿里雲"
+            value={breakdown ? formatCost(breakdown.aliyun_usd) : '--'}
+            hint={
+              aliyun?.configured
+                ? aliyun.ok
+                  ? `帳期 ${aliyun.billing_cycle} · ¥${aliyun.month_total_cny.toFixed(2)}`
+                  : '查詢失敗'
+                : '未配置 AccessKey'
+            }
+            accent="orange"
+          />
+          <StatCard
+            label="雲資源小計"
+            value={breakdown ? formatCost(breakdown.cloud_total_usd) : '--'}
+            hint="Docker＋阿里雲"
+            accent="green"
+          />
+        </div>
+      </SectionCard>
+
       {error && (
-        <div className="rounded-lg bg-red-500/15 px-4 py-2 text-sm text-red-300">
+        <div className="rounded-xl border border-red-500/20 bg-red-500/15 px-4 py-2 text-sm text-red-300">
           ⚠ {error}
-          <button onClick={() => void refresh()} className="ml-3 underline">重試</button>
+          <button onClick={() => void refresh()} className="ml-3 underline">
+            重試
+          </button>
         </div>
       )}
 
-      {/* 各服務費用明細 */}
-      {billing && billing.per_service.length > 0 && (
-        <div className="rounded-lg border border-gray-800 bg-gray-900/80">
-          <div className="border-b border-gray-800 px-4 py-3">
-            <h3 className="text-sm font-medium text-gray-200">各服務費用明細</h3>
+      {aliyun && (
+        <SectionCard
+          title="阿里雲 BSS 接入"
+          hint={`環境變數 ALIYUN_ACCESS_KEY_ID / ALIYUN_ACCESS_KEY_SECRET · CNY→USD 匯率 ${aliyun.cny_usd_rate}`}
+          action={
+            <span
+              className={`rounded px-2 py-0.5 text-[11px] ${
+                aliyun.configured && aliyun.ok
+                  ? 'bg-green-500/15 text-green-300'
+                  : aliyun.configured
+                    ? 'bg-amber-500/15 text-amber-300'
+                    : 'bg-gray-700/50 text-gray-400'
+              }`}
+            >
+              {aliyun.configured && aliyun.ok
+                ? '已連線'
+                : aliyun.configured
+                  ? '已配置但查詢失敗'
+                  : '未接入'}
+            </span>
+          }
+        >
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <StatCard
+              label="本月 CNY"
+              value={`¥${aliyun.month_total_cny.toFixed(2)}`}
+              hint={`帳期 ${aliyun.billing_cycle || '—'}`}
+              accent="orange"
+            />
+            <StatCard
+              label="本月 USD"
+              value={formatCost(aliyun.month_total_usd)}
+              hint={`匯率 ${aliyun.cny_usd_rate}`}
+              accent="amber"
+            />
+            <StatCard
+              label="今日 CNY"
+              value={`¥${aliyun.today_total_cny.toFixed(2)}`}
+              hint="粗估分攤"
+            />
+            <StatCard
+              label="今日 USD"
+              value={formatCost(aliyun.today_total_usd)}
+              hint="計入 Agent 雲資源"
+              accent="green"
+            />
           </div>
-          <div className="divide-y divide-gray-800">
-            {billing.per_service.map((svc) => {
-              const maxCost = billing.per_service[0]?.cost ?? 1;
-              const pct = maxCost > 0 ? (svc.cost / maxCost) * 100 : 0;
-              return (
-                <div key={svc.service} className="px-4 py-2.5">
-                  <div className="mb-1 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-gray-200">
-                        {svc.service}
-                      </span>
-                      <span className="text-[11px] text-gray-500">
-                        ${svc.rate.toFixed(3)}/h · {svc.uptime_hours}h
-                      </span>
-                    </div>
-                    <span className="text-sm font-semibold text-amber-300">
-                      {formatCost(svc.cost)}
-                    </span>
-                  </div>
-                  {/* 費用佔比條 */}
-                  <div className="h-1.5 overflow-hidden rounded-full bg-gray-800">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-amber-500 to-amber-300 transition-all"
-                      style={{ width: `${Math.max(pct, 2)}%` }}
-                    />
+          {aliyun.error && (
+            <p className="mt-3 text-[11px] text-amber-200/90">{aliyun.error}</p>
+          )}
+          {(aliyun.products?.length ?? 0) > 0 && (
+            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {aliyun.products.map((p) => (
+                <div
+                  key={`${p.product_code}-${p.product_name}`}
+                  className="rounded-lg border border-orange-500/15 bg-orange-500/5 px-3 py-2"
+                >
+                  <p className="truncate text-[12px] font-medium text-gray-200">{p.product_name}</p>
+                  <p className="mt-0.5 text-[10px] text-gray-500">{p.product_code}</p>
+                  <div className="mt-1.5 flex items-baseline justify-between">
+                    <span className="text-[11px] text-gray-500">¥{p.pretax_amount_cny.toFixed(2)}</span>
+                    <span className="font-mono text-[12px] text-orange-300">{formatCost(p.cost_usd)}</span>
                   </div>
                 </div>
-              );
-            })}
-          </div>
-          {/* 總計行 */}
-          <div className="border-t border-gray-800 px-4 py-2.5">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-300">總計</span>
-              <span className="text-sm font-bold text-amber-300">
-                {formatCost(billing.total_now)}
-              </span>
+              ))}
             </div>
-          </div>
-        </div>
+          )}
+        </SectionCard>
       )}
 
-      {/* 無數據提示：仍顯示費率卡，避免整頁空白 */}
-      {billing && billing.per_service.length === 0 && (
-        <div className="rounded-lg border border-gray-800 bg-gray-900/80 p-4">
-          <p className="text-sm text-gray-300">暫無容器運行</p>
-          <p className="mt-1 text-xs text-gray-500">
-            啟動 EvoLoop Compose 後開始按時計費。預設費率見實例管理頁。
-          </p>
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {['backend', 'frontend', 'opc', 'redis', 'chroma'].map((svc) => (
-              <div key={svc} className="rounded-md border border-gray-800 bg-gray-950/50 px-3 py-2">
-                <p className="text-xs text-gray-300">{svc}</p>
-                <p className="text-[11px] text-gray-500">待命 · $0.000</p>
-              </div>
-            ))}
+      {billing && billing.per_service.length > 0 && (
+        <SectionCard
+          title="各服務／產品費用明細"
+          hint={`${dockerCount} Docker · ${aliyunCount} 阿里雲產品`}
+          action={
+            <div className="flex gap-1 rounded-md border border-gray-800 bg-gray-950/50 p-0.5">
+              {([
+                ['all', '全部'],
+                ['docker', 'Docker'],
+                ['aliyun', '阿里雲'],
+              ] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setSourceFilter(key)}
+                  className={`rounded px-2 py-0.5 text-[11px] ${
+                    sourceFilter === key
+                      ? 'bg-gray-700 text-gray-100'
+                      : 'text-gray-500 hover:text-gray-300'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          }
+        >
+          {filteredServices.length === 0 ? (
+            <p className="text-sm text-gray-500">此篩選下暫無明細</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+              {filteredServices.map((svc) => (
+                <ServiceCostCard
+                  key={`${svc.source || 'docker'}-${svc.service}`}
+                  svc={svc}
+                  maxCost={billing.per_service[0]?.cost ?? 1}
+                />
+              ))}
+            </div>
+          )}
+          <div className="mt-3 flex items-center justify-between rounded-lg border border-gray-800 bg-gray-950/40 px-3 py-2.5">
+            <span className="text-sm font-medium text-gray-300">雲資源總計</span>
+            <span className="text-sm font-bold text-amber-300">{formatCost(billing.total_now)}</span>
           </div>
-        </div>
+        </SectionCard>
+      )}
+
+      {billing && billing.per_service.length === 0 && (
+        <SectionCard title="暫無雲資源費用">
+          <p className="text-sm text-gray-300">尚無 Docker 或阿里雲帳單資料</p>
+          <p className="mt-1 text-xs text-gray-500">
+            啟動 Compose 容器後開始 Docker 按時計費；配置阿里雲 AccessKey 後拉取 BSS 帳單。
+          </p>
+        </SectionCard>
       )}
     </div>
   );

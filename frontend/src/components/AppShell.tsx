@@ -4,7 +4,7 @@
  * 布局：TopBar → [ActivityBar | SidePanel | MainContent | RightPanel] → StatusBar
  * 管理 activeView / rightPanelOpen / sidebarOpen 等布局状态。
  */
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { ChatSession } from '../types';
 import ActivityBar from './ActivityBar';
@@ -23,7 +23,8 @@ export type MonitorTab =
   | 'llm'
   | 'cloud'
   | 'memory'
-  | 'checkpoints';
+  | 'checkpoints'
+  | 'balancer';
 
 export interface AppShellProps {
   /** 当前活跃视图 */
@@ -84,10 +85,17 @@ export default function AppShell({
 }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
+  // 任一入口切到「角色 Agent」時，確保左側外圍側欄開啟（名冊所在）
+  useEffect(() => {
+    if (activeView === 'monitor' && monitorTab === 'agents') {
+      setSidebarOpen(true);
+    }
+  }, [activeView, monitorTab]);
+
   const handleViewChange = useCallback(
     (view: ViewKey) => {
       onViewChange(view);
-      setSidebarOpen(false);
+      setSidebarOpen(view === 'monitor');
     },
     [onViewChange],
   );

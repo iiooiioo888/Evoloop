@@ -45,13 +45,22 @@ _OPC_KEYWORDS = re.compile(
     re.IGNORECASE,
 )
 
-# 複雜任務的 query 長度門檻（字符數）
+# 複雜任務的 query 長度門檻（字符數，P2 自適應反饋可動態調整）
 _COMPLEX_QUERY_LENGTH = 200
+
+
+def _complex_query_length() -> int:
+    try:
+        from backend.core.routing_feedback import adaptive_length_threshold
+        return adaptive_length_threshold(_COMPLEX_QUERY_LENGTH)
+    except Exception:
+        return _COMPLEX_QUERY_LENGTH
 
 
 def _is_complex_task(query: str) -> bool:
     """規則判斷任務是否複雜（需要公司運行時）。"""
-    if len(query) >= _COMPLEX_QUERY_LENGTH:
+    threshold = _complex_query_length()
+    if len(query) >= threshold:
         return True
     return bool(_COMPANY_KEYWORDS.search(query))
 

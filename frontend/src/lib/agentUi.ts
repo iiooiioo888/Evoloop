@@ -31,6 +31,8 @@ export function blankMetrics() {
     avg_cost_usd: 0,
     capacity_pct: 0,
     daily_spent_usd: 0,
+    api_spent_usd: 0,
+    cloud_spent_usd: 0,
     avg_latency_ms: 0,
     tokens_in: 0,
     tokens_out: 0,

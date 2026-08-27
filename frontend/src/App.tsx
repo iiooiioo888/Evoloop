@@ -56,7 +56,8 @@ export default function App() {
   const [activeView, setActiveView] = useState<ViewKey>(
     import.meta.env.VITE_GITHUB_PAGES === 'true' ? 'monitor' : 'chat',
   );
-  const [monitorTab, setMonitorTab] = useState<MonitorTab>('agents');
+  const [monitorTab, setMonitorTab] = useState<MonitorTab>('overview');
+  /** 進入監控「角色 Agent」時預選一位，主區開工作台；名冊在左側外圍 */
   const [focusAgentId, setFocusAgentId] = useState<string | null>('manager');
   const [rightPanelTask, setRightPanelTask] = useState<TaskProgress | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);

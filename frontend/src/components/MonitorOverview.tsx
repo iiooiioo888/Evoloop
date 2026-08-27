@@ -3,7 +3,7 @@
  *
  * 把控制面版、OPC、Hub、雲端、記憶、檢查點攤在同一頁，避免空殼分頁。
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
   fetchAgentMonitor,
@@ -17,8 +17,10 @@ import {
   fetchLlmOps,
   fetchMemories,
   fetchOpcMonitor,
+  fetchOptimizationMonitor,
 } from '../api/client';
 import { AGENT_FALLBACK_ROSTER, HUB_FALLBACK_MODELS, OPC_FALLBACK_CATALOG } from '../lib/monitorFallbacks';
+import { buildAnimLiveFeed } from '../lib/animLive';
 import type {
   AgentMonitorData,
   CheckpointSummary,
@@ -29,8 +31,11 @@ import type {
   HubMonitorData,
   LlmOpsData,
   OpcMonitorData,
+  OptimizationMonitorData,
 } from '../types';
 import type { MonitorTab } from './AppShell';
+import { RoadmapTable } from './ChatMonitorCards';
+import AnimTheater from './AnimTheater';
 
 interface MonitorOverviewProps {
   onOpenTab: (tab: MonitorTab, agentId?: string) => void;
@@ -96,11 +101,12 @@ export default function MonitorOverview({ onOpenTab }: MonitorOverviewProps) {
   const [memoryCount, setMemoryCount] = useState(0);
   const [cloudLatest, setCloudLatest] = useState<string>('');
   const [llmOps, setLlmOps] = useState<LlmOpsData | null>(null);
+  const [optimization, setOptimization] = useState<OptimizationMonitorData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
-      const [d, o, h, a, b, latest, dock, ev, cp, mem, llm] = await Promise.all([
+      const [d, o, h, a, b, latest, dock, ev, cp, mem, llm, opt] = await Promise.all([
         fetchDashboard().catch(() => null),
         fetchOpcMonitor().catch(() => null),
         fetchHubMonitor().catch(() => null),
@@ -112,6 +118,7 @@ export default function MonitorOverview({ onOpenTab }: MonitorOverviewProps) {
         fetchCheckpoints().catch(() => ({ checkpoints: [] as CheckpointSummary[] })),
         fetchMemories(1, 0).catch(() => ({ total: 0 })),
         fetchLlmOps().catch(() => null),
+        fetchOptimizationMonitor().catch(() => null),
       ]);
       setDash(d);
       setOpc(o);
@@ -123,6 +130,7 @@ export default function MonitorOverview({ onOpenTab }: MonitorOverviewProps) {
       setCheckpoints(cp?.checkpoints ?? []);
       setMemoryCount(mem?.total ?? 0);
       setLlmOps(llm);
+      setOptimization(opt);
       const services = latest?.services ? Object.keys(latest.services) : [];
       setCloudLatest(services.length ? `${services.length} 個服務採樣` : '尚無資源採樣');
       const missing = [
@@ -148,6 +156,7 @@ export default function MonitorOverview({ onOpenTab }: MonitorOverviewProps) {
   const opcCatalog =
     opc?.catalog && opc.catalog.length > 0 ? opc.catalog : OPC_FALLBACK_CATALOG;
   const hitPct = Math.round((hub?.cache.hit_rate ?? 0) * 100);
+  const llmCachePct = Math.round((optimization?.llm_cache.hit_rate ?? 0) * 100);
   const openCircuits = hubModels.filter((m) => m.circuit.state === 'OPEN').length;
   const dockerHealthy = docker?.health
     ? Object.values(docker.health.services || {}).filter((s) => s.healthy).length
@@ -156,6 +165,17 @@ export default function MonitorOverview({ onOpenTab }: MonitorOverviewProps) {
   const roster = agents?.agents?.length ? agents.agents : AGENT_FALLBACK_ROSTER;
   const busyAgents = roster.filter((a) => a.status === 'busy' || a.status === 'waiting' || a.status === 'error');
   const overviewRoster = [...busyAgents, ...roster.filter((a) => !busyAgents.includes(a))];
+  const liveFeed = useMemo(
+    () =>
+      buildAnimLiveFeed({
+        agents,
+        optimization,
+        opc,
+        billing,
+        llmOps,
+      }),
+    [agents, optimization, opc, billing, llmOps],
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-[#010102] p-4 text-[#f7f8f8]">
@@ -180,7 +200,7 @@ export default function MonitorOverview({ onOpenTab }: MonitorOverviewProps) {
         </div>
       )}
 
-      <div className="mb-4 grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-5 2xl:grid-cols-10">
+      <div className="mb-4 grid grid-cols-2 gap-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
         <Kpi
           label="任務成功率"
           value={`${dash?.stats.success_rate ?? 0}%`}
@@ -210,6 +230,18 @@ export default function MonitorOverview({ onOpenTab }: MonitorOverviewProps) {
           value={String(llmOps?.allowed_models.length ?? 0)}
           hint={llmOps?.ops.stale ? '目錄過期' : (llmOps?.provider_label ?? '尚未鎖定')}
           onClick={() => onOpenTab('llm')}
+        />
+        <Kpi
+          label="LLM 快取"
+          value={`${llmCachePct}%`}
+          hint={`路由門檻 ${optimization?.routing_feedback.adaptive_length_threshold ?? '—'} · trace ${optimization?.trace.trace_count ?? 0}`}
+          onClick={() => onOpenTab('llm')}
+        />
+        <Kpi
+          label="即時動態"
+          value={liveFeed.live ? 'LIVE' : 'IDLE'}
+          hint="管線 · 協作 · 匯報 · 路由"
+          onClick={() => onOpenTab('balancer')}
         />
         <Kpi
           label="雲端今日費用"
@@ -244,9 +276,34 @@ export default function MonitorOverview({ onOpenTab }: MonitorOverviewProps) {
       </div>
 
       <div className="mb-4">
-        <Section title="角色 Agent 工作台" action="打開目錄" onAction={() => onOpenTab('agents')}>
+        <Section title="即時動態" action="完整視圖" onAction={() => onOpenTab('balancer')}>
+          <AnimTheater
+            variant="full"
+            autoPlay
+            initialScene="pipeline"
+            feed={liveFeed}
+            hideBrand
+            scenes={['pipeline', 'company', 'report', 'budget']}
+            className="!border-gray-800/60"
+          />
+        </Section>
+      </div>
+
+      {(optimization?.roadmap?.length ?? 0) > 0 && (
+        <div className="mb-4">
+          <Section title="性能優化路線圖" action="LLM 運維" onAction={() => onOpenTab('llm')}>
+            <p className="mb-2 text-[11px] text-[#8a8f98]">
+              P0 任務-模型匹配 · 反思早停 · P1 合併審查 · 分層快取 · P2 路由反饋 · OPC 邊緣 · P3 Trace
+            </p>
+            <RoadmapTable items={optimization!.roadmap} />
+          </Section>
+        </div>
+      )}
+
+      <div className="mb-4">
+        <Section title="角色 Agent 工作台" action="左側名冊" onAction={() => onOpenTab('agents')}>
           <p className="mb-2 text-[11px] text-[#8a8f98]">
-            共 {roster.length} 個角色（含自定義 {agents?.summary.roles_custom ?? 0}，值班 {agents?.summary.roles_on_call ?? 0}，需核准 {agents?.summary.roles_need_approval ?? 0}，告警 {agents?.summary.alerts_open ?? 0}）· 忙碌優先列出全部
+            共 {roster.length} 個角色 · 完整名冊與「▣ 總覽」等同層，在左側外圍「◈ 角色 Agent」· 此處僅預覽忙碌優先
           </p>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 3xl:grid-cols-5">
             {overviewRoster.map((agent) => {

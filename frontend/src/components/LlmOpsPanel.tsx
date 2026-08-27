@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchLlmOps, refreshLlmModels, updateLlmOpsPrefs } from '../api/client';
 import type { LlmOpsData } from '../types';
+import OptimizationPanel from './OptimizationPanel';
 
 function fmtWhen(iso: string | undefined): string {
   if (!iso) return '尚未檢查';
@@ -211,6 +212,8 @@ export default function LlmOpsPanel() {
       {filtered.length > 120 && (
         <p className="mt-2 text-[11px] text-[#62666d]">僅顯示前 120 筆，請用搜尋縮小範圍。</p>
       )}
+
+      <OptimizationPanel />
     </div>
   );
 }

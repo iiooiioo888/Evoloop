@@ -167,6 +167,10 @@ def _blank_agent(snapshot: dict[str, Any]) -> dict[str, Any]:
         "done": 0,
         "blocked": 0,
         "cost_usd": 0.0,
+        "api_cost_usd": 0.0,
+        "cloud_cost_usd": 0.0,
+        "docker_cost_usd": 0.0,
+        "aliyun_cost_usd": 0.0,
         "last_activity_at": None,
         "work_items": [],
         "events": [],
@@ -186,6 +190,8 @@ def _blank_agent(snapshot: dict[str, Any]) -> dict[str, Any]:
             "avg_cost_usd": 0.0,
             "capacity_pct": 0.0,
             "daily_spent_usd": 0.0,
+            "api_spent_usd": 0.0,
+            "cloud_spent_usd": 0.0,
             "avg_latency_ms": 0.0,
             "tokens_in": 0,
             "tokens_out": 0,
@@ -614,7 +620,13 @@ def _finalize_agent(agent: dict[str, Any]) -> dict[str, Any]:
             None,
         )
     agent["current_item"] = current
-    agent["cost_usd"] = round(float(agent["cost_usd"] or 0), 4)
+    # 工作項累計先視為 API（LLM）用量；雲資源稍後由 collect 分攤
+    api_cost = round(float(agent["cost_usd"] or 0), 4)
+    agent["api_cost_usd"] = api_cost
+    agent["cloud_cost_usd"] = round(float(agent.get("cloud_cost_usd") or 0), 4)
+    agent["docker_cost_usd"] = round(float(agent.get("docker_cost_usd") or 0), 4)
+    agent["aliyun_cost_usd"] = round(float(agent.get("aliyun_cost_usd") or 0), 4)
+    agent["cost_usd"] = round(api_cost + float(agent["cloud_cost_usd"]), 4)
     events = agent["events"]
     items_total = len(agent["work_items"])
     done = int(agent["done"])
@@ -653,6 +665,8 @@ def _finalize_agent(agent: dict[str, Any]) -> dict[str, Any]:
         "avg_cost_usd": round(daily_spent / items_total, 4) if items_total else 0.0,
         "capacity_pct": round(min(int(agent["executing"]), cap) / cap * 100, 1),
         "daily_spent_usd": daily_spent,
+        "api_spent_usd": round(float(agent["api_cost_usd"] or 0), 4),
+        "cloud_spent_usd": round(float(agent["cloud_cost_usd"] or 0), 4),
         "avg_latency_ms": round(
             sum(float(e.get("duration_ms") or 0) for e in events if e.get("duration_ms"))
             / max(sum(1 for e in events if e.get("duration_ms")), 1),
@@ -676,7 +690,7 @@ def _finalize_agent(agent: dict[str, Any]) -> dict[str, Any]:
     if not agent.get("enabled", True):
         alerts.append({"level": "info", "message": "角色已停用，分解時不會被指派"})
     if agent.get("budget_over") and agent.get("alert_on_budget", True):
-        alerts.append({"level": "critical", "message": "今日花費已超過日預算"})
+        alerts.append({"level": "critical", "message": "今日花費已超過日預算（含 API＋雲資源）"})
     if int(agent["metrics"]["errors"]) > 0 and agent.get("alert_on_error", True):
         alerts.append({"level": "warning", "message": f"最近 {agent['metrics']['errors']} 次錯誤／降級"})
     if sla_breaches and agent.get("alert_on_sla", True):
@@ -721,6 +735,99 @@ def _finalize_agent(agent: dict[str, Any]) -> dict[str, Any]:
     return agent
 
 
+def _allocate_cloud_costs(agents: list[dict[str, Any]]) -> dict[str, float]:
+    """將 Docker + 阿里雲雲資源費用按 API 用量比例分攤到各 Agent。
+
+    預算口徑：cost_usd = api_cost_usd + cloud_cost_usd。
+    無 API 花費的活躍角色均分；全無活動時只回報彙總、不強行分攤。
+    """
+    docker_usd = 0.0
+    aliyun_usd = 0.0
+    try:
+        from backend.services.cloud_console import get_cloud_billing
+
+        summary = get_cloud_billing().get_billing_summary()
+        breakdown = summary.get("breakdown") or {}
+        docker_usd = float(breakdown.get("docker_usd") or 0)
+        aliyun_usd = float(breakdown.get("aliyun_usd") or 0)
+    except Exception:  # noqa: BLE001
+        logger.debug("雲資源費用讀取失敗，Agent 雲成本視為 0", exc_info=True)
+
+    cloud_total = docker_usd + aliyun_usd
+    if cloud_total <= 0:
+        return {
+            "docker_usd": 0.0,
+            "aliyun_usd": 0.0,
+            "cloud_total_usd": 0.0,
+            "api_total_usd": round(sum(float(a.get("api_cost_usd") or 0) for a in agents), 4),
+        }
+
+    active = [
+        a
+        for a in agents
+        if float(a.get("api_cost_usd") or 0) > 0
+        or a.get("status") in {"busy", "waiting", "error"}
+        or int(a.get("queue") or 0) + int(a.get("executing") or 0) > 0
+    ]
+    if not active:
+        active = [a for a in agents if a.get("enabled", True)]
+
+    api_sum = sum(float(a.get("api_cost_usd") or 0) for a in active)
+    for a in agents:
+        a["docker_cost_usd"] = 0.0
+        a["aliyun_cost_usd"] = 0.0
+        a["cloud_cost_usd"] = 0.0
+
+    if not active:
+        return {
+            "docker_usd": round(docker_usd, 4),
+            "aliyun_usd": round(aliyun_usd, 4),
+            "cloud_total_usd": round(cloud_total, 4),
+            "api_total_usd": round(sum(float(a.get("api_cost_usd") or 0) for a in agents), 4),
+        }
+
+    for a in active:
+        if api_sum > 0:
+            share = float(a.get("api_cost_usd") or 0) / api_sum
+        else:
+            share = 1.0 / len(active)
+        docker_share = round(docker_usd * share, 4)
+        aliyun_share = round(aliyun_usd * share, 4)
+        cloud_share = round(docker_share + aliyun_share, 4)
+        a["docker_cost_usd"] = docker_share
+        a["aliyun_cost_usd"] = aliyun_share
+        a["cloud_cost_usd"] = cloud_share
+        a["cost_usd"] = round(float(a.get("api_cost_usd") or 0) + cloud_share, 4)
+        metrics = a.get("metrics") or {}
+        metrics["daily_spent_usd"] = a["cost_usd"]
+        metrics["api_spent_usd"] = round(float(a.get("api_cost_usd") or 0), 4)
+        metrics["cloud_spent_usd"] = cloud_share
+        metrics["weekly_spent_usd"] = a["cost_usd"]
+        a["metrics"] = metrics
+        budget = float(a.get("daily_budget_usd") or 0)
+        a["budget_remaining_usd"] = None if budget <= 0 else round(max(budget - a["cost_usd"], 0.0), 4)
+        a["budget_over"] = bool(budget > 0 and a["cost_usd"] > budget)
+        # 重建預算相關告警（雲資源分攤後重新判定）
+        alerts = [
+            x
+            for x in (a.get("alerts") or [])
+            if "日預算" not in (x.get("message") or "") and "週預算" not in (x.get("message") or "")
+        ]
+        if a.get("budget_over") and a.get("alert_on_budget", True):
+            alerts.append({"level": "critical", "message": "今日花費已超過日預算（含 API＋雲資源）"})
+        weekly = float(a.get("weekly_budget_usd") or 0)
+        if weekly > 0 and a["cost_usd"] > weekly and a.get("alert_on_budget", True):
+            alerts.append({"level": "critical", "message": "已超過週預算（含 API＋雲資源）"})
+        a["alerts"] = alerts
+
+    return {
+        "docker_usd": round(docker_usd, 4),
+        "aliyun_usd": round(aliyun_usd, 4),
+        "cloud_total_usd": round(cloud_total, 4),
+        "api_total_usd": round(sum(float(a.get("api_cost_usd") or 0) for a in agents), 4),
+    }
+
+
 def collect_agent_monitor() -> dict[str, Any]:
     """聚合每位角色的 Agent 工作台；目錄永遠完整，缺資料時全部待命。"""
     snapshots = list_role_snapshots()
@@ -752,6 +859,7 @@ def collect_agent_monitor() -> dict[str, Any]:
         logger.warning("讀取公司 run log 失敗（已忽略）", exc_info=True)
 
     finalized = [_finalize_agent(agent) for agent in agents.values()]
+    cost_breakdown = _allocate_cloud_costs(finalized)
     finalized.sort(key=lambda a: (a["level"], a["id"]))
 
     roles_busy = sum(1 for a in finalized if a["status"] == "busy")
@@ -775,6 +883,10 @@ def collect_agent_monitor() -> dict[str, Any]:
             "company_tasks": company_tasks,
             "running_company_tasks": running_company,
             "total_cost_usd": round(sum(float(a.get("cost_usd") or 0) for a in finalized), 4),
+            "total_api_cost_usd": cost_breakdown["api_total_usd"],
+            "total_cloud_cost_usd": cost_breakdown["cloud_total_usd"],
+            "total_docker_cost_usd": cost_breakdown["docker_usd"],
+            "total_aliyun_cost_usd": cost_breakdown["aliyun_usd"],
             "roles_on_call": sum(1 for a in finalized if a.get("on_call")),
             "roles_need_approval": sum(1 for a in finalized if a.get("require_human_approval")),
             "roles_mainland_only": sum(1 for a in finalized if a.get("mainland_only")),

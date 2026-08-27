@@ -63,8 +63,8 @@ export default function InputBar({ disabled, onSend }: InputBarProps) {
   };
 
   return (
-    <div className="border-t border-gray-800/60 bg-gray-900/60 px-4 py-3 backdrop-blur-md">
-      <div className="mx-auto max-w-3xl">
+    <div className="shrink-0 border-t border-gray-800/60 bg-gray-900/60 px-3 py-3 backdrop-blur-md sm:px-4 lg:px-5">
+      <div className="w-full">
         {/* 統一模式控制列 */}
         <div className="mb-2.5 flex flex-wrap items-center gap-2">
           {/* 執行策略選擇 */}

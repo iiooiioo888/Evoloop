@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from backend.core.llm import call_llm, parse_json_response
+from backend.core.stage_router import resolve_stage_model
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +126,8 @@ class MultiDimensionalEvaluator:
         """執行 LLM 多維度評估，失敗時降級為規則評估。"""
         try:
             prompt = MULTI_DIM_EVALUATE_PROMPT.format(query=query, answer=answer)
-            raw = call_llm(prompt)
+            model = resolve_stage_model("evaluate")
+            raw = call_llm(prompt, model=model)
             data = parse_json_response(raw)
             return self._parse_evaluation(data, source="llm")
         except Exception as exc:
@@ -369,7 +371,10 @@ class CrossModelEvaluator:
             import os
             cross_model = os.getenv("EVOL_CROSS_EVAL_MODEL")
             if not cross_model:
-                return None  # 未配置覆核模型，跳過
+                if os.getenv("EVOL_CROSS_EVAL_AUTO", "").lower() == "true":
+                    cross_model = resolve_stage_model("cross_eval")
+                else:
+                    return None  # 未配置覆核模型，跳過
 
         try:
             prompt = CROSS_MODEL_PROMPT.format(

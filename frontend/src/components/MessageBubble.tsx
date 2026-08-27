@@ -81,7 +81,7 @@ export default function MessageBubble({ message, sessionId, onOpenTask, onOpenTr
         {isUser ? '👤' : '🔄'}
       </div>
 
-      <div className={`flex max-w-[85%] min-w-0 flex-col gap-1.5 sm:max-w-[75%] ${isUser ? 'items-end' : 'items-start'}`}>
+      <div className={`flex max-w-[92%] min-w-0 flex-col gap-1.5 lg:max-w-[88%] xl:max-w-[85%] ${isUser ? 'items-end' : 'items-start'}`}>
         <div
           className={`rounded-2xl px-4 py-3 text-sm leading-relaxed break-words transition-shadow duration-200 ${
             isUser

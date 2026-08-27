@@ -407,7 +407,10 @@ export interface DockerBudgetService {
 }
 
 export interface CompanyBudgetState {
+  api_cost?: number;
   docker_cost: number;
+  aliyun_cost?: number;
+  cloud_cost?: number;
   total_spent: number;
   budget_pressure: number;
   optimization_suggestions: Array<{
@@ -443,6 +446,30 @@ export interface CloudServiceCost {
   rate: number;
   uptime_hours: number;
   cost: number;
+  source?: 'docker' | 'aliyun' | string;
+  product_name?: string;
+  pretax_amount_cny?: number;
+}
+
+/** 阿里雲 BSS 帳目摘要 */
+export interface AliyunBilling {
+  configured: boolean;
+  ok: boolean;
+  currency: string;
+  cny_usd_rate: number;
+  month_total_cny: number;
+  month_total_usd: number;
+  today_total_cny: number;
+  today_total_usd: number;
+  products: Array<{
+    product_code: string;
+    product_name: string;
+    pretax_amount_cny: number;
+    cost_usd: number;
+    source?: string;
+  }>;
+  error: string | null;
+  billing_cycle: string;
 }
 
 /** GET /cloud/billing 回傳 */
@@ -453,6 +480,19 @@ export interface CloudBilling {
   month_total: number;
   month_projected: number;
   total_now: number;
+  docker?: {
+    realtime: Record<string, number>;
+    per_service: CloudServiceCost[];
+    total_now: number;
+    total_hourly_rate: number;
+    month_projected: number;
+  };
+  aliyun?: AliyunBilling;
+  breakdown?: {
+    docker_usd: number;
+    aliyun_usd: number;
+    cloud_total_usd: number;
+  };
 }
 
 /** 單服務資源數據點 */
@@ -692,6 +732,10 @@ export interface AgentMetrics {
   avg_cost_usd?: number;
   capacity_pct?: number;
   daily_spent_usd?: number;
+  /** API（LLM）用量花費 */
+  api_spent_usd?: number;
+  /** 雲資源（Docker + 阿里雲）分攤 */
+  cloud_spent_usd?: number;
   avg_latency_ms?: number;
   tokens_in?: number;
   tokens_out?: number;
@@ -726,6 +770,52 @@ export interface LlmCatalogModel {
   id: string;
   name: string;
   owned_by: string;
+}
+
+export interface OptimizationRoadmapItem {
+  priority: string;
+  id: string;
+  label: string;
+  benefit: string;
+  enabled: boolean;
+  status: string;
+  metric?: string;
+}
+
+export interface OptimizationMonitorData {
+  roadmap: OptimizationRoadmapItem[];
+  stage_router: Record<string, { tier: string; model: string }>;
+  reflection: {
+    pass_threshold: number;
+    max_iterations: number;
+    min_score_improvement: number;
+  };
+  merge_review_synth: { enabled: boolean };
+  llm_cache: {
+    hits: number;
+    misses: number;
+    semantic_hits: number;
+    evictions: number;
+    hit_rate: number;
+    semantic_enabled: boolean;
+    max_size: number;
+  };
+  routing_feedback: {
+    total: number;
+    simple_count: number;
+    company_count: number;
+    simple_avg_score: number;
+    company_avg_score: number;
+    adaptive_length_threshold: number;
+  };
+  opc_edge: {
+    tier: string;
+    edge_ttl_sec: number;
+    cache_age_sec: number | null;
+    cache_fresh: boolean;
+    reading_count: number;
+  };
+  trace: { trace_count: number; recent: Array<{ task_id?: string; event_count?: number }> };
 }
 
 export interface LlmOpsData {
@@ -849,6 +939,12 @@ export interface RoleAgent {
   done: number;
   blocked: number;
   cost_usd: number;
+  /** API（LLM token）用量 */
+  api_cost_usd?: number;
+  /** 雲資源分攤合計（Docker + 阿里雲） */
+  cloud_cost_usd?: number;
+  docker_cost_usd?: number;
+  aliyun_cost_usd?: number;
   last_activity_at: string | null;
   work_items: AgentWorkItem[];
   events: AgentEvent[];
@@ -877,6 +973,10 @@ export interface AgentMonitorData {
     company_tasks: number;
     running_company_tasks: number;
     total_cost_usd?: number;
+    total_api_cost_usd?: number;
+    total_cloud_cost_usd?: number;
+    total_docker_cost_usd?: number;
+    total_aliyun_cost_usd?: number;
     roles_on_call?: number;
     roles_need_approval?: number;
     roles_mainland_only?: number;

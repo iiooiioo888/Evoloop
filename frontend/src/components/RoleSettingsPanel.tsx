@@ -563,79 +563,107 @@ export default function RoleSettingsPanel({
       )}
 
       {section === 'alerts' && (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <Field label="每日預算 USD" hint="0=不限">
-            <input
-              type="number"
-              min={0}
-              step={0.1}
-              className={inputCls}
-              value={draft.daily_budget_usd}
-              onChange={(e) => setDraft({ ...draft, daily_budget_usd: Number(e.target.value) || 0 })}
-            />
-          </Field>
-          <Field label="週預算 USD" hint="0=不限">
-            <input
-              type="number"
-              min={0}
-              step={0.1}
-              className={inputCls}
-              value={draft.weekly_budget_usd}
-              onChange={(e) => setDraft({ ...draft, weekly_budget_usd: Number(e.target.value) || 0 })}
-            />
-          </Field>
-          <Field label="月預算 USD" hint="0=不限">
-            <input
-              type="number"
-              min={0}
-              step={0.1}
-              className={inputCls}
-              value={draft.monthly_budget_usd}
-              onChange={(e) => setDraft({ ...draft, monthly_budget_usd: Number(e.target.value) || 0 })}
-            />
-          </Field>
-          <Field label="SLA 延遲 ms" hint="0=不檢查">
-            <input
-              type="number"
-              min={0}
-              className={inputCls}
-              value={draft.sla_latency_ms}
-              onChange={(e) => setDraft({ ...draft, sla_latency_ms: Number(e.target.value) || 0 })}
-            />
-          </Field>
-          <div className="flex flex-wrap gap-3 md:col-span-2">
-            <label className="flex items-center gap-2 text-[12px] text-[#d0d6e0]">
-              <input
-                type="checkbox"
-                checked={draft.alert_on_error}
-                onChange={(e) => setDraft({ ...draft, alert_on_error: e.target.checked })}
-              />
-              錯誤時告警
-            </label>
-            <label className="flex items-center gap-2 text-[12px] text-[#d0d6e0]">
-              <input
-                type="checkbox"
-                checked={draft.alert_on_budget}
-                onChange={(e) => setDraft({ ...draft, alert_on_budget: e.target.checked })}
-              />
-              預算告警
-            </label>
-            <label className="flex items-center gap-2 text-[12px] text-[#d0d6e0]">
-              <input
-                type="checkbox"
-                checked={draft.alert_on_sla}
-                onChange={(e) => setDraft({ ...draft, alert_on_sla: e.target.checked })}
-              />
-              SLA 逾時告警
-            </label>
-            <label className="flex items-center gap-2 text-[12px] text-[#d0d6e0]">
-              <input
-                type="checkbox"
-                checked={draft.always_require_review}
-                onChange={(e) => setDraft({ ...draft, always_require_review: e.target.checked })}
-              />
-              產出一律送審查
-            </label>
+        <div className="space-y-3">
+          <div className="rounded-xl border border-[#23252a] bg-[#0f1011] p-3">
+            <div className="mb-2 flex items-baseline justify-between gap-2">
+              <h4 className="text-[11px] font-semibold uppercase tracking-wider text-[#8a8f98]">預算上限</h4>
+              <span className="text-[10px] text-[#62666d]">合計 = API＋Docker＋阿里雲 · 0=不限</span>
+            </div>
+            <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <div className="rounded-lg border border-[#23252a]/80 bg-[#141516] px-3 py-2">
+                <p className="text-[10px] text-[#62666d]">API 用量</p>
+                <p className="mt-0.5 text-[12px] text-[#828fff]">LLM token 花費</p>
+              </div>
+              <div className="rounded-lg border border-[#23252a]/80 bg-[#141516] px-3 py-2">
+                <p className="text-[10px] text-[#62666d]">Docker</p>
+                <p className="mt-0.5 text-[12px] text-sky-300">本地容器分攤</p>
+              </div>
+              <div className="rounded-lg border border-[#23252a]/80 bg-[#141516] px-3 py-2">
+                <p className="text-[10px] text-[#62666d]">阿里雲</p>
+                <p className="mt-0.5 text-[12px] text-orange-300">BSS 帳目分攤</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <Field label="每日預算 USD" hint="含 API＋雲資源">
+                <input
+                  type="number"
+                  min={0}
+                  step={0.1}
+                  className={inputCls}
+                  value={draft.daily_budget_usd}
+                  onChange={(e) => setDraft({ ...draft, daily_budget_usd: Number(e.target.value) || 0 })}
+                />
+              </Field>
+              <Field label="週預算 USD" hint="含 API＋雲資源">
+                <input
+                  type="number"
+                  min={0}
+                  step={0.1}
+                  className={inputCls}
+                  value={draft.weekly_budget_usd}
+                  onChange={(e) => setDraft({ ...draft, weekly_budget_usd: Number(e.target.value) || 0 })}
+                />
+              </Field>
+              <Field label="月預算 USD" hint="含 API＋雲資源">
+                <input
+                  type="number"
+                  min={0}
+                  step={0.1}
+                  className={inputCls}
+                  value={draft.monthly_budget_usd}
+                  onChange={(e) => setDraft({ ...draft, monthly_budget_usd: Number(e.target.value) || 0 })}
+                />
+              </Field>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-[#23252a] bg-[#0f1011] p-3">
+            <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-[#8a8f98]">SLA／告警</h4>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <Field label="SLA 延遲 ms" hint="0=不檢查">
+                <input
+                  type="number"
+                  min={0}
+                  className={inputCls}
+                  value={draft.sla_latency_ms}
+                  onChange={(e) => setDraft({ ...draft, sla_latency_ms: Number(e.target.value) || 0 })}
+                />
+              </Field>
+              <div className="flex flex-wrap content-end gap-3">
+                <label className="flex items-center gap-2 text-[12px] text-[#d0d6e0]">
+                  <input
+                    type="checkbox"
+                    checked={draft.alert_on_error}
+                    onChange={(e) => setDraft({ ...draft, alert_on_error: e.target.checked })}
+                  />
+                  錯誤時告警
+                </label>
+                <label className="flex items-center gap-2 text-[12px] text-[#d0d6e0]">
+                  <input
+                    type="checkbox"
+                    checked={draft.alert_on_budget}
+                    onChange={(e) => setDraft({ ...draft, alert_on_budget: e.target.checked })}
+                  />
+                  預算告警
+                </label>
+                <label className="flex items-center gap-2 text-[12px] text-[#d0d6e0]">
+                  <input
+                    type="checkbox"
+                    checked={draft.alert_on_sla}
+                    onChange={(e) => setDraft({ ...draft, alert_on_sla: e.target.checked })}
+                  />
+                  SLA 逾時告警
+                </label>
+                <label className="flex items-center gap-2 text-[12px] text-[#d0d6e0]">
+                  <input
+                    type="checkbox"
+                    checked={draft.always_require_review}
+                    onChange={(e) => setDraft({ ...draft, always_require_review: e.target.checked })}
+                  />
+                  產出一律送審查
+                </label>
+              </div>
+            </div>
           </div>
         </div>
       )}

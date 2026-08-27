@@ -27,6 +27,7 @@ from backend.core.llm_config import get_runtime_config, masked_key, save_runtime
 from backend.core.provider_pool import public_pool, refresh_model_catalog, set_refresh_interval
 from backend.services.llm_ops import collect_llm_ops, llm_ops_loop, run_ops_once
 from backend.hub.monitor import collect_hub_monitor
+from backend.services.optimization_monitor import collect_optimization_monitor
 from backend.company.role_catalog import (
     create_custom_role,
     delete_custom_role,
@@ -54,7 +55,10 @@ from backend.hub.api import register_hub
 # ═══════════════════════════════════════════════════════════════
 
 _company_budget_state: dict[str, Any] = {
+    "api_cost": 0.0,
     "docker_cost": 0.0,
+    "aliyun_cost": 0.0,
+    "cloud_cost": 0.0,
     "total_spent": 0.0,
     "budget_pressure": 0.0,
     "optimization_suggestions": [],
@@ -194,6 +198,12 @@ async def update_llm_ops(body: LlmOpsPrefsBody):
 async def monitor_llm_ops():
     """監控中心：目前 API 鎖定的模型池與定時檢查狀態。"""
     return collect_llm_ops()
+
+
+@app.get("/monitor/optimization")
+async def monitor_optimization():
+    """監控中心：P0–P3 性能優化路線圖運行時指標。"""
+    return collect_optimization_monitor()
 
 
 @app.post("/config/test")
@@ -996,9 +1006,17 @@ async def docker_start(service: str):
 
 @app.get("/cloud/billing")
 async def cloud_billing():
-    """獲取雲端費用摘要。"""
+    """獲取雲端費用摘要（Docker 按時計費 + 阿里雲 BSS）。"""
     billing = get_cloud_billing()
     return billing.get_billing_summary()
+
+
+@app.get("/cloud/aliyun")
+async def cloud_aliyun_status():
+    """阿里雲 BSS 接入狀態與本月帳目。"""
+    from backend.services.aliyun_bss import get_aliyun_bss
+
+    return get_aliyun_bss().get_billing_overview(force=True)
 
 
 @app.get("/cloud/monitoring")

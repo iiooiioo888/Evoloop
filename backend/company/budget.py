@@ -169,14 +169,19 @@ class TierRouter:
 
 
 class BudgetManager:
-    """預算管理器：追蹤花費、強制執行上限。"""
+    """預算管理器：追蹤花費、強制執行上限。
+
+    總預算 = API（LLM）用量 + 雲資源用量（本地 Docker + 阿里雲 BSS）。
+    """
 
     def __init__(self, config: BudgetConfig):
         self.config = config
         self._task_spent: float = 0.0
         self._session_spent: float = 0.0
-        self._monthly_spent: float = 0.0
+        self._monthly_spent: float = 0.0  # 僅 API（LLM）月累計
         self._docker_cost: float = 0.0
+        self._aliyun_cost: float = 0.0
+        self._task_aliyun_delta: float = 0.0  # 本任務內阿里雲增量（勿用月累計倒扣）
         self._month: int = datetime.now(timezone.utc).month
         self._year: int = datetime.now(timezone.utc).year
         self._router = TierRouter(config)
@@ -196,21 +201,43 @@ class BudgetManager:
         return self._docker_cost
 
     @property
-    def monthly_spent(self) -> float:
+    def aliyun_cost(self) -> float:
+        return self._aliyun_cost
+
+    @property
+    def cloud_cost(self) -> float:
+        """雲資源合計（Docker + 阿里雲）。"""
+        return self._docker_cost + self._aliyun_cost
+
+    @property
+    def api_cost(self) -> float:
+        """API（LLM）月累計。"""
         return self._monthly_spent
+
+    @property
+    def task_api_spent(self) -> float:
+        """本任務 API（LLM）花費 = 任務總額 − Docker − 本任務阿里雲增量。"""
+        return round(
+            max(0.0, self._task_spent - self._docker_cost - self._task_aliyun_delta),
+            6,
+        )
+
+    @property
+    def monthly_spent(self) -> float:
+        """月度總花費（API + 雲資源），供上限檢查。"""
+        return self._monthly_spent + self.cloud_cost
 
     @property
     def budget_pressure(self) -> float:
         """計算當前預算壓力（0.0 ~ 1.0）。
 
-        Docker 容器成本納入月度預算壓力計算，
-        公司可根據壓力自動優化容器開銷。
+        API + Docker + 阿里雲一併納入壓力計算。
         """
         pressures: list[float] = []
         for spent, limit in [
             (self._task_spent, self.config.task_limit_usd),
             (self._session_spent, self.config.session_limit_usd),
-            (self._monthly_spent + self._docker_cost, self.config.monthly_limit_usd),
+            (self.monthly_spent, self.config.monthly_limit_usd),
         ]:
             if limit > 0:
                 pressures.append(spent / limit)
@@ -218,8 +245,8 @@ class BudgetManager:
 
     @property
     def total_spent(self) -> float:
-        """總花費（LLM + Docker）。"""
-        return self._monthly_spent + self._docker_cost
+        """總花費（API + Docker + 阿里雲）。"""
+        return self.monthly_spent
 
     # ── 月度重置 ──
 
@@ -230,13 +257,14 @@ class BudgetManager:
             logger.info("月度預算重置：%d-%02d → %d-%02d",
                         self._year, self._month, now.year, now.month)
             self._monthly_spent = 0.0
+            self._aliyun_cost = 0.0
             self._month = now.month
             self._year = now.year
 
     # ── 花費記錄 ──
 
     def record_cost(self, amount: float) -> None:
-        """記錄一筆花費到所有追蹤層級。"""
+        """記錄一筆 API（LLM）花費到所有追蹤層級。"""
         self._check_month_rollover()
         self._task_spent += amount
         self._session_spent += amount
@@ -244,18 +272,19 @@ class BudgetManager:
         pressure = self.budget_pressure
         if pressure >= self.config.warn_threshold:
             logger.warning(
-                "預算警告：已達 %.0f%%（任務 $%.4f/$%.2f，會話 $%.4f/$%.2f，月 $%.4f/$%.2f）",
+                "預算警告：已達 %.0f%%（任務 $%.4f/$%.2f，會話 $%.4f/$%.2f，月 $%.4f/$%.2f）"
+                "｜API $%.4f + 雲 $%.4f",
                 pressure * 100,
                 self._task_spent, self.config.task_limit_usd,
                 self._session_spent, self.config.session_limit_usd,
-                self._monthly_spent, self.config.monthly_limit_usd,
+                self.monthly_spent, self.config.monthly_limit_usd,
+                self._monthly_spent, self.cloud_cost,
             )
 
     def record_docker_cost(self, service: str, hours: float) -> float:
-        """記錄容器服務按時費用（USD），同步計入公司總預算。
+        """記錄容器服務按時費用（USD），計入雲資源預算（不與 API 雙重累加）。
 
         類似阿里雲 ECS 按量付費：費用 = 小時費率 × 運行時長。
-        費用同時計入 _docker_cost（獨立追蹤）和 _monthly_spent（總預算）。
 
         Args:
             service: 服務名稱
@@ -269,7 +298,6 @@ class BudgetManager:
         cost = rate * hours
         if cost > 0:
             self._docker_cost += cost
-            self._monthly_spent += cost
             self._session_spent += cost
             self._task_spent += cost
             logger.debug(
@@ -279,10 +307,52 @@ class BudgetManager:
             pressure = self.budget_pressure
             if pressure >= self.config.warn_threshold:
                 logger.warning(
-                    "Docker 成本警告：預算壓力 %.0f%%（Docker $%.4f + LLM $%.4f = $%.4f）",
-                    pressure * 100, self._docker_cost, self._monthly_spent - self._docker_cost, self.total_spent,
+                    "雲資源成本警告：預算壓力 %.0f%%（API $%.4f + Docker $%.4f + 阿里雲 $%.4f = $%.4f）",
+                    pressure * 100,
+                    self._monthly_spent,
+                    self._docker_cost,
+                    self._aliyun_cost,
+                    self.total_spent,
                 )
         return cost
+
+    def record_aliyun_cost(self, amount_usd: float) -> float:
+        """同步阿里雲 BSS 帳目（USD）到公司預算。
+
+        採「設值」語意：以最新查詢結果覆寫本月阿里雲累計，避免輪詢重複加總。
+        """
+        self._check_month_rollover()
+        amount = max(0.0, float(amount_usd or 0))
+        delta = amount - self._aliyun_cost
+        self._aliyun_cost = amount
+        if delta > 0:
+            self._session_spent += delta
+            self._task_spent += delta
+            self._task_aliyun_delta += delta
+            logger.info("阿里雲費用同步：$%.4f（Δ $%.4f）", amount, delta)
+        return amount
+
+    def sync_cloud_from_billing(self) -> dict[str, float]:
+        """從 CloudBilling 拉取 Docker + 阿里雲並寫入預算計數器。"""
+        from backend.services.cloud_console import get_cloud_billing
+
+        summary = get_cloud_billing().get_billing_summary()
+        docker_usd = float((summary.get("breakdown") or {}).get("docker_usd") or 0)
+        aliyun_usd = float((summary.get("breakdown") or {}).get("aliyun_usd") or 0)
+        # Docker 採快照覆寫（與 record_docker_runtime 一致）
+        if docker_usd > self._docker_cost:
+            delta = docker_usd - self._docker_cost
+            self._docker_cost = docker_usd
+            self._session_spent += delta
+            self._task_spent += delta
+        self.record_aliyun_cost(aliyun_usd)
+        return {
+            "api_usd": round(self._monthly_spent, 4),
+            "docker_usd": round(self._docker_cost, 4),
+            "aliyun_usd": round(self._aliyun_cost, 4),
+            "cloud_usd": round(self.cloud_cost, 4),
+            "total_usd": round(self.total_spent, 4),
+        }
 
     def record_docker_runtime(self) -> dict[str, Any]:
         """記錄當前所有容器的運行成本（用於任務開始/結束快照）。
@@ -427,13 +497,14 @@ class BudgetManager:
         """
         self._check_month_rollover()
 
-        # 檢查月度上限
+        # 檢查月度上限（API + 雲資源）
         if (self.config.monthly_limit_usd > 0
-                and self._monthly_spent + estimated_cost > self.config.monthly_limit_usd):
+                and self.monthly_spent + estimated_cost > self.config.monthly_limit_usd):
             if self.config.hard_stop:
                 return False, (
                     f"月度預算已達上限 ($ {self.config.monthly_limit_usd})，"
-                    f"已花費 $ {self._monthly_spent:.4f}"
+                    f"已花費 $ {self.monthly_spent:.4f}"
+                    f"（API ${self._monthly_spent:.4f} + 雲 ${self.cloud_cost:.4f}）"
                 )
             return True, "月度預算接近上限，已降級到便宜模型"
 
@@ -481,11 +552,13 @@ class BudgetManager:
         """重置任務級別花費（新任務開始時）。"""
         self._task_spent = 0.0
         self._docker_cost = 0.0
+        self._task_aliyun_delta = 0.0
 
     def reset_session(self) -> None:
         """重置會話級別花費。"""
         self._session_spent = 0.0
         self._task_spent = 0.0
+        self._task_aliyun_delta = 0.0
 
     # ── 序列化 ──
 
@@ -493,12 +566,16 @@ class BudgetManager:
         """序列化為字典。"""
         return {
             "task_spent": round(self._task_spent, 4),
+            "task_api_spent": round(self.task_api_spent, 4),
             "task_limit": self.config.task_limit_usd,
             "session_spent": round(self._session_spent, 4),
             "session_limit": self.config.session_limit_usd,
-            "monthly_spent": round(self._monthly_spent, 4),
+            "monthly_spent": round(self.monthly_spent, 4),
             "monthly_limit": self.config.monthly_limit_usd,
+            "api_cost": round(self._monthly_spent, 4),
             "docker_cost": round(self._docker_cost, 4),
+            "aliyun_cost": round(self._aliyun_cost, 4),
+            "cloud_cost": round(self.cloud_cost, 4),
             "total_spent": round(self.total_spent, 4),
             "budget_pressure": round(self.budget_pressure, 2),
             "active_tier": self._router.resolve_model(

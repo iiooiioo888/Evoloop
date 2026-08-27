@@ -8,7 +8,7 @@
  * 生產環境可設定 VITE_API_URL 環境變數指向後端位址。
  */
 
-import type { AgentMonitorData, AgentMonitorPrefs, CheckpointSummary, CloudAlertsData, CloudBilling, CloudEventsData, CloudMonitoring, DashboardData, DockerActionResult, DockerBudget, DockerStatus, HubMonitorData, LlmOpsData, OpcMonitorData, RoleAgent, TaskOptions, TaskProgress, TraceEntry, TraceSummary } from '../types';
+import type { AgentMonitorData, AgentMonitorPrefs, AliyunBilling, CheckpointSummary, CloudAlertsData, CloudBilling, CloudEventsData, CloudMonitoring, DashboardData, DockerActionResult, DockerBudget, DockerStatus, HubMonitorData, LlmOpsData, OpcMonitorData, OptimizationMonitorData, RoleAgent, TaskOptions, TaskProgress, TraceEntry, TraceSummary } from '../types';
 
 const API_BASE: string = import.meta.env.VITE_API_URL ?? '/api';
 
@@ -223,6 +223,12 @@ export async function saveConfig(config: {
 export async function fetchLlmOps(): Promise<LlmOpsData> {
   const resp = await fetch(apiUrl('/monitor/llm-ops'));
   if (!resp.ok) throw new Error(`讀取 LLM 運維失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
+export async function fetchOptimizationMonitor(): Promise<OptimizationMonitorData> {
+  const resp = await fetch(apiUrl('/monitor/optimization'));
+  if (!resp.ok) throw new Error(`讀取優化監控失敗（HTTP ${resp.status}）`);
   return resp.json();
 }
 
@@ -629,6 +635,13 @@ export async function startDockerService(service: string): Promise<DockerActionR
 export async function fetchCloudBilling(): Promise<CloudBilling> {
   const resp = await fetch(apiUrl('/cloud/billing'));
   if (!resp.ok) throw new Error(`讀取費用失敗（HTTP ${resp.status}）`);
+  return resp.json();
+}
+
+/** 獲取阿里雲 BSS 接入狀態與本月帳目。 */
+export async function fetchCloudAliyun(): Promise<AliyunBilling> {
+  const resp = await fetch(apiUrl('/cloud/aliyun'));
+  if (!resp.ok) throw new Error(`讀取阿里雲帳目失敗（HTTP ${resp.status}）`);
   return resp.json();
 }
 

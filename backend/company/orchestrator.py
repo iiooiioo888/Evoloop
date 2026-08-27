@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import uuid
 from datetime import datetime
 from typing import Any
@@ -177,11 +178,15 @@ class CompanyOrchestrator:
         )
         self.events.emit(CompanyEvent.COMPANY_START, {"goal": goal, "config": self.config.name})
 
-        # ── 階段 0：Docker 預算檢查 ──
+        # ── 階段 0：雲資源預算檢查（Docker + 阿里雲 BSS）──
         docker_snapshot = self.budget.record_docker_runtime()
+        cloud_sync = self.budget.sync_cloud_from_billing()
         docker_ok, docker_reason = self._check_docker_budget()
         self._log("docker_budget_check", {
             "docker_cost": docker_snapshot["total_cost"],
+            "aliyun_cost": cloud_sync.get("aliyun_usd", 0),
+            "cloud_cost": cloud_sync.get("cloud_usd", 0),
+            "api_cost": cloud_sync.get("api_usd", 0),
             "can_continue": docker_ok,
             "reason": docker_reason,
             "budget_pressure": round(self.budget.budget_pressure, 2),
@@ -234,10 +239,16 @@ class CompanyOrchestrator:
             self._log("company_cancelled", {"at": "after_execute_review"}, level=logging.INFO)
             return self._error_result("任務已被使用者取消")
 
-        # ── 階段 3：Synthesizer 整合 ──
+        # ── 階段 3：Synthesizer 整合（P1：可合併 Reviewer+Synthesizer）──
         self._log("phase", {"phase": "synthesize"})
         self.events.emit(CompanyEvent.PHASE_CHANGE, {"phase": "synthesize"})
-        final_output = await self._synthesize(goal)
+        merge_enabled = os.getenv("EVOL_MERGE_REVIEW_SYNTH", "true").lower() == "true"
+        if merge_enabled:
+            final_output, merge_meta = await self._review_and_synthesize(goal)
+            self._log("review_synth_merge", merge_meta)
+        else:
+            final_output = await self._synthesize(goal)
+            merge_meta = {}
 
         # 取消檢查點：整合結束後
         if self._check_cancel():
@@ -249,8 +260,9 @@ class CompanyOrchestrator:
         self.events.emit(CompanyEvent.PHASE_CHANGE, {"phase": "final_review"})
         review_result = await self._manager_final_review(goal, final_output)
 
-        # ── 階段 5：Docker 成本結算 ──
+        # ── 階段 5：API＋雲資源成本結算（Docker + 阿里雲）──
         docker_final = self.budget.record_docker_runtime()
+        cloud_final = self.budget.sync_cloud_from_billing()
         docker_delta = round(docker_final["total_cost"] - docker_snapshot["total_cost"], 4)
 
         self._log(
@@ -259,18 +271,25 @@ class CompanyOrchestrator:
                 "total_items": len(work_items),
                 "completed_items": self.work_items.get_stats()["done"],
                 "review_rounds": self._count_review_rounds(),
-                "llm_cost": round(self.budget.task_spent - self.budget.docker_cost, 4),
+                "llm_cost": round(self.budget.task_api_spent, 4),
+                "api_cost": round(self.budget.task_api_spent, 4),
                 "docker_cost": self.budget.docker_cost,
+                "aliyun_cost": self.budget.aliyun_cost,
+                "cloud_cost": self.budget.cloud_cost,
                 "docker_delta": docker_delta,
                 "total_cost": round(self.budget.total_spent, 4),
+                "cloud_sync": cloud_final,
             },
             level=logging.INFO,
         )
         self.events.emit(CompanyEvent.COMPANY_DONE, {
             "total_items": len(work_items),
             "completed_items": self.work_items.get_stats()["done"],
-            "llm_cost": round(self.budget.task_spent - self.budget.docker_cost, 4),
+            "llm_cost": round(self.budget.task_api_spent, 4),
+            "api_cost": round(self.budget.task_api_spent, 4),
             "docker_cost": self.budget.docker_cost,
+            "aliyun_cost": self.budget.aliyun_cost,
+            "cloud_cost": self.budget.cloud_cost,
             "total_cost": round(self.budget.total_spent, 4),
         })
 
@@ -278,7 +297,10 @@ class CompanyOrchestrator:
         try:
             from backend.main import update_company_budget_state
             update_company_budget_state({
+                "api_cost": self.budget.api_cost,
                 "docker_cost": self.budget.docker_cost,
+                "aliyun_cost": self.budget.aliyun_cost,
+                "cloud_cost": self.budget.cloud_cost,
                 "total_spent": self.budget.total_spent,
                 "budget_pressure": self.budget.budget_pressure,
                 "optimization_suggestions": docker_suggestions,
@@ -928,6 +950,46 @@ class CompanyOrchestrator:
     # 階段 3：Synthesizer 整合
     # ═══════════════════════════════════════════════════════════
 
+    async def _review_and_synthesize(self, goal: str) -> tuple[str, dict[str, Any]]:
+        """P1：Reviewer + Synthesizer 合併 — 單次 LLM 審查並整合交付物。"""
+        model = self.budget.resolve_model_for_tier(BudgetTier.REASONING)
+        artifacts_text = self._collect_artifacts()
+        stats = self.work_items.get_stats()
+
+        prompt = self.prompt_config.review_synth_merge.format(
+            goal=goal,
+            artifacts=artifacts_text,
+            total_items=stats["total"],
+            completed_items=stats["done"],
+            review_rounds=self._count_review_rounds(),
+        )
+
+        try:
+            raw = call_llm(
+                prompt,
+                system=self.prompt_config.review_synth_merge_system,
+                model=model,
+            )
+            cost = CostTracker.estimate_cost_rough(model, "high")
+            self.budget.record_cost(cost)
+
+            result = parse_json_response(raw)
+            final_output = str(result.get("final_output") or raw)
+            meta = {
+                "merged": True,
+                "quality_passed": result.get("quality_passed", True),
+                "quality_score": result.get("quality_score"),
+                "quality_notes": result.get("quality_notes", ""),
+                "cost": round(cost, 4),
+            }
+            self._log("synthesize_done", meta)
+            return final_output, meta
+
+        except Exception as exc:  # noqa: BLE001 - 合併失敗降級為分離流程
+            logger.warning("Review+Synth 合併失敗，降級為獨立 Synthesizer：%s", exc)
+            output = await self._synthesize(goal)
+            return output, {"merged": False, "fallback": str(exc)}
+
     async def _synthesize(self, goal: str) -> str:
         """讓 Synthesizer 整合所有已完成工作項的交付物。"""
         role_def = self.config.roles.get(
@@ -1090,9 +1152,9 @@ class CompanyOrchestrator:
         append_run_record(record)
 
     def _check_docker_budget(self) -> tuple[bool, str]:
-        """檢查 Docker 容器預算是否可繼續。
+        """檢查總預算（API＋Docker＋阿里雲）是否可繼續。
 
-        公司全權控制容器預算：當預算壓力過高時，
+        公司全權控制雲資源預算：當預算壓力過高時，
         自動建議停止非核心容器以節省成本。
 
         Returns:
@@ -1103,7 +1165,10 @@ class CompanyOrchestrator:
         if pressure >= 1.0:
             return False, (
                 f"預算已耗盡（壓力 {pressure:.0%}），"
-                f"總花費 $ {self.budget.total_spent:.4f}（Docker ${self.budget.docker_cost:.4f}）"
+                f"總花費 ${self.budget.total_spent:.4f}"
+                f"（API ${self.budget.api_cost:.4f}"
+                f" + Docker ${self.budget.docker_cost:.4f}"
+                f" + 阿里雲 ${self.budget.aliyun_cost:.4f}）"
             )
 
         if pressure >= 0.85:
@@ -1117,7 +1182,7 @@ class CompanyOrchestrator:
                 f"預算壓力 {pressure:.0%}，建議檢查容器優化方案"
             )
 
-        return True, "預算充足，容器可正常運行"
+        return True, "預算充足（API＋雲資源），可正常運行"
 
     def _apply_docker_optimization(self, suggestions: list[dict[str, Any]]) -> dict[str, Any]:
         """根據優化建議自動停止容器。
