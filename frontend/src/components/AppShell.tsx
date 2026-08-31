@@ -21,7 +21,7 @@ export type MonitorTab =
   | 'tasks'
   | 'agents'
   | 'pipeline'
-  | 'opc'
+  | 'metrics'
   | 'lab'
   | 'ops'
   | 'memory';

@@ -16,7 +16,7 @@ export const MONITOR_PRIMARY_TABS: MonitorTabItem[] = [
 
 /** 收納於「更多」的次要分頁。 */
 export const MONITOR_MORE_TABS: MonitorTabItem[] = [
-  { key: 'opc', icon: '◇', label: 'OPC' },
+  { key: 'metrics', icon: '◇', label: '系統指標' },
   { key: 'lab', icon: '✦', label: '實驗室' },
   { key: 'ops', icon: '⚙', label: '運維' },
   { key: 'memory', icon: '◌', label: '記憶' },
@@ -38,6 +38,7 @@ export const MONITOR_TAB_ALIASES: Record<string, MonitorTab> = {
   llm: 'ops',
   cloud: 'ops',
   checkpoints: 'ops',
+  opc: 'metrics',
 };
 
 export function normalizeMonitorTab(tab: string | null | undefined): MonitorTab {

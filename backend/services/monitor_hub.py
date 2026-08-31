@@ -9,7 +9,6 @@ from backend.hub.monitor import collect_hub_monitor
 from backend.services.agent_monitor import collect_agent_monitor
 from backend.services.dashboard import collect_dashboard
 from backend.services.llm_ops import collect_llm_ops
-from backend.services.opc_monitor import collect_opc_monitor
 from backend.services.optimization_monitor import collect_optimization_monitor
 
 
@@ -17,7 +16,6 @@ def collect_monitor_hub() -> dict[str, Any]:
     """Aggregate one monitor snapshot for WS push and GET /monitor/hub-snapshot."""
     agents = None
     optimization = None
-    opc = None
     llm_ops = None
     hub = None
     dashboard = None
@@ -32,10 +30,6 @@ def collect_monitor_hub() -> dict[str, Any]:
         optimization = collect_optimization_monitor()
     except Exception as exc:  # noqa: BLE001
         errors.append(f"optimization:{exc}")
-    try:
-        opc = collect_opc_monitor()
-    except Exception as exc:  # noqa: BLE001
-        errors.append(f"opc:{exc}")
     try:
         llm_ops = collect_llm_ops()
     except Exception as exc:  # noqa: BLE001
@@ -60,7 +54,6 @@ def collect_monitor_hub() -> dict[str, Any]:
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "agents": agents,
         "optimization": optimization,
-        "opc": opc,
         "llm_ops": llm_ops,
         "hub": hub,
         "dashboard": dashboard,

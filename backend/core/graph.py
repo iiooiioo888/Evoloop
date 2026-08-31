@@ -47,15 +47,18 @@ def should_improve(state: EvoLoopState) -> str:
     """條件路由（優化 #4：動態迭代策略）。
 
     終止條件（任一滿足即 finalize）：
-    1. 分數已達門檻
+    1. 分數已達門檻（依任務複雜度動態調整）
     2. 達到最大迭代次數
     3. 分數變化率過低（最近兩輪提升 < MIN_SCORE_IMPROVEMENT）
     """
+    from backend.core.dynamic_threshold import resolve_pass_threshold
+
     score = state.get("score", 0.0)
     iteration = state.get("iteration", 0)
+    pass_threshold = resolve_pass_threshold(state.get("query", ""))
 
     # 條件 1：已達門檻
-    if score >= PASS_THRESHOLD:
+    if score >= pass_threshold:
         return "finalize"
 
     # 條件 2：達最大迭代

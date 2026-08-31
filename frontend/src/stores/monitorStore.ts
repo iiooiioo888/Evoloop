@@ -8,14 +8,12 @@ import type {
   DashboardData,
   HubMonitorData,
   LlmOpsData,
-  OpcMonitorData,
   OptimizationMonitorData,
 } from '../types';
 
 export interface MonitorHubSnapshot {
   agents: AgentMonitorData | null;
   optimization: OptimizationMonitorData | null;
-  opc: OpcMonitorData | null;
   billing: CloudBilling | null;
   llmOps: LlmOpsData | null;
   hub: HubMonitorData | null;
@@ -35,7 +33,6 @@ interface MonitorStore extends MonitorHubSnapshot {
 const empty: MonitorHubSnapshot = {
   agents: null,
   optimization: null,
-  opc: null,
   billing: null,
   llmOps: null,
   hub: null,

@@ -1,5 +1,5 @@
 /**
- * useChatLiveMonitor — 對話頁集中輪詢 Agent／雲端／LLM／OPC／Docker 監控。
+ * useChatLiveMonitor — 對話頁集中輪詢 Agent／雲端／LLM／系統指標／Docker 監控。
  */
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -9,7 +9,6 @@ import {
   fetchDockerStatus,
   fetchLlmOps,
   fetchMemories,
-  fetchOpcMonitor,
   fetchOptimizationMonitor,
 } from '../api/client';
 import type {
@@ -17,7 +16,6 @@ import type {
   CloudBilling,
   DockerStatus,
   LlmOpsData,
-  OpcMonitorData,
   OptimizationMonitorData,
 } from '../types';
 
@@ -25,7 +23,6 @@ export interface ChatLiveMonitorState {
   agents: AgentMonitorData | null;
   billing: CloudBilling | null;
   llmOps: LlmOpsData | null;
-  opc: OpcMonitorData | null;
   docker: DockerStatus | null;
   optimization: OptimizationMonitorData | null;
   cloudLatest: { cpu: number; memMb: number; ts: string | null };
@@ -41,7 +38,6 @@ export function useChatLiveMonitor(): ChatLiveMonitorState {
   const [agents, setAgents] = useState<AgentMonitorData | null>(null);
   const [billing, setBilling] = useState<CloudBilling | null>(null);
   const [llmOps, setLlmOps] = useState<LlmOpsData | null>(null);
-  const [opc, setOpc] = useState<OpcMonitorData | null>(null);
   const [docker, setDocker] = useState<DockerStatus | null>(null);
   const [optimization, setOptimization] = useState<OptimizationMonitorData | null>(null);
   const [cloudLatest, setCloudLatest] = useState<{ cpu: number; memMb: number; ts: string | null }>({
@@ -55,11 +51,10 @@ export function useChatLiveMonitor(): ChatLiveMonitorState {
 
   const refresh = useCallback(async () => {
     try {
-      const [a, b, llm, o, dock, latest, mem, opt] = await Promise.all([
+      const [a, b, llm, dock, latest, mem, opt] = await Promise.all([
         fetchAgentMonitor().catch(() => null),
         fetchCloudBilling().catch(() => null),
         fetchLlmOps().catch(() => null),
-        fetchOpcMonitor().catch(() => null),
         fetchDockerStatus().catch(() => null),
         fetchCloudMonitoringLatest().catch(() => null),
         fetchMemories(1, 0).catch(() => ({ total: 0 })),
@@ -68,7 +63,6 @@ export function useChatLiveMonitor(): ChatLiveMonitorState {
       if (a) setAgents(a);
       if (b) setBilling(b);
       if (llm) setLlmOps(llm);
-      if (o) setOpc(o);
       if (dock) setDocker(dock);
       if (opt) setOptimization(opt);
       if (latest) {
@@ -96,7 +90,6 @@ export function useChatLiveMonitor(): ChatLiveMonitorState {
     agents,
     billing,
     llmOps,
-    opc,
     docker,
     optimization,
     cloudLatest,

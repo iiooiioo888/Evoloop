@@ -42,6 +42,13 @@ services:
     networks:
       - evoloop_net
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2G
+        reservations:
+          memory: 512M
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s
@@ -64,6 +71,11 @@ services:
     networks:
       - evoloop_net
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 128M
 
   opc_service:
     build:
@@ -82,6 +94,11 @@ services:
     networks:
       - evoloop_net
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/opc/health')"]
       interval: 30s
@@ -99,6 +116,11 @@ services:
     networks:
       - evoloop_net
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -115,6 +137,11 @@ services:
     networks:
       - evoloop_net
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 1G
     healthcheck:
       # 新版 Chroma 映像無 curl/python，改用 bash 內建 /dev/tcp 探測 v2 心跳端點
       test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/8000 && printf 'GET /api/v2/heartbeat HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && grep -q 200 <&3"]

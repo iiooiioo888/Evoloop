@@ -271,25 +271,24 @@ function BudgetCard({ feed, dock }: { feed: AnimLiveFeed; dock?: boolean }) {
   );
 }
 
-function OpcCard({ feed }: { feed: AnimLiveFeed }) {
-  const edge = feed.optimization?.opc_edge;
-  const opc = feed.opc;
-  const fresh = edge?.cache_fresh ?? false;
-  const reachable = Boolean(opc?.live?.reachable && opc?.live?.health?.opc_connected);
-  const readings = edge?.reading_count ?? opc?.live?.readings?.length ?? 0;
-  const blocked = opc?.audit?.summary?.blocked ?? 0;
-  const tone = fresh ? GREEN : reachable ? ORANGE : GRAY;
+function SystemMetricsCard({ feed }: { feed: AnimLiveFeed }) {
+  const opt = feed.optimization;
+  const hitPct = Math.round((opt?.llm_cache.hit_rate ?? 0) * 100);
+  const traceCount = opt?.trace.trace_count ?? 0;
+  const successRate = opt?.system_stats?.success_rate ?? 0;
+  const satisfaction = Math.round((opt?.user_feedback?.satisfaction_rate ?? 0) * 100);
+  const tone = hitPct >= 30 || traceCount > 0 ? GREEN : GRAY;
 
   return (
     <FrostCard
-      title="OPC"
-      accessory={<StatusDot color={tone} label={fresh ? '邊緣' : reachable ? '連線' : '離線'} />}
+      title="系統指標"
+      accessory={<StatusDot color={tone} label={hitPct >= 30 ? '快取活躍' : '累積中'} />}
     >
       <div className="grid grid-cols-3 gap-4 py-2">
         {[
-          { label: '連線', value: reachable ? 'ON' : 'OFF', c: reachable ? GREEN : GRAY },
-          { label: '讀取', value: String(readings), c: readings > 0 ? BLUE : GRAY },
-          { label: '攔截', value: String(blocked), c: blocked > 0 ? RED : GRAY },
+          { label: '快取', value: `${hitPct}%`, c: hitPct >= 30 ? GREEN : GRAY },
+          { label: '成功率', value: `${successRate}%`, c: successRate >= 80 ? GREEN : ORANGE },
+          { label: 'Trace', value: String(traceCount), c: traceCount > 0 ? BLUE : GRAY },
         ].map((cell) => (
           <div key={cell.label} className="text-center">
             <p className="apple-title !normal-case !tracking-normal">{cell.label}</p>
@@ -299,6 +298,9 @@ function OpcCard({ feed }: { feed: AnimLiveFeed }) {
           </div>
         ))}
       </div>
+      {satisfaction > 0 && (
+        <p className="mt-1 text-center text-[10px] text-[#98989D]">滿意度 {satisfaction}%</p>
+      )}
     </FrostCard>
   );
 }
@@ -520,7 +522,7 @@ export default function LiveBoard({
             </div>
             <CompanyCard feed={feed} />
             <BudgetCard feed={feed} />
-            <OpcCard feed={feed} />
+            <SystemMetricsCard feed={feed} />
             <div className="lb-span-2">
               <EventsCard feed={feed} />
             </div>

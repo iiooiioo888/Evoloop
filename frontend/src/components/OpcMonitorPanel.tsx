@@ -1,8 +1,8 @@
 /**
- * OpcMonitorPanel — 監控中心 OPC 工業監控。
+ * OpcMonitorPanel — 已棄用：監控中心「系統指標」請用 SystemMetricsPanel。
  *
- * 即時標籤、6 級閉環、審計日誌、寫入護欄。opc_service 離線時
- * 仍顯示目錄與護欄，不得退化成「請去對話頁」占位。
+ * 本元件保留供 opc_service 工業任務路徑（閥位、馬達等）除錯；
+ * 不再掛載於監控中心主分頁。系統運行指標見 GET /monitor/optimization。
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchOpcMonitor } from '../api/client';

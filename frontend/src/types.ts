@@ -790,6 +790,9 @@ export interface OptimizationMonitorData {
     pass_threshold: number;
     max_iterations: number;
     min_score_improvement: number;
+    dynamic_threshold?: Record<string, unknown>;
+    sample_threshold_simple?: number;
+    sample_threshold_complex?: number;
   };
   merge_review_synth: { enabled: boolean };
   llm_cache: {
@@ -809,12 +812,40 @@ export interface OptimizationMonitorData {
     company_avg_score: number;
     adaptive_length_threshold: number;
   };
-  opc_edge: {
+  user_feedback?: {
+    total: number;
+    satisfaction_rate: number;
+    thumbs_up: number;
+    thumbs_down: number;
+  };
+  edge_cache?: {
+    source?: string;
+    tier: string;
+    edge_ttl_sec: number;
+    max_size?: number;
+    hit_rate?: number;
+    cache_age_sec: number | null;
+    cache_fresh: boolean;
+    entry_count: number;
+    reading_count?: number;
+  };
+  /** @deprecated 請改用 edge_cache；保留向後相容 */
+  opc_edge?: {
     tier: string;
     edge_ttl_sec: number;
     cache_age_sec: number | null;
     cache_fresh: boolean;
     reading_count: number;
+    entry_count?: number;
+  };
+  system_stats?: {
+    tasks_total: number;
+    tasks_running: number;
+    tasks_completed: number;
+    tasks_failed: number;
+    success_rate: number;
+    avg_score: number | null;
+    total_iterations: number;
   };
   trace: { trace_count: number; recent: Array<{ task_id?: string; event_count?: number }> };
 }

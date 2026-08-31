@@ -23,12 +23,36 @@ logger = logging.getLogger(__name__)
 _memory_store = VectorMemoryStore()
 
 
+def _compress_history_turn(content: str, max_chars: int = 80) -> str:
+    """將較早的對話輪次壓縮為一行摘要。"""
+    text = (content or "").replace("\n", " ").strip()
+    if len(text) <= max_chars:
+        return text
+    return text[: max_chars - 1] + "…"
+
+
 def _format_history(history: list[dict[str, str]]) -> str:
-    """將多輪對話歷史格式化為 Prompt 區塊。"""
+    """將多輪對話歷史格式化為 Prompt 區塊（含壓縮機制）。
+
+    - 超過 6 輪或總字數 > 3000 時，較早輪次壓縮為摘要行
+    - 最近 4 輪保留完整內容
+    """
     if not history:
         return ""
+    total_chars = sum(len(t.get("content", "")) for t in history)
+    need_compress = len(history) > 6 or total_chars > 3000
+
     lines = ["【對話歷史】"]
-    for turn in history[-6:]:  # 最多帶入最近 6 輪
+    if need_compress and len(history) > 4:
+        older = history[:-4]
+        for turn in older:
+            role = "使用者" if turn.get("role") == "user" else "助手"
+            lines.append(f"{role}（摘要）：{_compress_history_turn(turn.get('content', ''))}")
+        recent = history[-4:]
+    else:
+        recent = history[-6:]
+
+    for turn in recent:
         role = "使用者" if turn.get("role") == "user" else "助手"
         lines.append(f"{role}：{turn.get('content', '')}")
     return "\n".join(lines) + "\n"
@@ -118,21 +142,44 @@ def evaluate_answer(state: EvoLoopState) -> dict:
     }
 
 
+def _search_reflection_hints(query: str) -> str:
+    """從向量記憶庫檢索相似問題的歷史反思，供復用。"""
+    if not query:
+        return ""
+    try:
+        results = _memory_store.search_similar(query, k=2)
+        hints: list[str] = []
+        for item in results:
+            meta = item.get("metadata") or {}
+            if meta.get("type") != "reflection":
+                continue
+            text = item.get("text", "")
+            if "反思：" in text:
+                hints.append(text.split("反思：", 1)[1].split("\n", 1)[0][:300])
+        if hints:
+            return "【可參考的歷史反思】\n" + "\n".join(f"- {h}" for h in hints) + "\n"
+    except Exception as exc:
+        logger.debug("反思復用檢索跳過：%s", exc)
+    return ""
+
+
 def reflect(state: EvoLoopState) -> dict:
     """節點 3：針對低分回答進行反思（優化 #4：分層反思）。
 
     分層策略：
     - 低分（< 5）：深度反思，傳入完整多維度評估 + 強調根因分析
     - 中分（5-8）：表面修正，傳入摘要評估 + 聚焦具體改進點
+    - 相似問題的歷史反思可注入為參考（反思結果復用）
     """
     score = state.get("score", 0.0)
     multi_dim = state.get("multi_dim_evaluation", {})
+    reflection_hints = _search_reflection_hints(state.get("query", ""))
 
     # 分層反思：根據分數選擇反思深度
     if score < 5.0:
         # 深度反思：傳入完整多維度評估細節
         eval_detail = json.dumps(multi_dim, ensure_ascii=False) if multi_dim else json.dumps(state.get("evaluation", {}), ensure_ascii=False)
-        prompt = templates.REFLECT.format(
+        prompt = reflection_hints + templates.REFLECT.format(
             query=state["query"],
             answer=state["current_answer"],
             score=score,
@@ -151,7 +198,7 @@ def reflect(state: EvoLoopState) -> dict:
             eval_detail = json.dumps(eval_summary, ensure_ascii=False)
         else:
             eval_detail = json.dumps(state.get("evaluation", {}), ensure_ascii=False)
-        prompt = templates.REFLECT.format(
+        prompt = reflection_hints + templates.REFLECT.format(
             query=state["query"],
             answer=state["current_answer"],
             score=score,

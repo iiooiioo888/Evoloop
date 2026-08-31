@@ -1,6 +1,6 @@
 /**
  * ChatLiveRail — 對話頁右側即時監控欄。
- * 呈現 Agent／雲端帳單／LLM／OPC／Docker 等多源卡片。
+ * 呈現 Agent／雲端帳單／LLM／系統指標／Docker 等多源卡片。
  * 即時動態由上方 LiveBoard 一次呈現，此處不再重複場景切換。
  */
 import { useMemo } from 'react';
@@ -58,7 +58,7 @@ export default function ChatLiveRail({
   messages = [],
   compact,
 }: ChatLiveRailProps) {
-  const { agents, billing, llmOps, opc, docker, optimization, cloudLatest, memoryCount, updatedAt, error, refresh } =
+  const { agents, billing, llmOps, docker, optimization, cloudLatest, memoryCount, updatedAt, error, refresh } =
     monitor;
   const summary = agents?.summary;
   const liveAgents = useMemo(() => {
@@ -115,13 +115,12 @@ export default function ChatLiveRail({
   const agentTotal = summary?.total_cost_usd ?? apiTotal + cloudTotal;
   const dockerRunning = docker?.containers?.filter((c) => c.status?.toLowerCase().includes('running')).length ?? 0;
   const dockerTotal2 = docker?.containers?.length ?? 0;
-  const opcOk = opc?.live?.reachable && opc?.live?.health?.opc_connected;
   const llmOk = llmOps?.configured && !llmOps?.ops?.stale && llmOps?.ops?.consecutive_fail === 0;
-  const opcReadings = opc?.live?.readings?.slice(0, 4) ?? [];
   const cacheHitPct = Math.round((optimization?.llm_cache.hit_rate ?? 0) * 100);
   const routingThreshold = optimization?.routing_feedback.adaptive_length_threshold;
   const traceCount = optimization?.trace.trace_count ?? 0;
-  const opcEdgeFresh = optimization?.opc_edge.cache_fresh;
+  const successRate = optimization?.system_stats?.success_rate ?? 0;
+  const edgeFresh = (optimization?.edge_cache ?? optimization?.opc_edge)?.cache_fresh;
   return (
     <aside
       className={`apple-canvas flex min-h-0 flex-col gap-4 overflow-y-auto overscroll-contain border-l border-white/[0.08] p-4 ${
@@ -161,12 +160,12 @@ export default function ChatLiveRail({
             }
           />
           <HealthPill
-            label="OPC 工業"
-            ok={opcOk ? true : opc?.live?.reachable === false ? false : null}
+            label="系統指標"
+            ok={cacheHitPct > 0 || traceCount > 0 ? true : optimization ? false : null}
             detail={
-              opcOk
-                ? `${opc?.live?.readings?.length ?? 0} 標籤讀取中`
-                : opc?.live?.error || (opc?.guard?.sim_enabled ? '模擬模式' : '未連線')
+              optimization
+                ? `快取 ${cacheHitPct}% · 成功率 ${successRate}% · Trace ${traceCount}`
+                : '載入中'
             }
           />
           <HealthPill
@@ -210,7 +209,7 @@ export default function ChatLiveRail({
             <MiniKpi
               label="Trace"
               value={String(traceCount)}
-              hint={opcEdgeFresh ? 'OPC 邊緣有效' : 'OPC 雲端拉取'}
+              hint={edgeFresh ? '邊緣快取有效' : '雲端拉取'}
               accent="cyan"
             />
           </div>
@@ -272,15 +271,18 @@ export default function ChatLiveRail({
           </div>
         </MonitorSection>
       )}
-      {opcReadings.length > 0 && (
-        <MonitorSection title="OPC 感測" hint={`${opcReadings.length} 標籤`}>
+      {(cacheHitPct > 0 || successRate > 0) && (
+        <MonitorSection title="系統指標" hint="運行時">
           <div className="space-y-1">
-            {opcReadings.map((r, i) => (
-              <div key={`${r.tag_name}-${i}`} className="flex items-center justify-between gap-2 text-[11px]">
-                <span className="truncate text-gray-400">{r.tag_name?.split('.').pop() ?? r.tag_name}</span>
-                <span className="shrink-0 font-mono text-cyan-300/90">
-                  {typeof r.value === 'number' ? r.value.toFixed(2) : String(r.value ?? '—')}
-                </span>
+            {[
+              { label: 'LLM 快取命中', value: `${cacheHitPct}%` },
+              { label: '任務成功率', value: `${successRate}%` },
+              { label: '路由門檻', value: routingThreshold != null ? String(routingThreshold) : '—' },
+              { label: 'Trace 筆數', value: String(traceCount) },
+            ].map((row) => (
+              <div key={row.label} className="flex items-center justify-between gap-2 text-[11px]">
+                <span className="truncate text-gray-400">{row.label}</span>
+                <span className="shrink-0 font-mono text-cyan-300/90">{row.value}</span>
               </div>
             ))}
           </div>

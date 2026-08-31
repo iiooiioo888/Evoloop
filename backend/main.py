@@ -145,6 +145,13 @@ class TaskRequest(BaseModel):
     options: dict[str, Any] = {}
 
 
+class FeedbackRequest(BaseModel):
+    session_id: str
+    signal: str  # thumbs_up | thumbs_down | copy | edit
+    score: float | None = None
+    query_length: int = 0
+    comment: str = ""
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
@@ -205,6 +212,32 @@ async def monitor_llm_ops():
 async def monitor_optimization():
     """監控中心：P0–P3 性能優化路線圖運行時指標。"""
     return collect_optimization_monitor()
+
+
+@app.post("/feedback")
+async def submit_feedback(body: FeedbackRequest):
+    """收集用戶顯式/隱式反饋，供反思策略自適應調整。"""
+    from backend.core.user_feedback import record_feedback
+
+    allowed = {"thumbs_up", "thumbs_down", "copy", "edit"}
+    if body.signal not in allowed:
+        return {"ok": False, "error": f"signal 必須為 {allowed}"}
+    entry = record_feedback(
+        session_id=body.session_id,
+        signal=body.signal,  # type: ignore[arg-type]
+        score=body.score,
+        query_length=body.query_length,
+        comment=body.comment,
+    )
+    return {"ok": True, "record": entry}
+
+
+@app.get("/feedback/stats")
+async def feedback_stats():
+    """用戶反饋統計摘要。"""
+    from backend.core.user_feedback import feedback_stats as _stats
+
+    return _stats()
 
 
 @app.get("/monitor/hub-snapshot")

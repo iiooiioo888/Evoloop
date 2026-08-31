@@ -8,7 +8,6 @@ import {
   fetchDashboard,
   fetchHubMonitor,
   fetchLlmOps,
-  fetchOpcMonitor,
   fetchOptimizationMonitor,
   MonitorHubWebSocket,
 } from '../api/client';
@@ -17,10 +16,9 @@ import { useMonitorStore } from '../stores/monitorStore';
 const POLL_MS = 8000;
 
 async function pullRestSnapshot() {
-  const [agents, optimization, opc, billing, llmOps, hub, dashboard] = await Promise.all([
+  const [agents, optimization, billing, llmOps, hub, dashboard] = await Promise.all([
     fetchAgentMonitor().catch(() => null),
     fetchOptimizationMonitor().catch(() => null),
-    fetchOpcMonitor().catch(() => null),
     fetchCloudBilling().catch(() => null),
     fetchLlmOps().catch(() => null),
     fetchHubMonitor().catch(() => null),
@@ -29,7 +27,6 @@ async function pullRestSnapshot() {
   useMonitorStore.getState().applySnapshot({
     agents,
     optimization,
-    opc,
     billing,
     llmOps,
     hub,
@@ -73,7 +70,6 @@ export function useMonitorHub(enabled = true) {
           useMonitorStore.getState().applySnapshot({
             agents: (snap.agents as never) ?? null,
             optimization: (snap.optimization as never) ?? null,
-            opc: (snap.opc as never) ?? null,
             billing: (snap.billing as never) ?? null,
             llmOps: (snap.llm_ops as never) ?? null,
             hub: (snap.hub as never) ?? null,

@@ -29,7 +29,7 @@ export default function OptimizationPanel() {
   const cache = data?.llm_cache;
   const hitPct = Math.round((cache?.hit_rate ?? 0) * 100);
   const routing = data?.routing_feedback;
-  const opc = data?.opc_edge;
+  const edgeCache = data?.edge_cache ?? data?.opc_edge;
 
   return (
     <div className="mt-6 border-t border-white/[0.08] pt-5">
@@ -37,7 +37,7 @@ export default function OptimizationPanel() {
         <div>
           <h3 className="text-sm font-semibold text-[#f7f8f8]">性能優化路線圖</h3>
           <p className="mt-0.5 text-[11px] text-[#8a8f98]">
-            P0 任務-模型匹配 · 反思早停 · P1 合併審查 · 分層快取 · P2 路由反饋 · OPC 邊緣 · P3 Trace
+            P0 任務-模型匹配 · 反思早停 · P1 合併審查 · 分層快取 · P2 路由反饋 · 邊緣快取 · P3 Trace
           </p>
         </div>
         <button
@@ -89,12 +89,13 @@ export default function OptimizationPanel() {
           <p className="mt-0.5 text-[11px] text-[#8a8f98]">EVOL_MERGE_REVIEW_SYNTH</p>
         </div>
         <div className="apple-card apple-card--tight !p-0 px-3 py-2.5">
-          <p className="text-[10px] uppercase tracking-wider text-[#62666d]">OPC 邊緣層</p>
+          <p className="text-[10px] uppercase tracking-wider text-[#62666d]">分層快取</p>
           <p className="mt-1 text-sm text-[#f7f8f8]">
-            {opc?.tier ?? 'auto'} · TTL {opc?.edge_ttl_sec ?? 5}s
+            {edgeCache?.tier ?? 'exact'} · TTL {edgeCache?.edge_ttl_sec ?? 3600}s
           </p>
-          <p className={`mt-0.5 text-[11px] ${opc?.cache_fresh ? 'text-[#4cc38a]' : 'text-[#8a8f98]'}`}>
-            {opc?.cache_fresh ? '邊緣快取有效' : '需雲端拉取'} · {opc?.reading_count ?? 0} 標籤
+          <p className={`mt-0.5 text-[11px] ${edgeCache?.cache_fresh ? 'text-[#4cc38a]' : 'text-[#8a8f98]'}`}>
+            {edgeCache?.entry_count ?? 0}/{edgeCache?.max_size ?? 512} 項 · 命中{' '}
+            {Math.round((edgeCache?.hit_rate ?? 0) * 100)}%
           </p>
         </div>
       </div>

@@ -7,7 +7,6 @@ import type {
   ChatMessage,
   CloudBilling,
   LlmOpsData,
-  OpcMonitorData,
   OptimizationMonitorData,
   RoleAgent,
   TaskProgress,
@@ -18,7 +17,7 @@ export type AnimScene =
   | 'company'
   | 'report'
   | 'budget'
-  | 'opc'
+  | 'metrics'
   | 'balancer';
 
 export interface AnimReportLine {
@@ -45,7 +44,6 @@ export interface AnimLiveFeed {
   agents: RoleAgent[];
   summary?: AgentMonitorData['summary'] | null;
   optimization?: OptimizationMonitorData | null;
-  opc?: OpcMonitorData | null;
   billing?: CloudBilling | null;
   llmOps?: LlmOpsData | null;
   updatedAt?: string | null;
@@ -200,7 +198,6 @@ function activeTaskFromMessages(messages: ChatMessage[]): TaskProgress | null {
 export function buildAnimLiveFeed(opts: {
   agents?: AgentMonitorData | null;
   optimization?: OptimizationMonitorData | null;
-  opc?: OpcMonitorData | null;
   billing?: CloudBilling | null;
   llmOps?: LlmOpsData | null;
   messages?: ChatMessage[];
@@ -231,7 +228,6 @@ export function buildAnimLiveFeed(opts: {
     agents: roster,
     summary: opts.agents?.summary ?? null,
     optimization: opts.optimization ?? null,
-    opc: opts.opc ?? null,
     billing: opts.billing ?? null,
     llmOps: opts.llmOps ?? null,
     updatedAt: opts.updatedAt ?? null,

@@ -15,7 +15,6 @@ interface PipelineViewProps {
 export default function PipelineView({ onGoTasks }: PipelineViewProps) {
   const agents = useMonitorStore((s) => s.agents);
   const optimization = useMonitorStore((s) => s.optimization);
-  const opc = useMonitorStore((s) => s.opc);
   const billing = useMonitorStore((s) => s.billing);
   const llmOps = useMonitorStore((s) => s.llmOps);
 
@@ -24,11 +23,10 @@ export default function PipelineView({ onGoTasks }: PipelineViewProps) {
       buildAnimLiveFeed({
         agents,
         optimization,
-        opc,
         billing,
         llmOps,
       }),
-    [agents, optimization, opc, billing, llmOps],
+    [agents, optimization, billing, llmOps],
   );
 
   const phase = feed.streamPhase || feed.taskPhase;

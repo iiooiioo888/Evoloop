@@ -118,6 +118,11 @@ class LLMCache:
     def stats(self) -> dict[str, int]:
         return dict(self._stats)
 
+    @property
+    def size(self) -> int:
+        """目前快取條目數（精確 + 語義）。"""
+        return len(self._exact) + len(self._semantic)
+
     # ── 內部方法 ──
 
     @staticmethod

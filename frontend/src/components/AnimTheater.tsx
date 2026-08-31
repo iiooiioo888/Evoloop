@@ -36,7 +36,7 @@ const SCENES: Array<{ key: AnimScene; label: string }> = [
   { key: 'company', label: '協作' },
   { key: 'report', label: '事件' },
   { key: 'budget', label: '預算' },
-  { key: 'opc', label: 'OPC' },
+  { key: 'metrics', label: '指標' },
   { key: 'balancer', label: '路由' },
 ];
 
@@ -427,7 +427,7 @@ function BudgetScene({
   );
 }
 
-function OpcScene({
+function MetricsScene({
   variant,
   feed,
 }: {
@@ -435,62 +435,63 @@ function OpcScene({
   feed?: AnimLiveFeed | null;
 }) {
   const compact = variant === 'compact';
-  const edge = feed?.optimization?.opc_edge;
-  const opc = feed?.opc;
-  const fresh = edge?.cache_fresh ?? false;
-  const reachable = Boolean(opc?.live?.reachable && opc?.live?.health?.opc_connected);
-  const readings = edge?.reading_count ?? opc?.live?.readings?.length ?? 0;
-  const blocked = opc?.audit?.summary?.blocked ?? 0;
-  const edgeHit = fresh || (reachable && readings > 0);
+  const opt = feed?.optimization;
+  const cache = opt?.llm_cache;
+  const edge = opt?.edge_cache ?? opt?.opc_edge;
+  const hitPct = Math.round((cache?.hit_rate ?? 0) * 100);
+  const traceCount = opt?.trace.trace_count ?? 0;
+  const successRate = opt?.system_stats?.success_rate ?? 0;
+  const cacheActive = hitPct > 0 || (edge?.entry_count ?? 0) > 0;
+  const traceActive = traceCount > 0;
 
-  const caption = fresh
-    ? `邊緣 · TTL ${edge?.edge_ttl_sec ?? '—'}s · ${readings}`
-    : reachable
-      ? `連線 · 攔截 ${blocked}`
-      : '離線';
+  const caption = cacheActive
+    ? `快取 ${hitPct}% · ${edge?.entry_count ?? 0} 項`
+    : traceActive
+      ? `Trace ${traceCount} 筆`
+      : '待命中';
 
   return (
     <StageShell variant={variant} caption={caption}>
       <div className={`flex flex-1 items-center justify-around pb-5 ${compact ? 'px-1' : 'px-6'}`}>
         <div
           className={`rounded-2xl border px-3 py-3 text-center ${
-            reachable ? 'border-[#64D2FF]/40 bg-[#64D2FF]/10' : 'border-white/10'
+            cacheActive ? 'border-[#64D2FF]/40 bg-[#64D2FF]/10' : 'border-white/10'
           }`}
         >
-          <p className="text-[10px] text-[#64D2FF]">感測</p>
+          <p className="text-[10px] text-[#64D2FF]">快取</p>
           <p className={`font-mono ${compact ? 'text-sm' : 'text-lg'} text-white`}>
-            {reachable ? 'ON' : 'OFF'}
+            {hitPct}%
           </p>
         </div>
         <div className="flex flex-col items-center gap-1">
           <div
             className={`h-0.5 ${compact ? 'w-10' : 'w-16'}`}
-            style={{ background: edgeHit ? '#34C759' : reachable ? '#FF9500' : '#636366' }}
+            style={{ background: traceActive ? '#34C759' : cacheActive ? '#FF9500' : '#636366' }}
           />
           <span
             className="rounded-full px-1.5 py-0.5 text-[8px] text-white"
-            style={{ background: edgeHit ? '#34C759' : reachable ? '#FF9500' : '#636366' }}
+            style={{ background: traceActive ? '#34C759' : cacheActive ? '#FF9500' : '#636366' }}
           >
-            {edgeHit ? 'edge' : reachable ? 'miss' : 'idle'}
+            {traceActive ? 'trace' : cacheActive ? 'hit' : 'idle'}
           </span>
         </div>
         <div
           className={`rounded-2xl border px-3 py-3 text-center ${
-            edgeHit
+            successRate >= 80
               ? 'border-[#34C759]/40 bg-[#34C759]/10'
-              : reachable
+              : successRate > 0
                 ? 'border-[#FF9500]/40 bg-[#FF9500]/10'
                 : 'border-white/10'
           }`}
         >
           <p
             className="text-[10px]"
-            style={{ color: edgeHit ? '#34C759' : reachable ? '#FF9500' : '#8E8E93' }}
+            style={{ color: successRate >= 80 ? '#34C759' : successRate > 0 ? '#FF9500' : '#8E8E93' }}
           >
-            {edgeHit ? '邊緣' : '雲端'}
+            成功率
           </p>
           <p className={`font-mono ${compact ? 'text-sm' : 'text-lg'} text-white`}>
-            {edgeHit ? `TTL ${edge?.edge_ttl_sec ?? '—'}` : '—'}
+            {successRate}%
           </p>
         </div>
       </div>
@@ -598,7 +599,7 @@ export default function AnimTheater({
         {scene === 'budget' && (
           <BudgetScene variant={variant} motion={motionActive} feed={feed} />
         )}
-        {scene === 'opc' && <OpcScene variant={variant} feed={feed} />}
+        {scene === 'metrics' && <MetricsScene variant={variant} feed={feed} />}
         {scene === 'balancer' && (
           <StageRouterLive
             variant={dense ? 'compact' : page ? 'page' : 'full'}

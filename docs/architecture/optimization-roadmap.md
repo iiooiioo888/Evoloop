@@ -11,8 +11,11 @@
 | **P1** | Reviewer + Synthesizer 合并 | 延迟降低 ~25% | ✅ 已实现 |
 | **P1** | 分层缓存 | 命中率提升 | ✅ 已实现 |
 | **P2** | 路由自适应反馈 | 长期质量提升 | ✅ 已实现 |
-| **P2** | OPC UA 边缘-云分层 | 工业场景延迟可控 | ✅ 已实现 |
+| **P2** | 邊緣快取層 | 相似請求延遲可控 | ✅ 已实现 |
 | **P3** | 可观测性全链路 trace | 为后续优化提供数据基础 | ✅ 已实现 |
+| **P3** | 动态反思阈值 | 简单任务减少过度反思 | ✅ 已实现 |
+| **P3** | 用户反馈闭环 | 驱动策略自适应 | ✅ 已实现 |
+| **P3** | Docker 资源限制 | 部署环境稳定性 | ✅ 已实现 |
 
 ---
 
@@ -102,15 +105,37 @@ EVOL_ROUTING_LENGTH_BIAS=0
 
 ---
 
-## P2：OPC UA 边缘-云分层
+## P2：邊緣快取層
 
-**模块**：`opc_service/sense.py`
+監控中心「系統指標」彙總的是 **EvoLoop 自身運行狀態**（快取命中率、反思輪次、路由門檻、Trace、任務成功率等），**不是** OPC UA 工業現場感測。
 
-| 模式 | 行为 |
+- **前端**：`SystemMetricsPanel`（分頁鍵 `metrics`）· `GET /monitor/optimization`
+- **工業 OPC 任務路徑**（閥位、馬達等感測標籤）僅在 `resolved_path === 'opc'` 時由 `opc_service` 處理，與監控中心系統指標無關
+
+### 系統分層快取（監控 API）
+
+**模組**：`backend/services/optimization_monitor.py` → `_layered_cache_status()`
+
+反映 `backend/core/llm_cache.py` 精確 + 語義快取條目數與命中率，供 `GET /monitor/optimization` 與「系統指標」分頁使用。
+
+```env
+EVOL_LLM_CACHE_SIZE=512
+EVOL_LLM_CACHE_TTL=3600
+EVOL_SEMANTIC_CACHE=true
+EVOL_SEMANTIC_THRESHOLD=0.92
+```
+
+### OPC 工業邊緣快取（僅工業任務路徑）
+
+**模組**：`opc_service/sense.py`
+
+僅在 `route_by_complexity` 走 OPC 6 級閉環時使用，與系統指標監控無關。
+
+| 模式 | 行為 |
 |------|------|
-| `auto` | 边缘缓存 TTL 内复用，否则云拉取 |
-| `edge` | 仅使用本地缓存 |
-| `cloud` | 始终 HTTP 拉取 OPC 微服务 |
+| `auto` | 邊緣快取 TTL 內復用，否則雲拉取 |
+| `edge` | 僅使用本地快取 |
+| `cloud` | 始終 HTTP 拉取 OPC 微服務 |
 
 ```env
 EVOL_OPC_TIER=auto
@@ -128,6 +153,52 @@ EVOL_OPC_EDGE_CACHE=opc_service/data/edge_cache.json
 - `backend/core/pipeline_trace.py` — LangGraph 节点事件
 
 节点在 `session_id` / `task_id` 存在时自动写入 trace，供监控面板与后续分析使用。
+
+---
+
+## P3：动态反思阈值
+
+**模块**：`backend/core/dynamic_threshold.py`
+
+依任务复杂度与用户满意度自适应调整 `EVOL_PASS_THRESHOLD`：
+
+| 场景 | 行为 |
+|------|------|
+| 短查询（< 80 字）且无复杂关键词 | 门槛降低（默认 -0.5） |
+| 长查询或含开发/架构关键词 | 门槛提高（默认 +0.3） |
+| simple 路由历史低分率高 | 略提高门槛 |
+| 用户满意度低 | 略提高门槛 |
+
+```env
+EVOL_PASS_THRESHOLD=8
+EVOL_THRESHOLD_SIMPLE_BIAS=-0.5
+EVOL_THRESHOLD_COMPLEX_BIAS=0.3
+EVOL_THRESHOLD_MIN=6.5
+EVOL_THRESHOLD_MAX=9.0
+```
+
+---
+
+## P3：用户反馈闭环
+
+**模块**：`backend/core/user_feedback.py`
+
+- `POST /feedback` — 收集 thumbs_up / thumbs_down / copy / edit
+- `GET /feedback/stats` — 满意度统计
+- 反馈数据影响动态阈值微调
+
+```env
+EVOL_USER_FEEDBACK_PATH=backend/data/user_feedback.json
+EVOL_USER_FEEDBACK_MAX=500
+```
+
+---
+
+## P3：Docker 资源限制
+
+**文件**：`docker-compose.yml`
+
+各服务已配置 `deploy.resources.limits`（CPU / 内存），避免容器争抢导致性能波动。
 
 ---
 

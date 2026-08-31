@@ -1,19 +1,22 @@
-"""性能優化監控聚合（P0–P3 路線圖可觀測性）。
+"""性能優化與系統指標監控聚合（P0–P3 路線圖可觀測性）。
 
 供 GET /monitor/optimization 使用，彙總各優化模組的運行時狀態與指標。
+此處「指標」指 EvoLoop 自身系統狀態（快取、反思、路由、Trace 等），
+非 OPC UA 工業現場感測。
 """
 
 from __future__ import annotations
 
 import os
-import time
-from pathlib import Path
 from typing import Any
 
+from backend.core.dynamic_threshold import resolve_pass_threshold, threshold_config
 from backend.core.graph import MAX_ITERATIONS, MIN_SCORE_IMPROVEMENT, PASS_THRESHOLD
 from backend.core.llm_cache import get_llm_cache
 from backend.core.routing_feedback import routing_stats
 from backend.core.stage_router import stage_tier, resolve_stage_model
+from backend.core.user_feedback import feedback_stats as user_feedback_stats
+from backend.services.task_manager import task_manager
 
 
 def _cache_hit_rate(stats: dict[str, int]) -> float:
@@ -23,38 +26,55 @@ def _cache_hit_rate(stats: dict[str, int]) -> float:
     return round(stats["hits"] / total, 4)
 
 
-def _opc_edge_status() -> dict[str, Any]:
-    tier = os.getenv("EVOL_OPC_TIER", "auto").lower()
-    ttl = float(os.getenv("EVOL_OPC_EDGE_TTL", "5"))
-    cache_path = Path(
-        os.getenv(
-            "EVOL_OPC_EDGE_CACHE",
-            str(Path(__file__).resolve().parents[2] / "opc_service" / "data" / "edge_cache.json"),
-        )
-    )
-    age_sec: float | None = None
-    reading_count = 0
-    if cache_path.exists():
-        try:
-            import json
-
-            data = json.loads(cache_path.read_text(encoding="utf-8"))
-            updated = float(data.get("updated_at") or 0)
-            if updated > 0:
-                age_sec = round(time.time() - updated, 1)
-            readings = data.get("readings") or {}
-            if isinstance(readings, dict):
-                reading_count = len(readings)
-        except Exception:
-            pass
-    fresh = age_sec is not None and age_sec <= ttl
+def _system_task_stats() -> dict[str, Any]:
+    """從任務管理器彙總運行時指標（唯讀、降級安全）。"""
+    try:
+        tasks = list(task_manager.tasks.values())
+    except Exception:
+        return {
+            "tasks_total": 0,
+            "tasks_running": 0,
+            "tasks_completed": 0,
+            "tasks_failed": 0,
+            "success_rate": 0.0,
+            "avg_score": None,
+            "total_iterations": 0,
+        }
+    completed = [t for t in tasks if t.status == "completed"]
+    failed = [t for t in tasks if t.status == "failed"]
+    running = [t for t in tasks if t.status in ("running", "pending")]
+    scored = [t.score for t in completed if isinstance(t.score, (int, float))]
     return {
-        "tier": tier,
+        "tasks_total": len(tasks),
+        "tasks_running": len(running),
+        "tasks_completed": len(completed),
+        "tasks_failed": len(failed),
+        "success_rate": round(len(completed) / len(tasks) * 100, 1) if tasks else 0.0,
+        "avg_score": round(sum(scored) / len(scored), 2) if scored else None,
+        "total_iterations": sum(int(t.iteration or 0) for t in tasks),
+    }
+
+
+def _layered_cache_status() -> dict[str, Any]:
+    """系統分層快取狀態（LLM 精確 + 語義），非 OPC UA 工業感測。"""
+    cache = get_llm_cache()
+    stats = cache.stats
+    max_size = int(os.getenv("EVOL_LLM_CACHE_SIZE", "512"))
+    ttl = int(os.getenv("EVOL_LLM_CACHE_TTL", "3600"))
+    semantic_on = os.getenv("EVOL_SEMANTIC_CACHE", "true").lower() == "true"
+    entry_count = cache.size
+    hit_rate = _cache_hit_rate(stats)
+    active = entry_count > 0 or stats.get("hits", 0) > 0
+    return {
+        "source": "llm_cache",
+        "tier": "semantic+exact" if semantic_on else "exact",
         "edge_ttl_sec": ttl,
-        "cache_path": str(cache_path),
-        "cache_age_sec": age_sec,
-        "cache_fresh": fresh,
-        "reading_count": reading_count,
+        "max_size": max_size,
+        "cache_age_sec": None,
+        "cache_fresh": active,
+        "entry_count": entry_count,
+        "hit_rate": hit_rate,
+        "reading_count": entry_count,  # 向後相容舊前端欄位
     }
 
 
@@ -92,12 +112,17 @@ def collect_optimization_monitor() -> dict[str, Any]:
 
     stage_mapping = _stage_routing()
     trace_summary = _trace_summary()
-    opc_status = _opc_edge_status()
+    edge_cache = _layered_cache_status()
+    system_stats = _system_task_stats()
     reflection_cfg = {
         "pass_threshold": PASS_THRESHOLD,
+        "dynamic_threshold": threshold_config(),
+        "sample_threshold_simple": resolve_pass_threshold("你好"),
+        "sample_threshold_complex": resolve_pass_threshold("請設計並實現一個完整的微服務系統架構"),
         "max_iterations": MAX_ITERATIONS,
         "min_score_improvement": MIN_SCORE_IMPROVEMENT,
     }
+    user_fb = user_feedback_stats()
 
     roadmap = [
         {
@@ -108,6 +133,18 @@ def collect_optimization_monitor() -> dict[str, Any]:
             "enabled": True,
             "status": "active",
             "metric": f"{len(stage_mapping)} 環節已路由",
+        },
+        {
+            "priority": "P0",
+            "id": "dynamic_threshold",
+            "label": "動態反思閾值",
+            "benefit": "簡單任務減少不必要反思",
+            "enabled": True,
+            "status": "active",
+            "metric": (
+                f"簡單 {reflection_cfg['sample_threshold_simple']} · "
+                f"複雜 {reflection_cfg['sample_threshold_complex']}"
+            ),
         },
         {
             "priority": "P0",
@@ -154,14 +191,26 @@ def collect_optimization_monitor() -> dict[str, Any]:
         },
         {
             "priority": "P2",
-            "id": "opc_edge",
-            "label": "OPC UA 邊緣-雲分層",
-            "benefit": "工業場景延遲可控",
+            "id": "edge_cache",
+            "label": "分層快取（系統）",
+            "benefit": "相似 prompt 本地復用",
             "enabled": True,
             "status": "active",
             "metric": (
-                f"{'邊緣快取' if opc_status.get('cache_fresh') else '雲端拉取'} · "
-                f"{opc_status.get('reading_count', 0)} 標籤"
+                f"命中 {edge_cache.get('hit_rate', 0) * 100:.0f}% · "
+                f"{edge_cache.get('entry_count', 0)}/{edge_cache.get('max_size', 512)} 項"
+            ),
+        },
+        {
+            "priority": "P3",
+            "id": "user_feedback",
+            "label": "用戶反饋閉環",
+            "benefit": "驅動策略自適應",
+            "enabled": True,
+            "status": "active" if user_fb.get("total", 0) >= 1 else "idle",
+            "metric": (
+                f"滿意度 {user_fb.get('satisfaction_rate', 0) * 100:.0f}% · "
+                f"n={user_fb.get('total', 0)}"
             ),
         },
         {
@@ -187,6 +236,9 @@ def collect_optimization_monitor() -> dict[str, Any]:
             "max_size": int(os.getenv("EVOL_LLM_CACHE_SIZE", "512")),
         },
         "routing_feedback": routing,
-        "opc_edge": opc_status,
+        "user_feedback": user_fb,
+        "edge_cache": edge_cache,
+        "opc_edge": edge_cache,  # 向後相容舊前端欄位
+        "system_stats": system_stats,
         "trace": trace_summary,
     }

@@ -15,7 +15,7 @@ import ErrorState from './ui/ErrorState';
 const AgentsMonitorPanel = lazy(() => import('./AgentsMonitorPanel'));
 const TasksMonitorPanel = lazy(() => import('./TasksMonitorPanel'));
 const PipelineView = lazy(() => import('./PipelineView'));
-const OpcMonitorPanel = lazy(() => import('./OpcMonitorPanel'));
+const SystemMetricsPanel = lazy(() => import('./SystemMetricsPanel'));
 const LabPanel = lazy(() => import('./LabPanel'));
 const OpsPanel = lazy(() => import('./OpsPanel'));
 const MemoryPanel = lazy(() => import('./MemoryPanel'));
@@ -48,7 +48,6 @@ function LiveTab({
 }) {
   const agents = useMonitorStore((s) => s.agents);
   const optimization = useMonitorStore((s) => s.optimization);
-  const opc = useMonitorStore((s) => s.opc);
   const billing = useMonitorStore((s) => s.billing);
   const llmOps = useMonitorStore((s) => s.llmOps);
   const generatedAt = useMonitorStore((s) => s.generated_at);
@@ -58,7 +57,6 @@ function LiveTab({
   const liveFeed = buildAnimLiveFeed({
     agents,
     optimization,
-    opc,
     billing,
     llmOps,
     updatedAt: generatedAt,
@@ -120,7 +118,7 @@ export default function MonitorView({
           <AgentsMonitorPanel focusAgentId={focusAgentId} onFocusAgent={onFocusAgent} />
         )}
         {tab === 'pipeline' && <PipelineView onGoTasks={() => onTabChange('tasks')} />}
-        {tab === 'opc' && <OpcMonitorPanel />}
+        {tab === 'metrics' && <SystemMetricsPanel />}
         {tab === 'lab' && (
           <LabPanel activeTab={labSubTab} onTabChange={onLabSubTabChange} />
         )}

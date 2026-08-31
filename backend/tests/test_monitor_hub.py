@@ -8,7 +8,7 @@ def test_collect_monitor_hub_structure():
     assert "generated_at" in data
     assert "agents" in data
     assert "optimization" in data
-    assert "opc" in data
     assert "llm_ops" in data
+    assert "opc" not in data
     assert "errors" in data
     assert isinstance(data["errors"], list)
