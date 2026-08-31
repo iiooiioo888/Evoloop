@@ -21,8 +21,10 @@ router = APIRouter(tags=["OPC 读取"])
 async def read_tags(req: ReadRequest):
     """读取一个或多个标签的当前值（并发执行）。"""
     try:
-        # 使用并发批量读取，提升多标签读取性能
-        results = await opc_client.read_nodes(req.tag_names)
+        node_ids = req.node_ids
+        if node_ids is not None and len(node_ids) != len(req.tag_names):
+            node_ids = None
+        results = await opc_client.read_nodes(req.tag_names, node_ids)
         tags = [TagValue(**r) for r in results]
         # 审计日志
         for tag in tags:

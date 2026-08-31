@@ -2,7 +2,8 @@
  * SidePanel — 左側上下文面板。
  * Chat → 會話；Monitor → 精簡分頁 + 虛擬滾動名冊。
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { Virtuoso } from 'react-virtuoso';
 import { AGENT_STATUS_META, agentOpenCount } from '../lib/agentUi';
 import { AGENT_FALLBACK_ROSTER } from '../lib/monitorFallbacks';
@@ -11,6 +12,7 @@ import {
   MONITOR_MORE_TABS,
   MONITOR_PRIMARY_TABS,
 } from '../lib/monitorTabs';
+import { LAB_TABS, type LabSubTab } from '../lib/labTabs';
 import { useMonitorStore } from '../stores/monitorStore';
 import type { ChatSession, RoleAgent, TaskSummary } from '../types';
 import type { MonitorTab, ViewKey } from './AppShell';
@@ -33,6 +35,8 @@ interface SidePanelProps {
   onFocusTask: (id: string | null) => void;
   traceTaskId: string | null;
   onTraceTaskChange: (id: string | null) => void;
+  labSubTab: LabSubTab;
+  onLabSubTabChange: (tab: LabSubTab) => void;
 }
 
 function formatRelative(ts: number): string {
@@ -245,6 +249,9 @@ const TASK_STATUS_DOT: Record<string, string> = {
 
 const EMPTY_TASKS: TaskSummary[] = [];
 
+const selectTaskRoster = (s: ReturnType<typeof useMonitorStore.getState>) =>
+  s.dashboard?.tasks ?? EMPTY_TASKS;
+
 function TaskRoster({
   focusTaskId,
   onPick,
@@ -252,7 +259,7 @@ function TaskRoster({
   focusTaskId: string | null;
   onPick: (id: string) => void;
 }) {
-  const tasks = useMonitorStore((s) => s.dashboard?.tasks ?? EMPTY_TASKS);
+  const tasks = useMonitorStore(useShallow(selectTaskRoster));
   const running = tasks.filter((t) => t.status === 'running' || t.status === 'pending').length;
   const [query, setQuery] = useState('');
 
@@ -263,6 +270,35 @@ function TaskRoster({
       : tasks;
     return list.slice(0, 80);
   }, [tasks, query]);
+
+  const renderItem = useCallback(
+    (_i: number, task: TaskSummary) => {
+      const active = task.task_id === focusTaskId;
+      const dot = TASK_STATUS_DOT[task.status] ?? 'bg-[#8E8E93]';
+      return (
+        <button
+          type="button"
+          onClick={() => onPick(task.task_id)}
+          className={`mx-2 mb-0.5 flex w-[calc(100%-16px)] items-center gap-2 rounded-lg px-2.5 py-1.5 text-left transition-colors ${
+            active
+              ? 'bg-white/[0.06] text-[#F5F5F7]'
+              : 'text-[#AEAEB2] hover:bg-white/[0.03] hover:text-[#F5F5F7]'
+          }`}
+        >
+          <span className={`h-2 w-2 shrink-0 rounded-full ${dot}`} />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[12px] font-medium text-[#F5F5F7]">
+              {task.query || task.task_id.slice(0, 8)}
+            </span>
+            <span className="block truncate text-[10px] text-[#636366]">
+              {task.resolved_path || task.strategy} · {task.phase}
+            </span>
+          </span>
+        </button>
+      );
+    },
+    [focusTaskId, onPick],
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -285,31 +321,8 @@ function TaskRoster({
         <Virtuoso
           className="min-h-0 flex-1"
           data={filtered}
-          itemContent={(_i, task: TaskSummary) => {
-            const active = task.task_id === focusTaskId;
-            const dot = TASK_STATUS_DOT[task.status] ?? 'bg-[#8E8E93]';
-            return (
-              <button
-                type="button"
-                onClick={() => onPick(task.task_id)}
-                className={`mx-2 mb-0.5 flex w-[calc(100%-16px)] items-center gap-2 rounded-lg px-2.5 py-1.5 text-left transition-colors ${
-                  active
-                    ? 'bg-white/[0.06] text-[#F5F5F7]'
-                    : 'text-[#AEAEB2] hover:bg-white/[0.03] hover:text-[#F5F5F7]'
-                }`}
-              >
-                <span className={`h-2 w-2 shrink-0 rounded-full ${dot}`} />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[12px] font-medium text-[#F5F5F7]">
-                    {task.query || task.task_id.slice(0, 8)}
-                  </span>
-                  <span className="block truncate text-[10px] text-[#636366]">
-                    {task.resolved_path || task.strategy} · {task.phase}
-                  </span>
-                </span>
-              </button>
-            );
-          }}
+          computeItemKey={(_i, task) => task.task_id}
+          itemContent={renderItem}
         />
       )}
     </div>
@@ -341,6 +354,44 @@ function TabBtn({
   );
 }
 
+function LabSidebar({
+  labSubTab,
+  onLabSubTabChange,
+}: {
+  labSubTab: LabSubTab;
+  onLabSubTabChange: (tab: LabSubTab) => void;
+}) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="shrink-0 border-b border-white/[0.06] px-3 pb-3 pt-2">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-[#636366]">整合工具</p>
+        <p className="mt-1 text-[10px] leading-relaxed text-[#48484A]">
+          Firecrawl · Prompt Optimizer · Archify · Ponytail
+        </p>
+      </div>
+      <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2" aria-label="實驗室工具">
+        {LAB_TABS.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            onClick={() => onLabSubTabChange(item.key)}
+            className={`flex w-full flex-col rounded-lg px-2.5 py-2 text-left transition-colors ${
+              labSubTab === item.key
+                ? 'bg-white/[0.06] text-[#F5F5F7]'
+                : 'text-[#98989D] hover:bg-white/[0.03] hover:text-[#F5F5F7]'
+            }`}
+          >
+            <span className="text-[12px] font-medium">{item.label}</span>
+            {item.upstream && (
+              <span className="mt-0.5 truncate text-[10px] text-[#636366]">{item.upstream.name}</span>
+            )}
+          </button>
+        ))}
+      </nav>
+    </div>
+  );
+}
+
 function MonitorSidebar({
   monitorTab,
   onClose,
@@ -349,6 +400,8 @@ function MonitorSidebar({
   focusTaskId,
   onFocusTask,
   onMonitorTabChange,
+  labSubTab,
+  onLabSubTabChange,
 }: {
   monitorTab: MonitorTab;
   onClose: () => void;
@@ -357,9 +410,12 @@ function MonitorSidebar({
   focusTaskId: string | null;
   onFocusTask: (id: string | null) => void;
   onMonitorTabChange: (tab: MonitorTab) => void;
+  labSubTab: LabSubTab;
+  onLabSubTabChange: (tab: LabSubTab) => void;
 }) {
   const onAgentsTab = monitorTab === 'agents';
   const onTasksTab = monitorTab === 'tasks';
+  const onLabTab = monitorTab === 'lab';
   const [moreOpen, setMoreOpen] = useState(() => isMonitorMoreTab(monitorTab));
 
   useEffect(() => {
@@ -370,7 +426,7 @@ function MonitorSidebar({
     onMonitorTabChange(key);
     if (key !== 'agents' && focusAgentId) onFocusAgent(null);
     if (key !== 'tasks' && focusTaskId) onFocusTask(null);
-    if (key !== 'agents' && key !== 'tasks') onClose();
+    if (key !== 'agents' && key !== 'tasks' && key !== 'lab') onClose();
   };
 
   return (
@@ -426,6 +482,8 @@ function MonitorSidebar({
             onMonitorTabChange('tasks');
           }}
         />
+      ) : onLabTab ? (
+        <LabSidebar labSubTab={labSubTab} onLabSubTabChange={onLabSubTabChange} />
       ) : (
         <div className="flex-1" />
       )}
@@ -450,6 +508,8 @@ export default function SidePanel({
   onFocusTask,
   traceTaskId,
   onTraceTaskChange,
+  labSubTab,
+  onLabSubTabChange,
 }: SidePanelProps) {
   return (
     <>
@@ -487,6 +547,8 @@ export default function SidePanel({
             onFocusAgent={onFocusAgent}
             focusTaskId={focusTaskId}
             onFocusTask={onFocusTask}
+            labSubTab={labSubTab}
+            onLabSubTabChange={onLabSubTabChange}
           />
         )}
 

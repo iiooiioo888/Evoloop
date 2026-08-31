@@ -8,6 +8,7 @@ import { buildAnimLiveFeed } from '../lib/animLive';
 import { useMonitorStore } from '../stores/monitorStore';
 import type { TaskProgress } from '../types';
 import type { MonitorTab } from './AppShell';
+import type { LabSubTab } from '../lib/labTabs';
 import LiveBoard from './LiveBoard';
 import ErrorState from './ui/ErrorState';
 
@@ -28,6 +29,8 @@ interface MonitorViewProps {
   onFocusAgent: (id: string | null) => void;
   focusTaskId: string | null;
   onFocusTask: (id: string | null) => void;
+  labSubTab: LabSubTab;
+  onLabSubTabChange: (tab: LabSubTab) => void;
 }
 
 function PanelFallback() {
@@ -38,7 +41,11 @@ function PanelFallback() {
   );
 }
 
-function LiveTab() {
+function LiveTab({
+  onOpenLab,
+}: {
+  onOpenLab?: (sub: LabSubTab) => void;
+}) {
   const agents = useMonitorStore((s) => s.agents);
   const optimization = useMonitorStore((s) => s.optimization);
   const opc = useMonitorStore((s) => s.opc);
@@ -67,7 +74,7 @@ function LiveTab() {
       {!connected && !error && (
         <div className="shrink-0 px-5 py-2 text-[10px] text-[#48484A]">離線資料</div>
       )}
-      <LiveBoard feed={liveFeed} />
+      <LiveBoard feed={liveFeed} onOpenLab={onOpenLab} />
     </div>
   );
 }
@@ -81,6 +88,8 @@ export default function MonitorView({
   onFocusAgent,
   focusTaskId,
   onFocusTask,
+  labSubTab,
+  onLabSubTabChange,
 }: MonitorViewProps) {
   const tab = activeTab;
 
@@ -91,7 +100,14 @@ export default function MonitorView({
   return (
     <div className="flex flex-1 flex-col overflow-hidden apple-canvas">
       <Suspense fallback={<PanelFallback />}>
-        {tab === 'live' && <LiveTab />}
+        {tab === 'live' && (
+          <LiveTab
+            onOpenLab={(sub) => {
+              onTabChange('lab');
+              onLabSubTabChange(sub);
+            }}
+          />
+        )}
         {tab === 'tasks' && (
           <TasksMonitorPanel
             focusTaskId={focusTaskId}
@@ -105,7 +121,9 @@ export default function MonitorView({
         )}
         {tab === 'pipeline' && <PipelineView onGoTasks={() => onTabChange('tasks')} />}
         {tab === 'opc' && <OpcMonitorPanel />}
-        {tab === 'lab' && <LabPanel />}
+        {tab === 'lab' && (
+          <LabPanel activeTab={labSubTab} onTabChange={onLabSubTabChange} />
+        )}
         {tab === 'ops' && <OpsPanel />}
         {tab === 'memory' && (
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden apple-canvas">

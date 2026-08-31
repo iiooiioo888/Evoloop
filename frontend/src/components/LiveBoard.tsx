@@ -13,6 +13,7 @@ import {
   pickBusyAgents,
   stageBackends,
 } from '../lib/animLive';
+import { LAB_INTEGRATION_TABS, type LabSubTab } from '../lib/labTabs';
 
 const PIPELINE = [
   { id: 'sense', label: '感知' },
@@ -391,12 +392,75 @@ function EventsCard({ feed, dock }: { feed: AnimLiveFeed; dock?: boolean }) {
   );
 }
 
+function LabToolsCard({
+  dock,
+  onOpenLab,
+}: {
+  dock?: boolean;
+  onOpenLab?: (sub: LabSubTab) => void;
+}) {
+  const chipClass =
+    'rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[11px] font-medium text-[#F5F5F7] transition-colors hover:border-[#0A84FF]/40 hover:bg-[#0A84FF]/10';
+
+  return (
+    <FrostCard
+      title="整合工具"
+      accessory={
+        onOpenLab ? (
+          <button
+            type="button"
+            onClick={() => onOpenLab('prompt')}
+            className="text-[10px] font-bold text-[#0A84FF] hover:underline"
+          >
+            實驗室
+          </button>
+        ) : (
+          <a href="#/monitor/lab" className="text-[10px] font-bold text-[#0A84FF] hover:underline">
+            實驗室
+          </a>
+        )
+      }
+      className={dock ? '' : 'lb-span-2'}
+    >
+      <div className="flex flex-wrap gap-2">
+        {LAB_INTEGRATION_TABS.map((item) =>
+          onOpenLab ? (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => onOpenLab(item.key)}
+              className={chipClass}
+              title={item.upstream?.name}
+            >
+              {item.label}
+            </button>
+          ) : (
+            <a
+              key={item.key}
+              href={item.key === 'prompt' ? '#/monitor/lab' : `#/monitor/lab/${item.key}`}
+              className={chipClass}
+              title={item.upstream?.name}
+            >
+              {item.label}
+            </a>
+          ),
+        )}
+      </div>
+      <p className="mt-2 text-[10px] leading-relaxed text-[#636366]">
+        Firecrawl 爬蟲 · Prompt Optimizer · Archify 架構 · Ponytail 精簡
+      </p>
+    </FrostCard>
+  );
+}
+
 export default function LiveBoard({
   feed,
   density = 'page',
+  onOpenLab,
 }: {
   feed: AnimLiveFeed;
   density?: LiveBoardDensity;
+  onOpenLab?: (sub: LabSubTab) => void;
 }) {
   const dock = density === 'dock';
   const updated = feed.updatedAt
@@ -445,6 +509,9 @@ export default function LiveBoard({
             <div className="lb-span-2">
               <EventsCard feed={feed} dock />
             </div>
+            <div className="lb-span-2">
+              <LabToolsCard dock onOpenLab={onOpenLab} />
+            </div>
           </div>
         ) : (
           <div className="lb-board-grid">
@@ -457,6 +524,7 @@ export default function LiveBoard({
             <div className="lb-span-2">
               <EventsCard feed={feed} />
             </div>
+            <LabToolsCard onOpenLab={onOpenLab} />
           </div>
         )}
       </div>

@@ -312,6 +312,70 @@ def _register_builtin_tools() -> None:
         readonly=True,
     )
 
+    # 實驗室整合 — Firecrawl / Prompt Optimizer / Ponytail / Archify
+    from backend.services import lab_tools as _lab
+
+    tool_registry.register(
+        name="firecrawl_scrape",
+        description="抓取網頁並轉為 Markdown（Firecrawl；無 API 金鑰時走輕量模式）",
+        parameters={
+            "url": {"type": "string", "description": "http/https URL"},
+            "only_main_content": {"type": "boolean", "description": "僅主內容（預設 true）"},
+        },
+        execute=lambda url, only_main_content=True: _lab.firecrawl_scrape(
+            url, only_main_content=only_main_content
+        ),
+        readonly=True,
+    )
+    tool_registry.register(
+        name="firecrawl_search",
+        description="網頁搜尋並回傳 Markdown 摘要（需 FIRECRAWL_API_KEY）",
+        parameters={
+            "query": {"type": "string", "description": "搜尋關鍵字"},
+            "limit": {"type": "integer", "description": "結果筆數（1–10，預設 5）"},
+        },
+        execute=lambda query, limit=5: _lab.firecrawl_search(query, limit=limit),
+        readonly=True,
+    )
+    tool_registry.register(
+        name="optimize_prompt",
+        description="優化提示詞結構與可執行性（Prompt Optimizer）",
+        parameters={
+            "prompt": {"type": "string", "description": "原始提示詞"},
+            "mode": {"type": "string", "description": "user 或 system"},
+            "goal": {"type": "string", "description": "優化目標（可選）"},
+        },
+        execute=lambda prompt, mode="user", goal="": _lab.optimize_prompt(
+            prompt, mode=mode, goal=goal
+        ),
+        readonly=True,
+    )
+    tool_registry.register(
+        name="ponytail_review",
+        description="審查過度工程化並給出可刪除清單（Ponytail）",
+        parameters={
+            "content": {"type": "string", "description": "程式碼、提示詞或 diff"},
+            "kind": {"type": "string", "description": "code、prompt 或 diff"},
+        },
+        execute=lambda content, kind="code": _lab.ponytail_review(content, kind=kind),
+        allowed_roles=["reviewer", "manager", "developer", "architect"],
+        readonly=True,
+    )
+    tool_registry.register(
+        name="archify_generate",
+        description="由描述生成架構拓撲 IR（Archify）",
+        parameters={"description": {"type": "string", "description": "系統/流程描述"}},
+        execute=lambda description: _lab.generate_architecture(description),
+        readonly=True,
+    )
+    tool_registry.register(
+        name="archify_evoloop",
+        description="取得 EvoLoop 內建架構 IR",
+        parameters={},
+        execute=lambda: _lab.get_evoloop_architecture(),
+        readonly=True,
+    )
+
 
 # 模組載入時註冊內建工具
 _register_builtin_tools()

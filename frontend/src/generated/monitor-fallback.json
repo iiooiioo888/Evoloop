@@ -9937,7 +9937,7 @@
     {
       "name": "Temperature",
       "unit": "°C",
-      "desc": "反应槽温度",
+      "desc": "反應槽溫度",
       "range": [
         0.0,
         150.0
@@ -9947,7 +9947,7 @@
     {
       "name": "Pressure",
       "unit": "kPa",
-      "desc": "管线压力",
+      "desc": "管線壓力",
       "range": [
         0.0,
         500.0
@@ -9957,7 +9957,7 @@
     {
       "name": "FlowRate",
       "unit": "L/min",
-      "desc": "冷却水流量",
+      "desc": "冷卻水流量",
       "range": [
         0.0,
         1000.0
@@ -9967,7 +9967,7 @@
     {
       "name": "ValvePosition",
       "unit": "%",
-      "desc": "控制阀开度",
+      "desc": "控制閥開度",
       "range": [
         0.0,
         100.0
@@ -9977,7 +9977,7 @@
     {
       "name": "MotorSpeed",
       "unit": "RPM",
-      "desc": "主马达转速",
+      "desc": "主馬達轉速",
       "range": [
         0.0,
         3000.0
@@ -9987,7 +9987,7 @@
     {
       "name": "Level",
       "unit": "%",
-      "desc": "储槽液位",
+      "desc": "儲槽液位",
       "range": [
         0.0,
         100.0
@@ -9997,7 +9997,7 @@
     {
       "name": "AlarmStatus",
       "unit": "",
-      "desc": "警报状态（0=正常, 1=警报）",
+      "desc": "警報狀態（0=正常, 1=警報）",
       "range": [
         0.0,
         1.0
@@ -10007,7 +10007,7 @@
     {
       "name": "PowerConsumption",
       "unit": "kW",
-      "desc": "设备总功耗",
+      "desc": "設備總功耗",
       "range": [
         0.0,
         200.0

@@ -945,3 +945,128 @@ export async function hubGetAgentTask(
   if (!resp.ok) throw new Error(await readHubError(resp));
   return resp.json();
 }
+
+// ═══════════════════════════════════════════════════════════
+// 實驗室整合 — Firecrawl / Prompt Optimizer / Ponytail / Archify
+// ═══════════════════════════════════════════════════════════
+
+export interface FirecrawlScrapeResult {
+  url: string;
+  title: string;
+  markdown: string;
+  source: string;
+  status?: number;
+  hint?: string;
+}
+
+export interface FirecrawlSearchResult {
+  query: string;
+  results: Array<{ url: string; title: string; markdown: string }>;
+  source: string;
+  hint?: string;
+}
+
+export interface PromptOptimizeResult {
+  original: string;
+  optimized: string;
+  mode: string;
+  source: string;
+}
+
+export interface PonytailReviewResult {
+  kind: string;
+  source: string;
+  review: {
+    summary?: string;
+    severity?: string;
+    delete_list?: string[];
+    keep_list?: string[];
+    suggested_rewrite?: string;
+  };
+}
+
+export interface ArchifyIR {
+  meta?: { title?: string; type?: string; locale?: string; source?: string };
+  nodes: Array<{ id: string; label: string; role?: string }>;
+  edges: Array<{ from: string; to: string; label?: string }>;
+}
+
+async function readApiError(resp: Response): Promise<string> {
+  try {
+    const body = (await resp.json()) as { detail?: string };
+    if (body.detail) return body.detail;
+  } catch {
+    /* ignore */
+  }
+  return `請求失敗（HTTP ${resp.status}）`;
+}
+
+export async function labFirecrawlScrape(
+  url: string,
+  onlyMainContent = true,
+): Promise<FirecrawlScrapeResult> {
+  const resp = await fetch(apiUrl('/lab/firecrawl/scrape'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url, only_main_content: onlyMainContent }),
+  });
+  if (!resp.ok) throw new Error(await readApiError(resp));
+  return resp.json();
+}
+
+export async function labFirecrawlSearch(query: string, limit = 5): Promise<FirecrawlSearchResult> {
+  const resp = await fetch(apiUrl('/lab/firecrawl/search'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, limit }),
+  });
+  if (!resp.ok) throw new Error(await readApiError(resp));
+  return resp.json();
+}
+
+export async function labOptimizePrompt(opts: {
+  prompt: string;
+  mode?: 'user' | 'system';
+  goal?: string;
+}): Promise<PromptOptimizeResult> {
+  const resp = await fetch(apiUrl('/lab/prompt/optimize'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      prompt: opts.prompt,
+      mode: opts.mode ?? 'user',
+      goal: opts.goal ?? '',
+    }),
+  });
+  if (!resp.ok) throw new Error(await readApiError(resp));
+  return resp.json();
+}
+
+export async function labPonytailReview(
+  content: string,
+  kind: 'code' | 'prompt' | 'diff' = 'code',
+): Promise<PonytailReviewResult> {
+  const resp = await fetch(apiUrl('/lab/ponytail/review'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content, kind }),
+  });
+  if (!resp.ok) throw new Error(await readApiError(resp));
+  return resp.json();
+}
+
+export async function labArchifyEvoloop(): Promise<ArchifyIR> {
+  const resp = await fetch(apiUrl('/lab/archify/evoloop'));
+  if (!resp.ok) throw new Error(await readApiError(resp));
+  return resp.json();
+}
+
+export async function labArchifyGenerate(description: string): Promise<ArchifyIR> {
+  const resp = await fetch(apiUrl('/lab/archify/generate'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ description }),
+  });
+  if (!resp.ok) throw new Error(await readApiError(resp));
+  return resp.json();
+}

@@ -48,6 +48,7 @@ from backend.services.cloud_console import (
 )
 from backend.services.task_broadcaster import task_broadcaster
 from backend.services.task_manager import task_manager
+from backend.services import lab_tools
 from backend.hub.api import register_hub
 
 # ═══════════════════════════════════════════════════════════════
@@ -1132,6 +1133,99 @@ async def cloud_alerts_delete(rule_id: str):
     if not alerts.delete_rule(rule_id):
         raise HTTPException(status_code=404, detail="規則不存在")
     return {"deleted": True}
+
+
+# ═══════════════════════════════════════════════════════════════
+# 實驗室整合 — Firecrawl / Prompt Optimizer / Ponytail / Archify
+# ═══════════════════════════════════════════════════════════════
+
+
+class FirecrawlScrapeRequest(BaseModel):
+    url: str
+    only_main_content: bool = True
+
+
+class FirecrawlSearchRequest(BaseModel):
+    query: str
+    limit: int = 5
+
+
+class PromptOptimizeRequest(BaseModel):
+    prompt: str
+    mode: str = "user"
+    goal: str = ""
+
+
+class PonytailReviewRequest(BaseModel):
+    content: str
+    kind: str = "code"
+
+
+class ArchifyGenerateRequest(BaseModel):
+    description: str
+
+
+@app.post("/lab/firecrawl/scrape")
+async def lab_firecrawl_scrape(body: FirecrawlScrapeRequest):
+    """Firecrawl 單頁抓取（可選 API 金鑰）。"""
+    try:
+        return lab_tools.firecrawl_scrape(body.url, only_main_content=body.only_main_content)
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(status_code=502, detail=f"Firecrawl HTTP {exc.response.status_code}") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.post("/lab/firecrawl/search")
+async def lab_firecrawl_search(body: FirecrawlSearchRequest):
+    """Firecrawl 網頁搜尋（需 FIRECRAWL_API_KEY）。"""
+    try:
+        return lab_tools.firecrawl_search(body.query, limit=body.limit)
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(status_code=502, detail=f"Firecrawl HTTP {exc.response.status_code}") from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.post("/lab/prompt/optimize")
+async def lab_prompt_optimize(body: PromptOptimizeRequest):
+    """Prompt Optimizer — LLM 提示詞優化。"""
+    try:
+        return lab_tools.optimize_prompt(body.prompt, mode=body.mode, goal=body.goal)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.post("/lab/ponytail/review")
+async def lab_ponytail_review(body: PonytailReviewRequest):
+    """Ponytail — 過度工程審查。"""
+    try:
+        return lab_tools.ponytail_review(body.content, kind=body.kind)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.get("/lab/archify/evoloop")
+async def lab_archify_evoloop():
+    """Archify — EvoLoop 內建架構 IR。"""
+    return lab_tools.get_evoloop_architecture()
+
+
+@app.post("/lab/archify/generate")
+async def lab_archify_generate(body: ArchifyGenerateRequest):
+    """Archify — 由描述生成架構 IR。"""
+    try:
+        return lab_tools.generate_architecture(body.description)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 if __name__ == "__main__":

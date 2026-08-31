@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING, Any
 
 from asyncua import ua
 
+from opc_service.client.nodes import node_id_for_tag, short_tag_name
+
 if TYPE_CHECKING:
     from asyncua import Client
 
@@ -27,20 +29,21 @@ class WriterMixin:
              "written_value": ...}
         """
         client = await self._ensure_connected()
-        node_id = f"ns=2;s={tag_name}"
+        short = short_tag_name(tag_name)
+        resolved = node_id_for_tag(tag_name)
         try:
-            node = client.get_node(node_id)
+            node = client.get_node(resolved)
             dv = ua.DataValue(ua.Variant(value, ua.VariantType.Double))
             await node.write_value(dv)
             return {
-                "tag_name": tag_name,
+                "tag_name": short,
                 "success": True,
                 "message": "写入成功",
                 "written_value": value,
             }
         except ua.UaStatusCodeError as exc:
             return {
-                "tag_name": tag_name,
+                "tag_name": short,
                 "success": False,
                 "message": f"写入失败：{exc}",
                 "written_value": None,

@@ -29,11 +29,41 @@ def test_opc_monitor_degrades_when_service_down(tmp_path, monkeypatch):
 
     assert data["live"]["reachable"] is False
     assert data["live"]["error"] == "connection refused"
+    assert data["live"]["simulated"] is True
+    assert len(data["live"]["readings"]) == 8
+    assert data["live"]["readings"][0]["tag_name"] == "Temperature"
+    assert data["live"]["readings"][0]["value"] == 25.0
     assert "Temperature" in {t["name"] for t in data["catalog"]}
     assert "write_bounds" in data["guard"]
     assert "Temperature" in data["guard"]["write_bounds"]
     assert data["audit"]["recent"] == []
     assert data["recent_tasks"] == []
+
+
+def test_opc_monitor_aligns_foreign_readings(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPC_AUDIT_LOG_DIR", str(tmp_path / "audit"))
+    monkeypatch.setattr(task_manager, "tasks", {})
+    monkeypatch.setattr(
+        "backend.services.opc_monitor.fetch_opc_live",
+        lambda base_url=None: {
+            "reachable": True,
+            "health": {"status": "ok", "opc_connected": True},
+            "browse_tags": [],
+            "readings": [
+                {"tag_name": "Locations", "value": 1.0, "quality": "Good"},
+                {"tag_name": "Server", "value": 2.0, "quality": "Good"},
+            ],
+            "simulated": False,
+            "error": None,
+        },
+    )
+
+    data = collect_opc_monitor()
+
+    assert data["live"]["readings"][0]["tag_name"] == "Temperature"
+    assert data["live"]["readings"][0]["value"] == 25.0
+    assert data["live"]["simulated"] is True
+    assert len(data["live"]["readings"]) == 8
 
 
 def test_opc_monitor_includes_latest_opc_task(tmp_path, monkeypatch):

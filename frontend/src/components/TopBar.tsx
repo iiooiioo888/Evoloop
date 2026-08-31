@@ -4,11 +4,13 @@
 import { useTranslation } from 'react-i18next';
 import { setLocale } from '../i18n';
 import { monitorTabLabel } from '../lib/monitorTabs';
+import { labSubTabLabel, type LabSubTab } from '../lib/labTabs';
 import type { MonitorTab, ViewKey } from './AppShell';
 
 interface TopBarProps {
   activeView: ViewKey;
   monitorTab: MonitorTab;
+  labSubTab: LabSubTab;
   traceTaskId: string | null;
   llmConfigured: boolean | null;
   rightPanelOpen: boolean;
@@ -20,6 +22,7 @@ interface TopBarProps {
 export default function TopBar({
   activeView,
   monitorTab,
+  labSubTab,
   traceTaskId,
   llmConfigured,
   rightPanelOpen,
@@ -32,7 +35,9 @@ export default function TopBar({
     activeView === 'chat'
       ? t('nav.chat')
       : activeView === 'monitor'
-        ? `${t('nav.monitor')} · ${monitorTabLabel(monitorTab)}`
+        ? monitorTab === 'lab'
+          ? `${t('nav.monitor')} · ${monitorTabLabel(monitorTab)} · ${labSubTabLabel(labSubTab)}`
+          : `${t('nav.monitor')} · ${monitorTabLabel(monitorTab)}`
         : traceTaskId
           ? `${t('nav.traces')} · ${traceTaskId.slice(0, 8)}…`
           : t('nav.traces');

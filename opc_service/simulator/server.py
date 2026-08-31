@@ -48,14 +48,15 @@ class SimulatedOPCServer:
         # 建立 Objects 节点
         objects = self._server.get_objects_node()
 
-        # 为每个模拟标签建立变量节点
+        # 为每个模拟标签建立变量节点（ns=2;s=TagName，与 client 读取路径一致）
         for tag in SIM_TAGS:
             name = tag["name"]
             self._values[name] = tag["init"]
+            node_id = ua.NodeId(name, idx)
 
             var = await objects.add_variable(
-                nodeid=idx,
-                bname=f"{idx}:{name}",
+                nodeid=node_id,
+                bname=name,
                 val=tag["init"],
                 varianttype=ua.VariantType.Double,
             )

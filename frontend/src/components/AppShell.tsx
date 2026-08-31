@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { ChatSession } from '../types';
+import type { LabSubTab } from '../lib/labTabs';
 import ActivityBar from './ActivityBar';
 import RightPanel from './RightPanel';
 import SidePanel from './SidePanel';
@@ -59,6 +60,10 @@ export interface AppShellProps {
   traceTaskId: string | null;
   onTraceTaskChange: (id: string | null) => void;
 
+  /** 實驗室子分頁 */
+  labSubTab: LabSubTab;
+  onLabSubTabChange: (tab: LabSubTab) => void;
+
   /** 状态栏信息 */
   statusInfo: {
     taskCount: number;
@@ -89,6 +94,8 @@ export default function AppShell({
   onFocusTask,
   traceTaskId,
   onTraceTaskChange,
+  labSubTab,
+  onLabSubTabChange,
   statusInfo,
   children,
 }: AppShellProps) {
@@ -98,7 +105,8 @@ export default function AppShell({
   useEffect(() => {
     if (
       activeView === 'traces' ||
-      (activeView === 'monitor' && (monitorTab === 'agents' || monitorTab === 'tasks'))
+      (activeView === 'monitor' &&
+        (monitorTab === 'agents' || monitorTab === 'tasks' || monitorTab === 'lab'))
     ) {
       setSidebarOpen(true);
     }
@@ -118,6 +126,7 @@ export default function AppShell({
       <TopBar
         activeView={activeView}
         monitorTab={monitorTab}
+        labSubTab={labSubTab}
         traceTaskId={traceTaskId}
         llmConfigured={llmConfigured}
         rightPanelOpen={rightPanelTask !== null}
@@ -154,6 +163,8 @@ export default function AppShell({
           onFocusTask={onFocusTask}
           traceTaskId={traceTaskId}
           onTraceTaskChange={onTraceTaskChange}
+          labSubTab={labSubTab}
+          onLabSubTabChange={onLabSubTabChange}
         />
 
         {/* 主内容区 */}

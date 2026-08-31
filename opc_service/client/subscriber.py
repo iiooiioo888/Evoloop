@@ -11,6 +11,8 @@ from asyncua.common.subscription import (
     DataChangeNotificationHandler,
 )
 
+from opc_service.client.nodes import node_id_for_tag, short_tag_name
+
 if TYPE_CHECKING:
     from asyncua import Client
 
@@ -62,11 +64,9 @@ class SubscriberMixin:
         client = await self._ensure_connected()
         handler = OPCSubscriptionHandler(queue)
         sub = await client.create_subscription(period=500, handler=handler)
-        nodes = [
-            client.get_node(f"ns=2;s={name}") for name in tag_names
-        ]
+        nodes = [client.get_node(node_id_for_tag(name)) for name in tag_names]
         await sub.subscribe_data_change(nodes)
-        for name in tag_names:
-            self._subscriptions[name] = handler
+        for raw in tag_names:
+            self._subscriptions[short_tag_name(raw)] = handler
         logger.info("已订阅标签：%s", tag_names)
         return handler

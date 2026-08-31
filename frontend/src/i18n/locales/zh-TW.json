@@ -25,11 +25,19 @@
     "network": "網路連線失敗"
   },
   "lab": {
-    "dspy": "DSPy 優化",
+    "prompt": "提示詞",
+    "firecrawl": "爬蟲",
+    "archify": "架構",
+    "ponytail": "精簡",
     "mcp": "MCP 工具",
     "ab": "A/B 評估",
     "before": "優化前",
-    "after": "優化後"
+    "after": "優化後",
+    "integrations": "整合工具",
+    "optimize": "一鍵優化",
+    "scrape": "單頁抓取",
+    "search": "網頁搜尋",
+    "review": "Ponytail 審查"
   },
   "common": {
     "refresh": "重新整理",

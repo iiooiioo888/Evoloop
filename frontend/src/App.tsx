@@ -25,6 +25,7 @@ import {
 } from './lib/storage';
 import AppShell from './components/AppShell';
 import type { MonitorTab, ViewKey } from './components/AppShell';
+import type { LabSubTab } from './lib/labTabs';
 import ChatView from './components/ChatView';
 import type { SendOptions } from './components/InputBar';
 import MonitorView from './components/MonitorView';
@@ -69,6 +70,7 @@ export default function App() {
   const [focusAgentId, setFocusAgentId] = useState<string | null>(initialRoute.focusAgentId);
   const [focusTaskId, setFocusTaskId] = useState<string | null>(initialRoute.focusTaskId);
   const [traceTaskId, setTraceTaskId] = useState<string | null>(initialRoute.traceTaskId);
+  const [labSubTab, setLabSubTab] = useState<LabSubTab>(initialRoute.labSubTab);
   const [rightPanelTask, setRightPanelTask] = useState<TaskProgress | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [memoryCount, setMemoryCount] = useState(0);
@@ -102,9 +104,10 @@ export default function App() {
         focusAgentId,
         focusTaskId,
         traceTaskId,
+        labSubTab,
       }),
     );
-  }, [routeReady, activeView, monitorTab, focusAgentId, focusTaskId, traceTaskId]);
+  }, [routeReady, activeView, monitorTab, focusAgentId, focusTaskId, traceTaskId, labSubTab]);
 
   useEffect(() => {
     const onHashChange = () => {
@@ -115,6 +118,7 @@ export default function App() {
         focusAgentId,
         focusTaskId,
         traceTaskId,
+        labSubTab,
       });
       if (routesEqual(current, parsed)) return;
       const next = applyAppRoute(parsed);
@@ -123,10 +127,11 @@ export default function App() {
       setFocusAgentId(next.focusAgentId);
       setFocusTaskId(next.focusTaskId);
       setTraceTaskId(next.traceTaskId);
+      setLabSubTab(next.labSubTab);
     };
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
-  }, [activeView, monitorTab, focusAgentId, focusTaskId, traceTaskId]);
+  }, [activeView, monitorTab, focusAgentId, focusTaskId, traceTaskId, labSubTab]);
 
   const navigateRoute = useCallback(
     (patch: Partial<ReturnType<typeof getDefaultRoute>>) => {
@@ -136,6 +141,7 @@ export default function App() {
         focusAgentId: patch.focusAgentId !== undefined ? patch.focusAgentId : focusAgentId,
         focusTaskId: patch.focusTaskId !== undefined ? patch.focusTaskId : focusTaskId,
         traceTaskId: patch.traceTaskId !== undefined ? patch.traceTaskId : traceTaskId,
+        labSubTab: patch.labSubTab ?? labSubTab,
       });
       const applied = applyAppRoute(route);
       setActiveView(applied.activeView);
@@ -143,8 +149,9 @@ export default function App() {
       setFocusAgentId(applied.focusAgentId);
       setFocusTaskId(applied.focusTaskId);
       setTraceTaskId(applied.traceTaskId);
+      setLabSubTab(applied.labSubTab);
     },
-    [activeView, monitorTab, focusAgentId, focusTaskId, traceTaskId],
+    [activeView, monitorTab, focusAgentId, focusTaskId, traceTaskId, labSubTab],
   );
 
   useEffect(() => {
@@ -546,9 +553,17 @@ export default function App() {
         monitorTab: tab,
         focusAgentId: tab === 'agents' ? focusAgentId : null,
         focusTaskId: tab === 'tasks' ? focusTaskId : null,
+        labSubTab: tab === 'lab' ? labSubTab : 'prompt',
       });
     },
-    [navigateRoute, focusAgentId, focusTaskId],
+    [navigateRoute, focusAgentId, focusTaskId, labSubTab],
+  );
+
+  const handleLabSubTabChange = useCallback(
+    (sub: LabSubTab) => {
+      navigateRoute({ view: 'monitor', monitorTab: 'lab', labSubTab: sub });
+    },
+    [navigateRoute],
   );
 
   const handleFocusAgent = useCallback(
@@ -629,6 +644,8 @@ export default function App() {
         onFocusTask={handleFocusTask}
         traceTaskId={traceTaskId}
         onTraceTaskChange={handleTraceTaskChange}
+        labSubTab={labSubTab}
+        onLabSubTabChange={handleLabSubTabChange}
         statusInfo={statusInfo}
       >
         {activeView === 'chat' && (
@@ -658,6 +675,8 @@ export default function App() {
             onFocusAgent={handleFocusAgent}
             focusTaskId={focusTaskId}
             onFocusTask={handleFocusTask}
+            labSubTab={labSubTab}
+            onLabSubTabChange={handleLabSubTabChange}
           />
         )}
         {activeView === 'traces' && (

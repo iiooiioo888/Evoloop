@@ -7,20 +7,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchOpcMonitor } from '../api/client';
 import { OPC_FALLBACK_CATALOG } from '../lib/monitorFallbacks';
+import { mergeOpcCatalogReadings } from '../lib/opcTags';
 import { OPC_PHASES } from '../types';
 import type { OpcLiveReading, OpcMonitorData, OpcTagCatalog, TaskProgress } from '../types';
 
-function matchReading(name: string, readings: OpcLiveReading[]): OpcLiveReading | undefined {
-  return readings.find(
-    (r) =>
-      r.tag_name === name ||
-      r.tag_name.endsWith(name) ||
-      r.tag_name.includes(name),
-  );
-}
-
 function num(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'boolean') return value ? 1 : 0;
   if (typeof value === 'string' && value.trim() !== '') {
     const n = Number(value);
     return Number.isFinite(n) ? n : null;
@@ -107,7 +100,9 @@ function TagRow({ tag, reading }: { tag: OpcTagCatalog; reading?: OpcLiveReading
   const [min, max] = tag.range;
   const value = num(reading?.value);
   const quality = reading?.quality ?? (reading ? 'Good' : '—');
-  const good = quality === 'Good' || quality === '—';
+  const good = quality === 'Good' || quality === 'Simulated';
+  const qualityLabel =
+    quality === 'Simulated' ? '模擬' : quality === 'Good' ? 'Good' : quality;
   return (
     <tr className="border-b border-white/[0.08] last:border-0">
       <td className="py-2 pr-3">
@@ -127,10 +122,14 @@ function TagRow({ tag, reading }: { tag: OpcTagCatalog; reading?: OpcLiveReading
       <td className="py-2 pr-3">
         <span
           className={`rounded px-1.5 py-0.5 text-[10px] ${
-            good ? 'bg-[#27a644]/15 text-[#4cc38a]' : 'bg-amber-500/15 text-amber-300'
+            quality === 'Simulated'
+              ? 'bg-[#007AFF]/15 text-[#64D2FF]'
+              : good
+                ? 'bg-[#27a644]/15 text-[#4cc38a]'
+                : 'bg-amber-500/15 text-amber-300'
           }`}
         >
-          {quality}
+          {qualityLabel}
         </span>
       </td>
       <td className="py-2 text-[10px] text-[#8a8f98]">{tag.writable ? '白名單可寫' : '只讀'}</td>
@@ -165,12 +164,13 @@ export default function OpcMonitorPanel() {
   const summary = data?.audit.summary ?? {};
   const live = data?.live;
   const connected = Boolean(live?.reachable && live.health?.opc_connected);
+  const simulated = Boolean(live?.simulated);
 
   const rows = useMemo(() => {
     const catalog =
       data?.catalog && data.catalog.length > 0 ? data.catalog : OPC_FALLBACK_CATALOG;
     const readings = live?.readings ?? [];
-    return catalog.map((tag) => ({ tag, reading: matchReading(tag.name, readings) }));
+    return mergeOpcCatalogReadings(catalog, readings);
   }, [data, live]);
 
   return (
@@ -187,12 +187,20 @@ export default function OpcMonitorPanel() {
             className={`rounded-full px-2.5 py-0.5 text-[11px] ${
               connected
                 ? 'bg-[#27a644]/15 text-[#4cc38a]'
-                : live?.reachable
-                  ? 'bg-amber-500/15 text-amber-300'
-                  : 'bg-[#141516] text-[#8a8f98]'
+                : simulated
+                  ? 'bg-[#007AFF]/15 text-[#64D2FF]'
+                  : live?.reachable
+                    ? 'bg-amber-500/15 text-amber-300'
+                    : 'bg-[#141516] text-[#8a8f98]'
             }`}
           >
-            {connected ? 'UA 已連線' : live?.reachable ? '服務在線、UA 降級' : 'opc_service 離線'}
+            {connected
+              ? 'UA 已連線'
+              : simulated
+                ? '模擬快照'
+                : live?.reachable
+                  ? '服務在線、UA 降級'
+                  : 'opc_service 離線'}
           </span>
           <button
             onClick={() => void refresh()}
@@ -209,9 +217,13 @@ export default function OpcMonitorPanel() {
         </div>
       )}
 
-      {!connected && live?.error && (
+      {!connected && (simulated || live?.error) && (
         <div className="mb-3 rounded-xl border border-white/[0.08] bg-[#1C1C1E] px-3 py-2 text-[11px] text-[#8a8f98]">
-          即時讀取失敗（{live.error}）。下方改顯示模擬標籤目錄、護欄邊界與審計檔。
+          {simulated
+            ? live?.error
+              ? `opc_service 不可達（${live.error}），下方顯示模擬器初始值。`
+              : 'UA 未連線，下方顯示模擬器初始值；啟動 OPC_SIM_ENABLED 可取得即時漂移。'
+            : `即時讀取失敗（${live?.error}）。下方改顯示模擬標籤目錄、護欄邊界與審計檔。`}
         </div>
       )}
 

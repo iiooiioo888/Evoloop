@@ -5,9 +5,11 @@
  *   #/chat
  *   #/monitor | #/monitor/tasks | #/monitor/tasks/{taskId}
  *   #/monitor/agents/{agentId}
+ *   #/monitor/lab | #/monitor/lab/{prompt|firecrawl|archify|ponytail|mcp|ab}
  *   #/traces | #/traces/{taskId}
  */
 import type { MonitorTab, ViewKey } from '../components/AppShell';
+import { normalizeLabSubTab, type LabSubTab } from './labTabs';
 import { normalizeMonitorTab } from './monitorTabs';
 
 export interface AppRoute {
@@ -16,6 +18,7 @@ export interface AppRoute {
   focusAgentId: string | null;
   focusTaskId: string | null;
   traceTaskId: string | null;
+  labSubTab: LabSubTab;
 }
 
 function defaultView(): ViewKey {
@@ -29,6 +32,7 @@ export function getDefaultRoute(): AppRoute {
     focusAgentId: null,
     focusTaskId: null,
     traceTaskId: null,
+    labSubTab: 'prompt',
   };
 }
 
@@ -46,12 +50,14 @@ export function parseAppRoute(hash: string): AppRoute {
   if (head === 'monitor') {
     const tab = normalizeMonitorTab(parts[1] ?? 'live');
     const focusRaw = parts[2] ? decodeURIComponent(parts[2]) : null;
+    const labSubTab = tab === 'lab' ? normalizeLabSubTab(focusRaw) : 'prompt';
     return {
       view: 'monitor',
       monitorTab: tab,
       focusAgentId: tab === 'agents' && focusRaw ? focusRaw : null,
       focusTaskId: tab === 'tasks' && focusRaw ? focusRaw : null,
       traceTaskId: null,
+      labSubTab,
     };
   }
 
@@ -77,6 +83,9 @@ export function buildAppRouteHash(route: AppRoute): string {
     if (route.monitorTab === 'tasks' && route.focusTaskId) {
       return `#/monitor/tasks/${encodeURIComponent(route.focusTaskId)}`;
     }
+    if (route.monitorTab === 'lab') {
+      return route.labSubTab === 'prompt' ? '#/monitor/lab' : `#/monitor/lab/${route.labSubTab}`;
+    }
     if (route.monitorTab === 'live') return '#/monitor';
     return `#/monitor/${route.monitorTab}`;
   }
@@ -96,6 +105,7 @@ export function appRouteFromState(params: {
   focusAgentId: string | null;
   focusTaskId: string | null;
   traceTaskId: string | null;
+  labSubTab: LabSubTab;
 }): AppRoute {
   return {
     view: params.activeView,
@@ -103,6 +113,7 @@ export function appRouteFromState(params: {
     focusAgentId: params.focusAgentId,
     focusTaskId: params.focusTaskId,
     traceTaskId: params.traceTaskId,
+    labSubTab: params.labSubTab,
   };
 }
 
@@ -119,7 +130,8 @@ export function routesEqual(a: AppRoute, b: AppRoute): boolean {
     a.monitorTab === b.monitorTab &&
     a.focusAgentId === b.focusAgentId &&
     a.focusTaskId === b.focusTaskId &&
-    a.traceTaskId === b.traceTaskId
+    a.traceTaskId === b.traceTaskId &&
+    a.labSubTab === b.labSubTab
   );
 }
 
@@ -129,6 +141,7 @@ export function applyAppRoute(route: AppRoute): {
   focusAgentId: string | null;
   focusTaskId: string | null;
   traceTaskId: string | null;
+  labSubTab: LabSubTab;
 } {
   return {
     activeView: route.view,
@@ -136,5 +149,6 @@ export function applyAppRoute(route: AppRoute): {
     focusAgentId: route.focusAgentId,
     focusTaskId: route.focusTaskId,
     traceTaskId: route.traceTaskId,
+    labSubTab: route.labSubTab,
   };
 }

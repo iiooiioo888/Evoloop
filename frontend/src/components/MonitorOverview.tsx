@@ -14,6 +14,7 @@ import {
   fetchOptimizationMonitor,
 } from '../api/client';
 import { AGENT_FALLBACK_ROSTER, HUB_FALLBACK_MODELS, OPC_FALLBACK_CATALOG } from '../lib/monitorFallbacks';
+import { mergeOpcCatalogReadings } from '../lib/opcTags';
 import { buildAnimLiveFeed } from '../lib/animLive';
 import type {
   AgentMonitorData,
@@ -250,11 +251,9 @@ export default function MonitorOverview({ onOpenTab }: MonitorOverviewProps) {
         </Section>
 
         <Section title="OPC" onAction={() => onOpenTab('opc')}>
-          {opcCatalog.slice(0, 6).map((tag) => {
-            const reading = opc?.live.readings.find(
-              (r) => r.tag_name === tag.name || String(r.tag_name).includes(tag.name),
-            );
-            return (
+          {mergeOpcCatalogReadings(opcCatalog, opc?.live.readings ?? [])
+            .slice(0, 6)
+            .map(({ tag, reading }) => (
               <Row
                 key={tag.name}
                 left={tag.name}
@@ -264,8 +263,7 @@ export default function MonitorOverview({ onOpenTab }: MonitorOverviewProps) {
                     : `${String(reading.value)}${tag.unit ? ` ${tag.unit}` : ''}`
                 }
               />
-            );
-          })}
+            ))}
         </Section>
       </div>
 

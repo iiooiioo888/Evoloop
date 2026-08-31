@@ -25,11 +25,19 @@
     "network": "Network error"
   },
   "lab": {
-    "dspy": "DSPy",
+    "prompt": "Prompt",
+    "firecrawl": "Crawl",
+    "archify": "Arch",
+    "ponytail": "Trim",
     "mcp": "MCP Tools",
     "ab": "A/B Eval",
     "before": "Before",
-    "after": "After"
+    "after": "After",
+    "integrations": "Integrations",
+    "optimize": "Optimize",
+    "scrape": "Scrape",
+    "search": "Search",
+    "review": "Ponytail Review"
   },
   "common": {
     "refresh": "Refresh",

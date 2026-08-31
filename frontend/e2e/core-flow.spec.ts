@@ -14,14 +14,30 @@ test.describe('EvoLoop 核心 UI', () => {
     await expect(page.getByText(/LIVE|IDLE|待命|即時/).first()).toBeVisible({ timeout: 15_000 });
   });
 
-  test('實驗室面板可開啟 DSPy 對照', async ({ page }) => {
-    await page.goto('/');
-    await page.getByTitle('監控').or(page.getByTitle('Monitor')).click();
-    // 「更多」收納次要分頁
-    const more = page.getByRole('button', { name: /更多|More/ });
-    if (await more.isVisible()) await more.click();
-    await page.getByRole('button', { name: /實驗室|Lab/ }).click();
-    await expect(page.getByText(/DSPy|優化前|Before/)).toBeVisible({ timeout: 15_000 });
+  test('實驗室面板可開啟提示詞優化', async ({ page }) => {
+    await page.goto('/#/monitor/lab');
+    await expect(page.getByText(/監控 · 實驗室 · 提示詞|Monitor ·/)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/優化前|Before/)).toBeVisible({ timeout: 15_000 });
+
+    await page.reload();
+    await expect(page.url()).toMatch(/#\/monitor\/lab/);
+  });
+
+  test('即時看板整合工具可跳轉至實驗室 firecrawl', async ({ page }) => {
+    await page.goto('/#/monitor');
+    await page.getByRole('button', { name: '爬蟲' }).first().click();
+    await expect(page.getByText(/監控 · 實驗室 · 爬蟲|Monitor ·/)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/單頁抓取|Scrape/)).toBeVisible({ timeout: 10_000 });
+    await expect(page.url()).toMatch(/#\/monitor\/lab\/firecrawl/);
+  });
+
+  test('Hash 路由：#/monitor/lab/firecrawl 可書籤與刷新還原', async ({ page }) => {
+    await page.goto('/#/monitor/lab/firecrawl');
+    await expect(page.getByText(/監控 · 實驗室 · 爬蟲|Monitor ·/)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/單頁抓取|Scrape/)).toBeVisible({ timeout: 10_000 });
+
+    await page.reload();
+    await expect(page.url()).toMatch(/#\/monitor\/lab\/firecrawl/);
   });
 
   test('角色分頁可開啟名冊', async ({ page }) => {

@@ -12,6 +12,10 @@ class ReadRequest(BaseModel):
     tag_names: list[str] = Field(
         ..., min_length=1, max_length=50, description="要读取的标签名称列表"
     )
+    node_ids: list[str | None] | None = Field(
+        default=None,
+        description="可选：与 tag_names 对应的 OPC node id，browse 后传入可提高命中率",
+    )
 
 
 class TagValue(BaseModel):

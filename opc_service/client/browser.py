@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING, Any
 
 from asyncua import ua
 
+from opc_service.client.nodes import short_tag_name
+
 if TYPE_CHECKING:
     from asyncua import Client
 
@@ -40,6 +42,13 @@ class BrowserMixin:
         
         # 并发处理所有子节点
         async def process_child(child):
+            try:
+                node_class = await child.read_node_class()
+            except ua.UaError:
+                return None
+            if node_class != ua.NodeClass.Variable:
+                return None
+
             display_name = (await child.read_display_name()).Text
             try:
                 val = await child.read_value()
@@ -55,9 +64,10 @@ class BrowserMixin:
                 desc = (await child.read_description()).Text or ""
             except ua.UaError:
                 desc = ""
+            node_id = child.nodeid.to_string()
             return {
-                "tag_name": display_name,
-                "node_id": child.nodeid.to_string(),
+                "tag_name": short_tag_name(display_name, node_id),
+                "node_id": node_id,
                 "data_type": "",
                 "value": val,
                 "writable": writable,
@@ -67,6 +77,7 @@ class BrowserMixin:
         # 并发处理所有子节点
         tasks = [process_child(child) for child in children]
         if tasks:
-            tags = await asyncio.gather(*tasks)
-        
+            rows = await asyncio.gather(*tasks)
+            tags = [row for row in rows if row is not None]
+
         return list(tags)

@@ -11,7 +11,7 @@ SIM_TAGS: list[dict] = [
         "range": (0.0, 150.0),
         "drift": 0.3,
         "unit": "°C",
-        "desc": "反应槽温度",
+        "desc": "反應槽溫度",
     },
     {
         "name": "Pressure",
@@ -19,7 +19,7 @@ SIM_TAGS: list[dict] = [
         "range": (0.0, 500.0),
         "drift": 0.5,
         "unit": "kPa",
-        "desc": "管线压力",
+        "desc": "管線壓力",
     },
     {
         "name": "FlowRate",
@@ -27,7 +27,7 @@ SIM_TAGS: list[dict] = [
         "range": (0.0, 1000.0),
         "drift": 2.0,
         "unit": "L/min",
-        "desc": "冷却水流量",
+        "desc": "冷卻水流量",
     },
     {
         "name": "ValvePosition",
@@ -35,7 +35,7 @@ SIM_TAGS: list[dict] = [
         "range": (0.0, 100.0),
         "drift": 0.0,
         "unit": "%",
-        "desc": "控制阀开度",
+        "desc": "控制閥開度",
     },
     {
         "name": "MotorSpeed",
@@ -43,7 +43,7 @@ SIM_TAGS: list[dict] = [
         "range": (0.0, 3000.0),
         "drift": 5.0,
         "unit": "RPM",
-        "desc": "主马达转速",
+        "desc": "主馬達轉速",
     },
     {
         "name": "Level",
@@ -51,7 +51,7 @@ SIM_TAGS: list[dict] = [
         "range": (0.0, 100.0),
         "drift": 0.1,
         "unit": "%",
-        "desc": "储槽液位",
+        "desc": "儲槽液位",
     },
     {
         "name": "AlarmStatus",
@@ -59,7 +59,7 @@ SIM_TAGS: list[dict] = [
         "range": (0.0, 1.0),
         "drift": 0.0,
         "unit": "",
-        "desc": "警报状态（0=正常, 1=警报）",
+        "desc": "警報狀態（0=正常, 1=警報）",
     },
     {
         "name": "PowerConsumption",
@@ -67,6 +67,6 @@ SIM_TAGS: list[dict] = [
         "range": (0.0, 200.0),
         "drift": 0.8,
         "unit": "kW",
-        "desc": "设备总功耗",
+        "desc": "設備總功耗",
     },
 ]

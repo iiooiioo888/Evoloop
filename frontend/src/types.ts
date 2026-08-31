@@ -586,11 +586,12 @@ export interface OpcMonitorData {
   };
   catalog: OpcTagCatalog[];
   audit: { recent: AuditRecord[]; summary: Record<string, number> };
-  live: {
+    live: {
     reachable: boolean;
     health: { status?: string; opc_connected?: boolean; opc_server?: string } | null;
     browse_tags: Array<Record<string, unknown>>;
     readings: OpcLiveReading[];
+    simulated?: boolean;
     error: string | null;
   };
   recent_tasks: TaskProgress[];
