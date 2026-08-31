@@ -9,6 +9,7 @@ export type MonitorTabItem = { key: MonitorTab; icon: string; label: string };
 /** 左側常駐主分頁。 */
 export const MONITOR_PRIMARY_TABS: MonitorTabItem[] = [
   { key: 'live', icon: '◎', label: '即時' },
+  { key: 'tasks', icon: '▣', label: '任務' },
   { key: 'agents', icon: '◈', label: '角色' },
   { key: 'pipeline', icon: '⬡', label: '管線' },
 ];
@@ -31,7 +32,8 @@ export const MONITOR_TABS: MonitorTabItem[] = [
 export const MONITOR_TAB_ALIASES: Record<string, MonitorTab> = {
   overview: 'live',
   balancer: 'live',
-  dashboard: 'pipeline',
+  task: 'tasks',
+  dashboard: 'tasks',
   hub: 'ops',
   llm: 'ops',
   cloud: 'ops',

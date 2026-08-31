@@ -925,7 +925,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
       {layout === 'floor' && (
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
           <div className="mb-3 rounded-lg border border-[#007AFF]/25 bg-[#007AFF]/8 px-3 py-2 text-[11px] text-[#a8b0ff]">
-            樓層卡片為輔助視圖 · 名冊入口與「▣ 總覽／📊 控制面版」等同層，位於左側外圍。
+            樓層卡片為輔助視圖 · 名冊入口與左側「◈ 角色」分頁同層。
           </div>
           {grouped.map((group) => (
             <section key={group.level} className="mb-5">

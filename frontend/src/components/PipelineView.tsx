@@ -1,26 +1,23 @@
 /**
- * 管線視圖：DAG + 反思雷達／趨勢 + 任務控制面版。
+ * 管線視圖：DAG + 反思雷達／趨勢。
  */
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { buildAnimLiveFeed } from '../lib/animLive';
 import { useMonitorStore } from '../stores/monitorStore';
-import type { MultiDimEvaluation, TaskProgress } from '../types';
-import Dashboard from './Dashboard';
+import type { MultiDimEvaluation } from '../types';
 import PipelineDag from './PipelineDag';
 import { IterationTrend, ReflectionRadar } from './ReflectionCharts';
 
 interface PipelineViewProps {
-  onOpenTask: (task: TaskProgress) => void;
-  onOpenAgent?: (id: string) => void;
+  onGoTasks?: () => void;
 }
 
-export default function PipelineView({ onOpenTask, onOpenAgent }: PipelineViewProps) {
+export default function PipelineView({ onGoTasks }: PipelineViewProps) {
   const agents = useMonitorStore((s) => s.agents);
   const optimization = useMonitorStore((s) => s.optimization);
   const opc = useMonitorStore((s) => s.opc);
   const billing = useMonitorStore((s) => s.billing);
   const llmOps = useMonitorStore((s) => s.llmOps);
-  const [showDash, setShowDash] = useState(false);
 
   const feed = useMemo(
     () =>
@@ -64,29 +61,20 @@ export default function PipelineView({ onOpenTask, onOpenAgent }: PipelineViewPr
         <p className="apple-heading text-[15px]">管線</p>
         <button
           type="button"
-          onClick={() => setShowDash((v) => !v)}
+          onClick={() => onGoTasks?.()}
           className="rounded-full border border-white/10 px-3 py-1 text-[11px] font-bold text-[#AEAEB2] hover:text-[#F5F5F7]"
         >
-          {showDash ? '圖表模式' : '任務面版'}
+          任務監控 →
         </button>
       </div>
 
-      {showDash ? (
-        <Dashboard
-          embedded
-          onBack={() => setShowDash(false)}
-          onOpenTask={onOpenTask}
-          onOpenAgent={onOpenAgent}
-        />
-      ) : (
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-6 sm:p-8">
-          <PipelineDag phase={phase} height={300} />
-          <div className="grid gap-5 lg:grid-cols-2">
-            <ReflectionRadar multiDim={multiDim} />
-            <IterationTrend history={history} />
-          </div>
+      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-6 sm:p-8">
+        <PipelineDag phase={phase} height={300} />
+        <div className="grid gap-5 lg:grid-cols-2">
+          <ReflectionRadar multiDim={multiDim} />
+          <IterationTrend history={history} />
         </div>
-      )}
+      </div>
     </div>
   );
 }

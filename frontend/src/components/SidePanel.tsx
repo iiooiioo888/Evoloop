@@ -12,8 +12,9 @@ import {
   MONITOR_PRIMARY_TABS,
 } from '../lib/monitorTabs';
 import { useMonitorStore } from '../stores/monitorStore';
-import type { ChatSession, RoleAgent } from '../types';
+import type { ChatSession, RoleAgent, TaskSummary } from '../types';
 import type { MonitorTab, ViewKey } from './AppShell';
+import TraceRoster from './TraceRoster';
 
 interface SidePanelProps {
   activeView: ViewKey;
@@ -28,6 +29,10 @@ interface SidePanelProps {
   onMonitorTabChange: (tab: MonitorTab) => void;
   focusAgentId: string | null;
   onFocusAgent: (id: string | null) => void;
+  focusTaskId: string | null;
+  onFocusTask: (id: string | null) => void;
+  traceTaskId: string | null;
+  onTraceTaskChange: (id: string | null) => void;
 }
 
 function formatRelative(ts: number): string {
@@ -62,25 +67,25 @@ function SessionList({
 
   return (
     <>
-      <div className="border-b border-white/[0.06] p-3">
+      <div className="border-b border-white/[0.06] p-2.5">
         <button
           onClick={onNewSession}
-          className="w-full rounded-full bg-[#007AFF] px-3 py-2 text-[12px] font-bold text-white"
+          className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[12px] font-medium text-[#F5F5F7] transition-colors hover:bg-white/[0.06]"
         >
           新對話
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto p-2">
+      <div className="flex-1 overflow-y-auto p-1.5">
         {sessions.length === 0 && (
           <p className="mt-8 px-3 text-center text-[11px] text-[#636366]">尚無對話紀錄</p>
         )}
         {sessions.map((session) => (
           <div
             key={session.id}
-            className={`group mb-0.5 flex cursor-pointer items-center gap-2 rounded-xl px-2.5 py-2 transition-colors ${
+            className={`group mb-0.5 flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 transition-colors ${
               session.id === activeSessionId
-                ? 'bg-[#007AFF]/15 ring-1 ring-[#007AFF]/35'
-                : 'hover:bg-white/[0.04]'
+                ? 'bg-white/[0.06] text-[#F5F5F7]'
+                : 'text-[#AEAEB2] hover:bg-white/[0.03] hover:text-[#F5F5F7]'
             }`}
             onClick={() => onSelectSession(session.id)}
           >
@@ -112,8 +117,8 @@ function SessionList({
           </div>
         ))}
       </div>
-      <div className="border-t border-white/[0.06] p-3 text-[10px] text-[#636366]">
-        對話紀錄僅存於本機瀏覽器
+      <div className="border-t border-white/[0.06] px-3 py-2 text-[10px] text-[#48484A]">
+        本機儲存
       </div>
     </>
   );
@@ -198,10 +203,10 @@ function AgentRoster({
             <button
               type="button"
               onClick={() => onPick(agent.id)}
-              className={`mx-2 mb-0.5 flex w-[calc(100%-16px)] items-center gap-2 rounded-xl px-2.5 py-1.5 text-left transition-colors ${
+              className={`mx-2 mb-0.5 flex w-[calc(100%-16px)] items-center gap-2 rounded-lg px-2.5 py-1.5 text-left transition-colors ${
                 active
-                  ? 'bg-[#007AFF]/15 ring-1 ring-[#007AFF]/35'
-                  : 'hover:bg-white/[0.04]'
+                  ? 'bg-white/[0.06] text-[#F5F5F7]'
+                  : 'text-[#AEAEB2] hover:bg-white/[0.03] hover:text-[#F5F5F7]'
               }`}
             >
               <span
@@ -229,6 +234,88 @@ function AgentRoster({
   );
 }
 
+const TASK_STATUS_DOT: Record<string, string> = {
+  pending: 'bg-[#FF9500]',
+  running: 'bg-[#007AFF] animate-pulse',
+  completed: 'bg-[#34C759]',
+  failed: 'bg-[#FF3B30]',
+  cancelled: 'bg-[#8E8E93]',
+  interrupted: 'bg-[#FF9500]',
+};
+
+const EMPTY_TASKS: TaskSummary[] = [];
+
+function TaskRoster({
+  focusTaskId,
+  onPick,
+}: {
+  focusTaskId: string | null;
+  onPick: (id: string) => void;
+}) {
+  const tasks = useMonitorStore((s) => s.dashboard?.tasks ?? EMPTY_TASKS);
+  const running = tasks.filter((t) => t.status === 'running' || t.status === 'pending').length;
+  const [query, setQuery] = useState('');
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    const list = q
+      ? tasks.filter((t) => t.query.toLowerCase().includes(q) || t.task_id.includes(q))
+      : tasks;
+    return list.slice(0, 80);
+  }, [tasks, query]);
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="shrink-0 space-y-2 border-b border-white/[0.06] px-3 pb-3 pt-2">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-[#636366]">
+          {tasks.length} 筆 · {running} 執行中
+        </p>
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="搜尋任務／ID"
+          className="w-full rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-[11px] text-[#F5F5F7] placeholder:text-[#636366] outline-none focus:border-[#007AFF]/50"
+        />
+      </div>
+      {filtered.length === 0 ? (
+        <p className="px-3 py-8 text-center text-[11px] text-[#636366]">
+          {tasks.length === 0 ? '尚無任務紀錄' : '無符合結果'}
+        </p>
+      ) : (
+        <Virtuoso
+          className="min-h-0 flex-1"
+          data={filtered}
+          itemContent={(_i, task: TaskSummary) => {
+            const active = task.task_id === focusTaskId;
+            const dot = TASK_STATUS_DOT[task.status] ?? 'bg-[#8E8E93]';
+            return (
+              <button
+                type="button"
+                onClick={() => onPick(task.task_id)}
+                className={`mx-2 mb-0.5 flex w-[calc(100%-16px)] items-center gap-2 rounded-lg px-2.5 py-1.5 text-left transition-colors ${
+                  active
+                    ? 'bg-white/[0.06] text-[#F5F5F7]'
+                    : 'text-[#AEAEB2] hover:bg-white/[0.03] hover:text-[#F5F5F7]'
+                }`}
+              >
+                <span className={`h-2 w-2 shrink-0 rounded-full ${dot}`} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[12px] font-medium text-[#F5F5F7]">
+                    {task.query || task.task_id.slice(0, 8)}
+                  </span>
+                  <span className="block truncate text-[10px] text-[#636366]">
+                    {task.resolved_path || task.strategy} · {task.phase}
+                  </span>
+                </span>
+              </button>
+            );
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
 function TabBtn({
   item,
   active,
@@ -242,16 +329,13 @@ function TabBtn({
     <button
       type="button"
       onClick={onClick}
-      className={`relative flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[12px] transition-colors ${
+      className={`relative flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] transition-colors ${
         active
-          ? 'bg-[#007AFF]/15 font-bold text-[#F5F5F7] ring-1 ring-[#007AFF]/30'
-          : 'font-medium text-[#AEAEB2] hover:bg-white/[0.04] hover:text-[#F5F5F7]'
+          ? 'bg-white/[0.06] font-medium text-[#F5F5F7]'
+          : 'text-[#98989D] hover:bg-white/[0.03] hover:text-[#F5F5F7]'
       }`}
     >
-      {active && (
-        <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-r-full bg-[#007AFF]" />
-      )}
-      <span className="w-4 shrink-0 text-center text-[13px] leading-none opacity-80">{item.icon}</span>
+      <span className="w-4 shrink-0 text-center text-[12px] leading-none opacity-70">{item.icon}</span>
       <span className="min-w-0 flex-1 truncate">{item.label}</span>
     </button>
   );
@@ -262,15 +346,20 @@ function MonitorSidebar({
   onClose,
   focusAgentId,
   onFocusAgent,
+  focusTaskId,
+  onFocusTask,
   onMonitorTabChange,
 }: {
   monitorTab: MonitorTab;
   onClose: () => void;
   focusAgentId: string | null;
   onFocusAgent: (id: string | null) => void;
+  focusTaskId: string | null;
+  onFocusTask: (id: string | null) => void;
   onMonitorTabChange: (tab: MonitorTab) => void;
 }) {
   const onAgentsTab = monitorTab === 'agents';
+  const onTasksTab = monitorTab === 'tasks';
   const [moreOpen, setMoreOpen] = useState(() => isMonitorMoreTab(monitorTab));
 
   useEffect(() => {
@@ -279,16 +368,15 @@ function MonitorSidebar({
 
   const pick = (key: MonitorTab) => {
     onMonitorTabChange(key);
-    if (key !== 'agents') {
-      onFocusAgent(null);
-      onClose();
-    }
+    if (key !== 'agents' && focusAgentId) onFocusAgent(null);
+    if (key !== 'tasks' && focusTaskId) onFocusTask(null);
+    if (key !== 'agents' && key !== 'tasks') onClose();
   };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="shrink-0 border-b border-white/[0.06] px-3 py-3">
-        <p className="apple-title">監控</p>
+      <div className="shrink-0 px-3 py-2.5">
+        <p className="text-[11px] font-medium text-[#636366]">監控</p>
       </div>
 
       <nav className="shrink-0 space-y-0.5 border-b border-white/[0.06] p-2" aria-label="監控分頁">
@@ -330,12 +418,16 @@ function MonitorSidebar({
             onClose();
           }}
         />
+      ) : onTasksTab ? (
+        <TaskRoster
+          focusTaskId={focusTaskId}
+          onPick={(id) => {
+            onFocusTask(id);
+            onMonitorTabChange('tasks');
+          }}
+        />
       ) : (
-        <div className="flex-1 overflow-y-auto p-4">
-          <p className="text-[11px] leading-relaxed text-[#636366]">
-            主區只留即時／角色／管線。OPC、實驗室、運維與記憶收在「更多」。
-          </p>
-        </div>
+        <div className="flex-1" />
       )}
     </div>
   );
@@ -354,6 +446,10 @@ export default function SidePanel({
   onMonitorTabChange,
   focusAgentId,
   onFocusAgent,
+  focusTaskId,
+  onFocusTask,
+  traceTaskId,
+  onTraceTaskChange,
 }: SidePanelProps) {
   return (
     <>
@@ -362,7 +458,7 @@ export default function SidePanel({
       )}
 
       <aside
-        className={`fixed inset-y-10 left-12 z-30 flex w-56 flex-col overflow-hidden border-r border-white/[0.06] apple-chrome transition-transform md:static md:translate-x-0 ${
+        className={`fixed inset-y-10 left-11 z-30 flex w-52 flex-col overflow-hidden border-r border-white/[0.06] apple-chrome transition-transform md:static md:translate-x-0 ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -389,17 +485,23 @@ export default function SidePanel({
             onClose={onClose}
             focusAgentId={focusAgentId}
             onFocusAgent={onFocusAgent}
+            focusTaskId={focusTaskId}
+            onFocusTask={onFocusTask}
           />
         )}
 
         {activeView === 'traces' && (
-          <div className="space-y-2 p-3">
-            <p className="apple-title mb-2">執行軌跡</p>
-            {['LLM 調用鏈', '評估 · 反思 · 改進', '工具呼叫'].map((t) => (
-              <div key={t} className="apple-inset px-3 py-2.5">
-                <p className="text-[12px] font-bold text-[#F5F5F7]">{t}</p>
-              </div>
-            ))}
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="shrink-0 px-3 py-2.5">
+              <p className="text-[11px] font-medium text-[#636366]">執行軌跡</p>
+            </div>
+            <TraceRoster
+              selectedTaskId={traceTaskId}
+              onPick={(id) => {
+                onTraceTaskChange(id);
+                onClose();
+              }}
+            />
           </div>
         )}
       </aside>

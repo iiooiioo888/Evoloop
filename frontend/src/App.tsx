@@ -9,6 +9,14 @@ import type { ChatMessage, ChatSession, TaskProgress } from './types';
 import { createTask, fetchConfig, fetchMemories, fetchTask, sendChatStream, TaskWebSocket } from './api/client';
 import type { TaskWsMessage } from './api/client';
 import {
+  appRouteFromState,
+  applyAppRoute,
+  getDefaultRoute,
+  parseAppRoute,
+  routesEqual,
+  syncAppRouteHash,
+} from './lib/appRoute';
+import {
   loadActiveSessionId,
   loadSessions,
   newSessionId,
@@ -52,13 +60,15 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [lastQuery, setLastQuery] = useState<string | null>(null);
 
-  // ── IDE 布局状态 ──
-  const [activeView, setActiveView] = useState<ViewKey>(
-    import.meta.env.VITE_GITHUB_PAGES === 'true' ? 'monitor' : 'chat',
-  );
-  const [monitorTab, setMonitorTab] = useState<MonitorTab>('live');
+  // ── IDE 布局状态（由 Hash 路由初始化） ──
+  const initialRoute = applyAppRoute(parseAppRoute(window.location.hash));
+  const [routeReady, setRouteReady] = useState(false);
+  const [activeView, setActiveView] = useState<ViewKey>(initialRoute.activeView);
+  const [monitorTab, setMonitorTab] = useState<MonitorTab>(initialRoute.monitorTab);
   /** 進入監控「角色 Agent」時預選一位，主區開工作台；名冊在左側外圍 */
-  const [focusAgentId, setFocusAgentId] = useState<string | null>('manager');
+  const [focusAgentId, setFocusAgentId] = useState<string | null>(initialRoute.focusAgentId);
+  const [focusTaskId, setFocusTaskId] = useState<string | null>(initialRoute.focusTaskId);
+  const [traceTaskId, setTraceTaskId] = useState<string | null>(initialRoute.traceTaskId);
   const [rightPanelTask, setRightPanelTask] = useState<TaskProgress | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [memoryCount, setMemoryCount] = useState(0);
@@ -75,6 +85,67 @@ export default function App() {
   useEffect(() => {
     refreshConfigStatus();
   }, [refreshConfigStatus]);
+
+  // Hash 路由：初始化正規化 + 狀態同步 + 瀏覽器前進/後退
+  useEffect(() => {
+    const boot = parseAppRoute(window.location.hash);
+    syncAppRouteHash(boot);
+    setRouteReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!routeReady) return;
+    syncAppRouteHash(
+      appRouteFromState({
+        activeView,
+        monitorTab,
+        focusAgentId,
+        focusTaskId,
+        traceTaskId,
+      }),
+    );
+  }, [routeReady, activeView, monitorTab, focusAgentId, focusTaskId, traceTaskId]);
+
+  useEffect(() => {
+    const onHashChange = () => {
+      const parsed = parseAppRoute(window.location.hash);
+      const current = appRouteFromState({
+        activeView,
+        monitorTab,
+        focusAgentId,
+        focusTaskId,
+        traceTaskId,
+      });
+      if (routesEqual(current, parsed)) return;
+      const next = applyAppRoute(parsed);
+      setActiveView(next.activeView);
+      setMonitorTab(next.monitorTab);
+      setFocusAgentId(next.focusAgentId);
+      setFocusTaskId(next.focusTaskId);
+      setTraceTaskId(next.traceTaskId);
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, [activeView, monitorTab, focusAgentId, focusTaskId, traceTaskId]);
+
+  const navigateRoute = useCallback(
+    (patch: Partial<ReturnType<typeof getDefaultRoute>>) => {
+      const route = appRouteFromState({
+        activeView: patch.view ?? activeView,
+        monitorTab: patch.monitorTab ?? monitorTab,
+        focusAgentId: patch.focusAgentId !== undefined ? patch.focusAgentId : focusAgentId,
+        focusTaskId: patch.focusTaskId !== undefined ? patch.focusTaskId : focusTaskId,
+        traceTaskId: patch.traceTaskId !== undefined ? patch.traceTaskId : traceTaskId,
+      });
+      const applied = applyAppRoute(route);
+      setActiveView(applied.activeView);
+      setMonitorTab(applied.monitorTab);
+      setFocusAgentId(applied.focusAgentId);
+      setFocusTaskId(applied.focusTaskId);
+      setTraceTaskId(applied.traceTaskId);
+    },
+    [activeView, monitorTab, focusAgentId, focusTaskId, traceTaskId],
+  );
 
   useEffect(() => {
     fetchMemories(1, 0)
@@ -439,9 +510,93 @@ export default function App() {
   }, []);
 
   // ── 打開執行軌跡視圖 ──
-  const handleOpenTrace = useCallback((_taskId: string) => {
-    setActiveView('traces');
-  }, []);
+  const handleOpenTrace = useCallback(
+    (taskId: string) => {
+      navigateRoute({ view: 'traces', traceTaskId: taskId });
+    },
+    [navigateRoute],
+  );
+
+  const handleViewChange = useCallback(
+    (view: ViewKey) => {
+      if (view === 'monitor') {
+        // 從其他主視圖切回監控時才清掉 focus；已在監控內則保留書籤路由
+        const resetFocus = activeView !== 'monitor';
+        navigateRoute({
+          view,
+          monitorTab,
+          focusAgentId: resetFocus ? null : focusAgentId,
+          focusTaskId: resetFocus ? null : focusTaskId,
+        });
+        return;
+      }
+      if (view === 'traces') {
+        navigateRoute({ view, traceTaskId });
+        return;
+      }
+      navigateRoute({ view: 'chat', focusAgentId: null, focusTaskId: null, traceTaskId: null });
+    },
+    [navigateRoute, activeView, monitorTab, focusAgentId, focusTaskId, traceTaskId],
+  );
+
+  const handleMonitorTabChange = useCallback(
+    (tab: MonitorTab) => {
+      navigateRoute({
+        view: 'monitor',
+        monitorTab: tab,
+        focusAgentId: tab === 'agents' ? focusAgentId : null,
+        focusTaskId: tab === 'tasks' ? focusTaskId : null,
+      });
+    },
+    [navigateRoute, focusAgentId, focusTaskId],
+  );
+
+  const handleFocusAgent = useCallback(
+    (id: string | null) => {
+      if (id) {
+        navigateRoute({
+          view: 'monitor',
+          monitorTab: 'agents',
+          focusAgentId: id,
+          focusTaskId: null,
+        });
+        return;
+      }
+      navigateRoute({
+        view: 'monitor',
+        monitorTab,
+        focusAgentId: null,
+      });
+    },
+    [navigateRoute, monitorTab],
+  );
+
+  const handleFocusTask = useCallback(
+    (id: string | null) => {
+      if (id) {
+        navigateRoute({
+          view: 'monitor',
+          monitorTab: 'tasks',
+          focusTaskId: id,
+          focusAgentId: null,
+        });
+        return;
+      }
+      navigateRoute({
+        view: 'monitor',
+        monitorTab,
+        focusTaskId: null,
+      });
+    },
+    [navigateRoute, monitorTab],
+  );
+
+  const handleTraceTaskChange = useCallback(
+    (id: string | null) => {
+      navigateRoute({ view: 'traces', traceTaskId: id });
+    },
+    [navigateRoute],
+  );
 
   // ── 状态栏信息 ──
   const statusInfo = useMemo(
@@ -456,7 +611,7 @@ export default function App() {
     <>
       <AppShell
         activeView={activeView}
-        onViewChange={setActiveView}
+        onViewChange={handleViewChange}
         rightPanelTask={rightPanelTask}
         onRightPanelClose={() => setRightPanelTask(null)}
         sessions={sessions}
@@ -467,9 +622,13 @@ export default function App() {
         llmConfigured={llmConfigured}
         onOpenSettings={() => setSettingsOpen(true)}
         monitorTab={monitorTab}
-        onMonitorTabChange={setMonitorTab}
+        onMonitorTabChange={handleMonitorTabChange}
         focusAgentId={focusAgentId}
-        onFocusAgent={setFocusAgentId}
+        onFocusAgent={handleFocusAgent}
+        focusTaskId={focusTaskId}
+        onFocusTask={handleFocusTask}
+        traceTaskId={traceTaskId}
+        onTraceTaskChange={handleTraceTaskChange}
         statusInfo={statusInfo}
       >
         {activeView === 'chat' && (
@@ -492,13 +651,21 @@ export default function App() {
         {activeView === 'monitor' && (
           <MonitorView
             onOpenTask={handleDashboardOpenTask}
+            onOpenTrace={handleOpenTrace}
             activeTab={monitorTab}
-            onTabChange={setMonitorTab}
+            onTabChange={handleMonitorTabChange}
             focusAgentId={focusAgentId}
-            onFocusAgent={setFocusAgentId}
+            onFocusAgent={handleFocusAgent}
+            focusTaskId={focusTaskId}
+            onFocusTask={handleFocusTask}
           />
         )}
-        {activeView === 'traces' && <TraceView />}
+        {activeView === 'traces' && (
+          <TraceView
+            taskId={traceTaskId}
+            onTaskIdChange={handleTraceTaskChange}
+          />
+        )}
       </AppShell>
 
       {/* LLM 设置弹窗 */}

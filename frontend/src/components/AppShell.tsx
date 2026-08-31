@@ -17,6 +17,7 @@ export type ViewKey = 'chat' | 'monitor' | 'traces';
 /** 精簡後的監控主分頁（次要功能收入 ops / lab）。 */
 export type MonitorTab =
   | 'live'
+  | 'tasks'
   | 'agents'
   | 'pipeline'
   | 'opc'
@@ -51,6 +52,12 @@ export interface AppShellProps {
   onMonitorTabChange: (tab: MonitorTab) => void;
   focusAgentId: string | null;
   onFocusAgent: (id: string | null) => void;
+  focusTaskId: string | null;
+  onFocusTask: (id: string | null) => void;
+
+  /** 執行軌跡 */
+  traceTaskId: string | null;
+  onTraceTaskChange: (id: string | null) => void;
 
   /** 状态栏信息 */
   statusInfo: {
@@ -78,14 +85,21 @@ export default function AppShell({
   onMonitorTabChange,
   focusAgentId,
   onFocusAgent,
+  focusTaskId,
+  onFocusTask,
+  traceTaskId,
+  onTraceTaskChange,
   statusInfo,
   children,
 }: AppShellProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  // 任一入口切到「角色 Agent」時，確保左側外圍側欄開啟（名冊所在）
+  // 切到「角色」「任務」或「軌跡」時，確保左側外圍側欄開啟
   useEffect(() => {
-    if (activeView === 'monitor' && monitorTab === 'agents') {
+    if (
+      activeView === 'traces' ||
+      (activeView === 'monitor' && (monitorTab === 'agents' || monitorTab === 'tasks'))
+    ) {
       setSidebarOpen(true);
     }
   }, [activeView, monitorTab]);
@@ -93,7 +107,7 @@ export default function AppShell({
   const handleViewChange = useCallback(
     (view: ViewKey) => {
       onViewChange(view);
-      setSidebarOpen(view === 'monitor');
+      setSidebarOpen(true);
     },
     [onViewChange],
   );
@@ -103,6 +117,8 @@ export default function AppShell({
       {/* ══ 顶栏 ══ */}
       <TopBar
         activeView={activeView}
+        monitorTab={monitorTab}
+        traceTaskId={traceTaskId}
         llmConfigured={llmConfigured}
         rightPanelOpen={rightPanelTask !== null}
         onRightPanelToggle={() => {
@@ -134,6 +150,10 @@ export default function AppShell({
           onMonitorTabChange={onMonitorTabChange}
           focusAgentId={focusAgentId}
           onFocusAgent={onFocusAgent}
+          focusTaskId={focusTaskId}
+          onFocusTask={onFocusTask}
+          traceTaskId={traceTaskId}
+          onTraceTaskChange={onTraceTaskChange}
         />
 
         {/* 主内容区 */}

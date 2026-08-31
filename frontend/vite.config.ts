@@ -16,8 +16,9 @@ export default defineConfig({
     dedupe: ['react', 'react-dom', 'react-is'],
   },
   server: {
-    port: 5173,
-    host: true,
+    // 5173 在部分 Windows 環境會 EACCES；3000 較穩定
+    port: Number(process.env.VITE_DEV_PORT) || 3000,
+    host: '127.0.0.1',
     proxy: {
       // 開發時將 API 請求代理到 FastAPI 後端
       // 容器內執行時透過 VITE_PROXY_TARGET 指向服務名（如 http://backend:8000）

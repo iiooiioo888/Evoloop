@@ -1,12 +1,15 @@
 /**
- * TopBar — Apple 風格頂欄。
+ * TopBar — 極簡頂欄。
  */
 import { useTranslation } from 'react-i18next';
 import { setLocale } from '../i18n';
-import type { ViewKey } from './AppShell';
+import { monitorTabLabel } from '../lib/monitorTabs';
+import type { MonitorTab, ViewKey } from './AppShell';
 
 interface TopBarProps {
   activeView: ViewKey;
+  monitorTab: MonitorTab;
+  traceTaskId: string | null;
   llmConfigured: boolean | null;
   rightPanelOpen: boolean;
   onRightPanelToggle: () => void;
@@ -16,6 +19,8 @@ interface TopBarProps {
 
 export default function TopBar({
   activeView,
+  monitorTab,
+  traceTaskId,
   llmConfigured,
   rightPanelOpen,
   onRightPanelToggle,
@@ -27,75 +32,72 @@ export default function TopBar({
     activeView === 'chat'
       ? t('nav.chat')
       : activeView === 'monitor'
-        ? t('nav.monitor')
-        : t('nav.traces');
+        ? `${t('nav.monitor')} · ${monitorTabLabel(monitorTab)}`
+        : traceTaskId
+          ? `${t('nav.traces')} · ${traceTaskId.slice(0, 8)}…`
+          : t('nav.traces');
 
   return (
-    <header className="flex h-10 shrink-0 items-center border-b border-white/[0.06] apple-chrome px-3">
+    <header className="flex h-10 shrink-0 items-center gap-2 border-b border-white/[0.06] apple-chrome px-3">
       <button
         onClick={onToggleSidebar}
-        className="mr-1 rounded-lg px-2 py-1 text-[#8E8E93] hover:bg-white/[0.06] hover:text-[#F5F5F7] md:hidden"
+        className="apple-icon-btn md:hidden"
         aria-label="切換側邊欄"
       >
-        ☰
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
+          <path d="M2.5 4h11M2.5 8h11M2.5 12h11" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+        </svg>
       </button>
 
-      <span className="mr-2 text-[13px] font-bold tracking-tight text-[#F5F5F7]">EvoLoop</span>
-      <span className="rounded-full bg-white/[0.04] px-2.5 py-0.5 text-[11px] font-medium text-[#AEAEB2]">
-        {viewLabel}
-      </span>
+      <span className="text-[13px] font-semibold text-[#F5F5F7]">EvoLoop</span>
+      <span className="text-[12px] text-[#636366]">· {viewLabel}</span>
 
-      <div className="ml-auto flex items-center gap-1.5">
-        <span
-          className="flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px]"
-          style={{
-            color:
-              llmConfigured === null ? '#8E8E93' : llmConfigured ? '#34C759' : '#FF9500',
-            background:
-              llmConfigured === null
-                ? 'rgba(255,255,255,0.04)'
-                : llmConfigured
-                  ? 'rgba(52,199,89,0.12)'
-                  : 'rgba(255,149,0,0.12)',
-          }}
-        >
-          <span
-            className={
-              llmConfigured
-                ? 'apple-dot apple-dot--ok'
-                : llmConfigured === false
-                  ? 'apple-dot apple-dot--warn'
-                  : 'apple-dot'
-            }
-            style={llmConfigured === null ? { background: '#8E8E93' } : undefined}
-          />
-          {llmConfigured === null ? '—' : llmConfigured ? '已連線' : '未配置'}
-        </span>
+      <div className="ml-auto flex items-center gap-0.5">
+        {llmConfigured === false && (
+          <span className="mr-1 hidden items-center gap-1.5 text-[10px] text-[#FF9F0A] sm:flex">
+            <span className="apple-dot apple-dot--warn" />
+            未配置
+          </span>
+        )}
 
         <button
           type="button"
           onClick={() => setLocale(i18n.language === 'en' ? 'zh-TW' : 'en')}
-          className="rounded-full border border-white/[0.08] px-2 py-0.5 text-[10px] font-bold text-[#AEAEB2] hover:text-[#F5F5F7]"
+          className="apple-icon-btn text-[10px] font-semibold"
           title="Language"
         >
           {i18n.language === 'en' ? 'EN' : '繁'}
         </button>
 
-        <button
-          onClick={onRightPanelToggle}
-          className={`rounded-lg px-2 py-1 text-[12px] ${
-            rightPanelOpen ? 'text-[#007AFF]' : 'text-[#8E8E93] hover:text-[#F5F5F7]'
-          }`}
-          title="OPC 面板"
-        >
-          OPC
-        </button>
+        {rightPanelOpen && (
+          <button
+            onClick={onRightPanelToggle}
+            className="apple-icon-btn apple-icon-btn--active text-[10px] font-medium"
+            title="關閉 OPC"
+          >
+            OPC
+          </button>
+        )}
+
         <button
           onClick={onOpenSettings}
-          className="rounded-lg px-2 py-1 text-[12px] text-[#8E8E93] hover:text-[#F5F5F7]"
+          className="apple-icon-btn"
           title="設定"
+          aria-label="設定"
         >
-          ⚙
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden>
+            <path
+              d="M7.5 9.5a2 2 0 100-4 2 2 0 000 4z"
+              stroke="currentColor"
+              strokeWidth="1.2"
+            />
+            <path
+              d="M7.5 1.5l1 .6 1.1-.2.6 1 .9.7 1.1.2v1.2l-.7.9.2 1.1-1 .6-.2 1.1-1.2.2-.6 1-1.1-.2-.9.7-1.1.2v-1.2l.7-.9-.2-1.1 1-.6.2-1.1 1.2-.2.6-1z"
+              stroke="currentColor"
+              strokeWidth="1"
+              strokeLinejoin="round"
+            />
+          </svg>
         </button>
       </div>
     </header>

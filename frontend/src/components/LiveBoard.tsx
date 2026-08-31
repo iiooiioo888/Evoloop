@@ -23,11 +23,11 @@ const PIPELINE = [
   { id: 'out', label: '輸出' },
 ];
 
-const BLUE = '#007AFF';
-const GREEN = '#34C759';
-const ORANGE = '#FF9500';
-const RED = '#FF3B30';
-const GRAY = '#8E8E93';
+const BLUE = '#0A84FF';
+const GREEN = '#30D158';
+const ORANGE = '#FF9F0A';
+const RED = '#FF453A';
+const GRAY = '#98989D';
 
 export type LiveBoardDensity = 'page' | 'dock';
 
@@ -71,15 +71,8 @@ function StatusDot({ color, label }: { color: string; label: string }) {
             ? 'apple-dot apple-dot--info'
             : 'apple-dot';
   return (
-    <span className="inline-flex items-center gap-2 text-[10px] font-normal text-[#AEAEB2]">
-      <span
-        className={tone}
-        style={
-          tone === 'apple-dot'
-            ? { background: color, boxShadow: `0 0 0 2px ${color}33, 0 0 12px ${color}66` }
-            : undefined
-        }
-      />
+    <span className="inline-flex items-center gap-1.5 text-[10px] text-[#98989D]">
+      <span className={tone} style={tone === 'apple-dot' ? { background: color } : undefined} />
       {label}
     </span>
   );
@@ -422,13 +415,22 @@ export default function LiveBoard({
     >
       <div
         className={`lb-board-scroll min-h-0 flex-1 overflow-y-auto ${
-          dock ? 'px-3 py-3' : 'px-6 py-8 sm:px-10 sm:py-10'
+          dock ? 'px-3 py-3' : 'px-4 py-4 sm:px-6 sm:py-5'
         }`}
       >
-        <div className={`flex items-center gap-3 ${dock ? 'mb-3' : 'mb-8'}`}>
-          <StatusDot color={feed.live ? GREEN : GRAY} label={feed.live ? 'LIVE' : 'IDLE'} />
-          {updated && <span className="font-mono text-[10px] text-[#636366]">{updated}</span>}
-        </div>
+        {!dock && (
+          <header className="mb-4 flex items-center justify-end gap-2">
+            <StatusDot color={feed.live ? GREEN : GRAY} label={feed.live ? 'LIVE' : 'IDLE'} />
+            {updated && <span className="apple-data text-[10px] text-[#636366]">{updated}</span>}
+          </header>
+        )}
+
+        {dock && (
+          <div className="mb-3 flex items-center gap-2">
+            <StatusDot color={feed.live ? GREEN : GRAY} label={feed.live ? 'LIVE' : 'IDLE'} />
+            {updated && <span className="font-mono text-[10px] text-[#636366]">{updated}</span>}
+          </div>
+        )}
 
         {dock ? (
           <div className="lb-dock-grid">
@@ -450,9 +452,6 @@ export default function LiveBoard({
               <PipelineCard feed={feed} />
             </div>
             <CompanyCard feed={feed} />
-            <div className="lb-span-2">
-              <RouterCard feed={feed} />
-            </div>
             <BudgetCard feed={feed} />
             <OpcCard feed={feed} />
             <div className="lb-span-2">

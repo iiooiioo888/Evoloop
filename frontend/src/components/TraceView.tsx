@@ -1,19 +1,10 @@
 /** TraceView — 執行軌跡視圖（思考過程查看器）。
  *
- * 按 Linear 設計規範：
- * - Canvas: #010102, Surface-1: #0f1011, Hairline: #23252a
- * - Primary accent: #007AFF (lavender-blue)
- * - 使用 surface ladder + hairline borders，不用 shadow
- *
- * 功能：
- * - 列出所有軌跡檔案
- * - 點擊查看完整思考過程時間線
- * - 按事件類型篩選
- * - 可展開查看完整 prompt/response
+ * 軌跡清單由左側 TraceRoster 共用；此處僅渲染事件時間線。
  */
 import { useCallback, useEffect, useState } from 'react';
-import { fetchTaskTrace, fetchTraces } from '../api/client';
-import type { TraceEntry, TraceSummary } from '../types';
+import { fetchTaskTrace } from '../api/client';
+import type { TraceEntry } from '../types';
 
 // ── 事件類型元數據 ──
 const EVENT_META: Record<string, { label: string; icon: string; color: string }> = {
@@ -225,124 +216,88 @@ function TraceEventCard({ entry }: { entry: TraceEntry }) {
   );
 }
 
-export default function TraceView() {
-  const [traces, setTraces] = useState<TraceSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+interface TraceViewProps {
+  /** 外部導航指定要開啟的任務軌跡 */
+  taskId?: string | null;
+  onTaskIdChange?: (taskId: string | null) => void;
+}
 
-  // 選中的任務軌跡
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+export default function TraceView({ taskId = null, onTaskIdChange }: TraceViewProps) {
+  const [error, setError] = useState<string | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(taskId);
   const [events, setEvents] = useState<TraceEntry[]>([]);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [filter, setFilter] = useState('all');
 
-  const loadTraces = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await fetchTraces(50);
-      setTraces(data.traces);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const loadEvents = useCallback(
+    async (nextTaskId: string) => {
+      setSelectedTaskId(nextTaskId);
+      if (nextTaskId !== taskId) onTaskIdChange?.(nextTaskId);
+      setEventsLoading(true);
+      setEvents([]);
+      setError(null);
+      try {
+        const data = await fetchTaskTrace(nextTaskId, 200, 0);
+        setEvents(data.events);
+      } catch (err) {
+        setError((err as Error).message);
+      } finally {
+        setEventsLoading(false);
+      }
+    },
+    [onTaskIdChange, taskId],
+  );
 
   useEffect(() => {
-    void loadTraces();
-  }, [loadTraces]);
-
-  const loadEvents = useCallback(async (taskId: string) => {
-    setSelectedTaskId(taskId);
-    setEventsLoading(true);
-    setEvents([]);
-    try {
-      const data = await fetchTaskTrace(taskId, 200, 0);
-      setEvents(data.events);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setEventsLoading(false);
+    if (taskId && taskId !== selectedTaskId) {
+      void loadEvents(taskId);
     }
-  }, []);
+    if (!taskId && selectedTaskId) {
+      setSelectedTaskId(null);
+      setEvents([]);
+    }
+  }, [taskId, selectedTaskId, loadEvents]);
 
   const filteredEvents = filter === 'all' ? events : events.filter((e) => e.event === filter);
 
   return (
     <div className="flex h-full flex-col apple-canvas">
-      {/* 標題列 */}
       <div className="flex items-center justify-between border-b border-white/[0.08] px-4 py-3">
         <h2 className="text-sm font-medium tracking-tight text-[#f7f8f8]">
-          📜 執行軌跡
-          <span className="ml-2 text-xs font-normal text-[#8a8f98]">
-            {selectedTaskId ? `任務 ${selectedTaskId}` : `${traces.length} 個軌跡檔案`}
-          </span>
-        </h2>
-        <div className="flex items-center gap-2">
+          執行軌跡
           {selectedTaskId && (
-            <button
-              onClick={() => { setSelectedTaskId(null); setEvents([]); }}
-              className="rounded-xl border border-white/[0.08] bg-[#1C1C1E] px-3 py-1.5 text-xs text-[#f7f8f8] transition-colors hover:border-[#34343a]"
-            >
-              ← 返回列表
-            </button>
+            <span className="ml-2 font-mono text-xs font-normal text-[#007AFF]">{selectedTaskId}</span>
           )}
+        </h2>
+        {selectedTaskId && (
           <button
-            onClick={() => void loadTraces()}
-            disabled={loading}
-            className="rounded-xl border border-white/[0.08] bg-[#1C1C1E] px-3 py-1.5 text-xs text-[#f7f8f8] transition-colors hover:border-[#34343a] disabled:opacity-40"
+            onClick={() => {
+              setSelectedTaskId(null);
+              onTaskIdChange?.(null);
+              setEvents([]);
+            }}
+            className="rounded-xl border border-white/[0.08] bg-[#1C1C1E] px-3 py-1.5 text-xs text-[#f7f8f8] transition-colors hover:border-[#34343a]"
           >
-            {loading ? '...' : '🔄'}
+            清除選取
           </button>
-        </div>
+        )}
       </div>
 
-      {/* 錯誤提示 */}
       {error && (
         <p className="border-b border-red-900/50 bg-red-950/30 px-4 py-2 text-xs text-red-400">
-          ⚠️ {error}
+          {error}
         </p>
       )}
 
-      {/* 軌跡列表 */}
       {!selectedTaskId && (
-        <div className="flex-1 overflow-y-auto p-4">
-          {loading && traces.length === 0 && (
-            <p className="py-12 text-center text-xs text-[#62666d]">載入中...</p>
-          )}
-          {!loading && traces.length === 0 && (
-            <div className="py-16 text-center">
-              <span className="text-3xl">📜</span>
-              <p className="mt-2 text-xs text-[#62666d]">尚無軌跡記錄</p>
-              <p className="mt-1 text-[11px] text-[#3e3e44]">執行任務後，思考過程會自動記錄在此</p>
-            </div>
-          )}
-          <div className="space-y-2">
-            {traces.map((t) => (
-              <button
-                key={t.task_id}
-                onClick={() => void loadEvents(t.task_id)}
-                className="w-full apple-card apple-card--tight !p-0 p-3 text-left transition-colors hover:border-[#007AFF]/40"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-xs text-[#007AFF]">{t.task_id}</span>
-                  <span className="text-[10px] text-[#62666d]">{t.file_size_kb} KB</span>
-                </div>
-                <div className="mt-1 flex items-center gap-3 text-[11px] text-[#8a8f98]">
-                  <span>{t.event_count} 個事件</span>
-                  <span>{t.last_ts ? new Date(t.last_ts).toLocaleString('zh-TW') : ''}</span>
-                </div>
-              </button>
-            ))}
-          </div>
+        <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+          <p className="text-sm text-[#8a8f98]">從左側選擇軌跡檔案</p>
+          <p className="mt-1 text-[11px] text-[#48484A]">執行任務後，思考過程會自動記錄在此</p>
         </div>
       )}
 
-      {/* 事件詳情 */}
       {selectedTaskId && (
         <div className="flex flex-1 flex-col overflow-hidden">
-          {/* 篩選列 */}
           <div className="flex flex-wrap gap-1.5 border-b border-white/[0.08] px-4 py-2">
             {FILTER_OPTIONS.map((opt) => (
               <button
@@ -362,7 +317,6 @@ export default function TraceView() {
             </span>
           </div>
 
-          {/* 事件列表 */}
           <div className="flex-1 space-y-2 overflow-y-auto p-4">
             {eventsLoading && (
               <p className="py-12 text-center text-xs text-[#62666d]">載入中...</p>

@@ -176,9 +176,14 @@ export default function MonitorOverview({ onOpenTab }: MonitorOverviewProps) {
           onClick={() => onOpenTab('live')}
         />
         <Kpi
+          label="任務"
+          value={`${dash?.stats.tasks_running ?? 0}/${dash?.stats.tasks_total ?? 0}`}
+          onClick={() => onOpenTab('tasks')}
+        />
+        <Kpi
           label="成功率"
           value={`${dash?.stats.success_rate ?? 0}%`}
-          onClick={() => onOpenTab('pipeline')}
+          onClick={() => onOpenTab('tasks')}
         />
         <Kpi
           label="Agent"
