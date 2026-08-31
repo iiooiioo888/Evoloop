@@ -124,22 +124,23 @@ body {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 4px 16px 16px;
+  /* 留白 > 內容：上下多留，避免貼邊擁擠 */
+  padding: 8px 20px 22px;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
-  /* 上下淡出，避免內容貼邊 */
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+  scroll-behavior: smooth;
   mask-image: linear-gradient(
     to bottom,
     transparent 0,
-    #000 10px,
-    #000 calc(100% - 12px),
+    #000 14px,
+    #000 calc(100% - 16px),
     transparent 100%
   );
 }
 
 .apple-card--tight .apple-card__body {
-  padding: 2px 14px 14px;
+  padding: 6px 16px 16px;
 }
 
 .apple-card__body--static {
@@ -161,12 +162,12 @@ body {
 /* 卡片柵格：留白 > 內容密度 */
 .apple-card-grid {
   display: grid;
-  gap: 16px;
+  gap: 22px;
   align-items: stretch;
 }
 
 .apple-card-grid--dense {
-  gap: 12px;
+  gap: 16px;
 }
 
 .apple-inset {
@@ -491,7 +492,7 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 16px 18px 10px;
+  padding: 18px 20px 12px;
 }
 
 .lb-frost-card > .lb-card-body {
@@ -500,15 +501,16 @@ body {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 2px 18px 18px;
+  padding: 6px 20px 22px;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+  scroll-behavior: smooth;
   mask-image: linear-gradient(
     to bottom,
     transparent 0,
-    #000 8px,
-    #000 calc(100% - 10px),
+    #000 14px,
+    #000 calc(100% - 16px),
     transparent 100%
   );
 }
@@ -553,7 +555,7 @@ body {
 
 .lb-board-grid {
   display: grid;
-  gap: 20px;
+  gap: 24px;
   align-items: stretch;
   grid-template-columns: 1fr;
 }
@@ -561,14 +563,14 @@ body {
 @media (min-width: 1024px) {
   .lb-board-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 22px;
+    gap: 26px;
   }
 }
 
 @media (min-width: 1280px) {
   .lb-board-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 24px;
+    gap: 28px;
   }
 }
 

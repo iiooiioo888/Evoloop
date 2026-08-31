@@ -9,6 +9,12 @@ const base = process.env.VITE_BASE || '/'
 export default defineConfig({
   base,
   plugins: [react(), tailwindcss()],
+  optimizeDeps: {
+    include: ['react-is', 'recharts'],
+  },
+  resolve: {
+    dedupe: ['react', 'react-dom', 'react-is'],
+  },
   server: {
     port: 5173,
     host: true,

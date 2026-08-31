@@ -422,10 +422,10 @@ export default function LiveBoard({
     >
       <div
         className={`lb-board-scroll min-h-0 flex-1 overflow-y-auto ${
-          dock ? 'px-3 py-3' : 'px-6 py-6 sm:px-8 sm:py-7'
+          dock ? 'px-3 py-3' : 'px-6 py-8 sm:px-10 sm:py-10'
         }`}
       >
-        <div className={`flex items-center gap-3 ${dock ? 'mb-3' : 'mb-6'}`}>
+        <div className={`flex items-center gap-3 ${dock ? 'mb-3' : 'mb-8'}`}>
           <StatusDot color={feed.live ? GREEN : GRAY} label={feed.live ? 'LIVE' : 'IDLE'} />
           {updated && <span className="font-mono text-[10px] text-[#636366]">{updated}</span>}
         </div>

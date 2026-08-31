@@ -1,4 +1,4 @@
-/** 單則訊息氣泡：任務面板、Markdown 渲染、複製按鈕、評分/模式徽章、回饋。 */
+/** 單則訊息氣泡：任務面板、Markdown、評分、回饋（Apple 語彙）。 */
 import { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import type { ChatMessage } from '../types';
@@ -10,9 +10,7 @@ import ErrorState from './ui/ErrorState';
 interface MessageBubbleProps {
   message: ChatMessage;
   sessionId: string;
-  /** 開啟整頁任務視圖 */
   onOpenTask?: () => void;
-  /** 打開執行軌跡視圖 */
   onOpenTrace?: (taskId: string) => void;
 }
 
@@ -23,14 +21,19 @@ function formatTime(ts: number): string {
   });
 }
 
-export default function MessageBubble({ message, sessionId, onOpenTask, onOpenTrace }: MessageBubbleProps) {
+export default function MessageBubble({
+  message,
+  sessionId,
+  onOpenTask,
+  onOpenTrace,
+}: MessageBubbleProps) {
   const [feedbackSent, setFeedbackSent] = useState<1 | 2 | undefined>(message.feedback);
   const [showThanks, setShowThanks] = useState(false);
   const [copied, setCopied] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
+  const [showRadar, setShowRadar] = useState(false);
   const isUser = message.role === 'user';
 
-  /** 取消任務（盡力而為，後續狀態由 WebSocket/輪詢推送更新） */
   const handleCancelTask = async (taskId: string) => {
     setCancelError(null);
     try {
@@ -41,7 +44,6 @@ export default function MessageBubble({ message, sessionId, onOpenTask, onOpenTr
     }
   };
 
-  /** 斷點續跑（盡力而為，後續狀態由 WebSocket/輪詢推送更新） */
   const handleResumeTask = async (taskId: string) => {
     setCancelError(null);
     try {
@@ -66,29 +68,32 @@ export default function MessageBubble({ message, sessionId, onOpenTask, onOpenTr
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     } catch {
-      // 剪貼簿不可用時靜默忽略
+      // ignore
     }
   };
 
   return (
     <div className={`group flex gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
-      {/* 頭像 */}
       <div
-        className={`mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-base shadow-lg transition-transform duration-200 group-hover:scale-105 ${
+        className={`mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-bold ${
           isUser
-            ? 'bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 ring-1 ring-blue-400/30'
-            : 'bg-gradient-to-br from-gray-700 via-gray-800 to-gray-900 ring-1 ring-gray-600/50'
+            ? 'bg-[#007AFF] text-white'
+            : 'bg-white/[0.08] text-[#AEAEB2] ring-1 ring-white/[0.08]'
         }`}
       >
-        {isUser ? '👤' : '🔄'}
+        {isUser ? '你' : 'E'}
       </div>
 
-      <div className={`flex max-w-[92%] min-w-0 flex-col gap-1.5 lg:max-w-[88%] xl:max-w-[85%] ${isUser ? 'items-end' : 'items-start'}`}>
+      <div
+        className={`flex max-w-[92%] min-w-0 flex-col gap-2 lg:max-w-[88%] ${
+          isUser ? 'items-end' : 'items-start'
+        }`}
+      >
         <div
-          className={`rounded-2xl px-4 py-3 text-sm leading-relaxed break-words transition-shadow duration-200 ${
+          className={`rounded-2xl px-4 py-3 text-[14px] font-normal leading-relaxed break-words ${
             isUser
-              ? 'rounded-br-md bg-gradient-to-br from-blue-600 via-blue-600 to-indigo-600 whitespace-pre-wrap text-white shadow-lg shadow-blue-900/20 ring-1 ring-blue-500/20'
-              : 'rounded-bl-md bg-gray-800/80 text-gray-100 shadow-lg shadow-black/10 ring-1 ring-gray-700/40 backdrop-blur-sm hover:ring-gray-600/50'
+              ? 'rounded-br-md bg-[#007AFF] whitespace-pre-wrap text-white'
+              : 'rounded-bl-md bg-white/[0.06] text-[#F5F5F7] ring-1 ring-white/[0.08]'
           }`}
         >
           {message.taskState && (
@@ -109,7 +114,6 @@ export default function MessageBubble({ message, sessionId, onOpenTask, onOpenTr
             isUser ? (
               message.content
             ) : (
-              /* AI 回答以 Markdown 渲染 */
               <div className="markdown-body">
                 <ReactMarkdown>{message.content}</ReactMarkdown>
               </div>
@@ -117,81 +121,82 @@ export default function MessageBubble({ message, sessionId, onOpenTask, onOpenTr
           ) : (
             message.streaming &&
             !message.taskState && (
-              <span className="flex items-center gap-1.5 text-gray-400">
-                <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-gray-500 border-t-transparent" />
+              <span className="inline-flex items-center gap-2 text-[#8E8E93]">
+                <span className="apple-dot apple-dot--info" />
                 建立任務中…
               </span>
             )
           )}
         </div>
 
-        {/* 時間 + 徽章列 */}
-        <div className="flex flex-wrap items-center gap-2 px-1 text-xs text-gray-500">
-          <span className="tabular-nums text-[11px] text-gray-600">{formatTime(message.timestamp)}</span>
+        <div className="flex flex-wrap items-center gap-2 px-1 text-[11px] text-[#636366]">
+          <span className="apple-data">{formatTime(message.timestamp)}</span>
           {message.executionStrategy === 'company' && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-purple-500/10 px-2 py-0.5 text-[10px] font-medium text-purple-300 ring-1 ring-purple-500/25">
-              🏢 公司運行時
+            <span className="rounded-full bg-[#007AFF]/12 px-2 py-0.5 font-bold text-[#64D2FF]">
+              公司運行時
             </span>
           )}
           {message.meta?.score != null && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-300 ring-1 ring-emerald-500/25">
-              ⭐ 評分 {message.meta.score.toFixed(1)}
+            <span className="rounded-full bg-[#34C759]/12 px-2 py-0.5 font-bold text-[#34C759]">
+              {message.meta.score.toFixed(1)}
             </span>
           )}
           {!!message.meta?.iteration && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-sky-500/10 px-2 py-0.5 text-[10px] font-medium text-sky-300 ring-1 ring-sky-500/25">
-              🔁 迭代 {message.meta.iteration}
-            </span>
+            <span className="apple-data text-[#8E8E93]">iter {message.meta.iteration}</span>
           )}
-          {message.meta?.multiDim && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-300 ring-1 ring-amber-500/25">
-              📊 準確{message.meta.multiDim.accuracy.score.toFixed(1)} 完整{message.meta.multiDim.completeness.score.toFixed(1)} 清晰{message.meta.multiDim.clarity.score.toFixed(1)} 相關{message.meta.multiDim.relevance.score.toFixed(1)}
-            </span>
+          {message.meta?.multiDim && !message.streaming && (
+            <button
+              type="button"
+              onClick={() => setShowRadar((v) => !v)}
+              className="rounded-full bg-white/[0.06] px-2 py-0.5 font-bold text-[#AEAEB2] hover:text-[#F5F5F7]"
+            >
+              {showRadar ? '隱藏雷達' : '四維評分'}
+            </button>
           )}
         </div>
 
-        {message.meta?.multiDim && !message.streaming && (
-          <div className="mt-1 w-full max-w-md">
+        {showRadar && message.meta?.multiDim && !message.streaming && (
+          <div className="mt-1 w-full max-w-sm">
             <ReflectionRadar multiDim={message.meta.multiDim} height={180} />
           </div>
         )}
 
-        {/* 操作列：AI 訊息且非生成中 */}
         {!isUser && !message.streaming && (message.content || message.taskState) && (
-          <div className="flex items-center gap-0.5 px-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+          <div className="flex items-center gap-1 px-1 opacity-0 transition-opacity group-hover:opacity-100">
             <button
-              onClick={handleCopy}
-              className="rounded-lg px-2 py-1 text-xs text-gray-400 transition-all hover:bg-gray-700/60 hover:text-gray-200"
+              type="button"
+              onClick={() => void handleCopy()}
+              className="rounded-lg px-2 py-1 text-[11px] text-[#8E8E93] hover:bg-white/[0.06] hover:text-[#F5F5F7]"
             >
-              {copied ? '✓ 已複製' : '📋 複製'}
+              {copied ? '已複製' : '複製'}
             </button>
             <button
+              type="button"
               onClick={() => void handleFeedback(2)}
               disabled={!!feedbackSent}
-              className={`rounded-lg px-2 py-1 text-sm transition-all ${
+              className={`rounded-lg px-2 py-1 text-[11px] ${
                 feedbackSent === 2
-                  ? 'bg-green-600/20 ring-1 ring-green-500/50'
-                  : 'hover:bg-gray-700/60 disabled:opacity-30'
+                  ? 'text-[#34C759]'
+                  : 'text-[#8E8E93] hover:bg-white/[0.06] hover:text-[#F5F5F7] disabled:opacity-30'
               }`}
               aria-label="滿意"
             >
-              👍
+              讚
             </button>
             <button
+              type="button"
               onClick={() => void handleFeedback(1)}
               disabled={!!feedbackSent}
-              className={`rounded-lg px-2 py-1 text-sm transition-all ${
+              className={`rounded-lg px-2 py-1 text-[11px] ${
                 feedbackSent === 1
-                  ? 'bg-red-600/20 ring-1 ring-red-500/50'
-                  : 'hover:bg-gray-700/60 disabled:opacity-30'
+                  ? 'text-[#FF3B30]'
+                  : 'text-[#8E8E93] hover:bg-white/[0.06] hover:text-[#F5F5F7] disabled:opacity-30'
               }`}
               aria-label="不滿意"
             >
-              👎
+              差
             </button>
-            {showThanks && (
-              <span className="animate-pulse text-xs text-green-400">感謝您的回饋！</span>
-            )}
+            {showThanks && <span className="text-[11px] text-[#34C759]">感謝回饋</span>}
           </div>
         )}
       </div>

@@ -6,7 +6,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { Virtuoso } from 'react-virtuoso';
 import { AGENT_STATUS_META, agentOpenCount } from '../lib/agentUi';
 import { AGENT_FALLBACK_ROSTER } from '../lib/monitorFallbacks';
-import { MONITOR_TABS } from '../lib/monitorTabs';
+import {
+  isMonitorMoreTab,
+  MONITOR_MORE_TABS,
+  MONITOR_PRIMARY_TABS,
+} from '../lib/monitorTabs';
 import { useMonitorStore } from '../stores/monitorStore';
 import type { ChatSession, RoleAgent } from '../types';
 import type { MonitorTab, ViewKey } from './AppShell';
@@ -225,6 +229,34 @@ function AgentRoster({
   );
 }
 
+function TabBtn({
+  item,
+  active,
+  onClick,
+}: {
+  item: { key: string; icon: string; label: string };
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`relative flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[12px] transition-colors ${
+        active
+          ? 'bg-[#007AFF]/15 font-bold text-[#F5F5F7] ring-1 ring-[#007AFF]/30'
+          : 'font-medium text-[#AEAEB2] hover:bg-white/[0.04] hover:text-[#F5F5F7]'
+      }`}
+    >
+      {active && (
+        <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-r-full bg-[#007AFF]" />
+      )}
+      <span className="w-4 shrink-0 text-center text-[13px] leading-none opacity-80">{item.icon}</span>
+      <span className="min-w-0 flex-1 truncate">{item.label}</span>
+    </button>
+  );
+}
+
 function MonitorSidebar({
   monitorTab,
   onClose,
@@ -239,6 +271,19 @@ function MonitorSidebar({
   onMonitorTabChange: (tab: MonitorTab) => void;
 }) {
   const onAgentsTab = monitorTab === 'agents';
+  const [moreOpen, setMoreOpen] = useState(() => isMonitorMoreTab(monitorTab));
+
+  useEffect(() => {
+    if (isMonitorMoreTab(monitorTab)) setMoreOpen(true);
+  }, [monitorTab]);
+
+  const pick = (key: MonitorTab) => {
+    onMonitorTabChange(key);
+    if (key !== 'agents') {
+      onFocusAgent(null);
+      onClose();
+    }
+  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -247,33 +292,33 @@ function MonitorSidebar({
       </div>
 
       <nav className="shrink-0 space-y-0.5 border-b border-white/[0.06] p-2" aria-label="監控分頁">
-        {MONITOR_TABS.map((item) => {
-          const active = monitorTab === item.key;
-          return (
-            <button
+        {MONITOR_PRIMARY_TABS.map((item) => (
+          <TabBtn
+            key={item.key}
+            item={item}
+            active={monitorTab === item.key}
+            onClick={() => pick(item.key)}
+          />
+        ))}
+
+        <button
+          type="button"
+          onClick={() => setMoreOpen((v) => !v)}
+          className="flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-left text-[11px] font-bold uppercase tracking-wider text-[#636366] hover:bg-white/[0.04]"
+        >
+          <span>更多</span>
+          <span className="font-mono text-[10px]">{moreOpen ? '−' : '+'}</span>
+        </button>
+
+        {moreOpen &&
+          MONITOR_MORE_TABS.map((item) => (
+            <TabBtn
               key={item.key}
-              type="button"
-              onClick={() => {
-                onMonitorTabChange(item.key);
-                if (item.key !== 'agents') {
-                  onFocusAgent(null);
-                  onClose();
-                }
-              }}
-              className={`relative flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-[12px] transition-colors ${
-                active
-                  ? 'bg-[#007AFF]/15 font-bold text-[#F5F5F7] ring-1 ring-[#007AFF]/30'
-                  : 'font-medium text-[#AEAEB2] hover:bg-white/[0.04] hover:text-[#F5F5F7]'
-              }`}
-            >
-              {active && (
-                <span className="absolute left-0 top-1/2 h-4 w-0.5 -translate-y-1/2 rounded-r-full bg-[#007AFF]" />
-              )}
-              <span className="w-4 shrink-0 text-center text-[13px] leading-none opacity-80">{item.icon}</span>
-              <span className="min-w-0 flex-1 truncate">{item.label}</span>
-            </button>
-          );
-        })}
+              item={item}
+              active={monitorTab === item.key}
+              onClick={() => pick(item.key)}
+            />
+          ))}
       </nav>
 
       {onAgentsTab ? (
@@ -288,7 +333,7 @@ function MonitorSidebar({
       ) : (
         <div className="flex-1 overflow-y-auto p-4">
           <p className="text-[11px] leading-relaxed text-[#636366]">
-            七個主分頁。運維／實驗室以膠囊收納次要工具，減少主區雜訊。
+            主區只留即時／角色／管線。OPC、實驗室、運維與記憶收在「更多」。
           </p>
         </div>
       )}
