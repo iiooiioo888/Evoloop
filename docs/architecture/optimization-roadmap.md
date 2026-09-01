@@ -8,6 +8,8 @@
 |--------|--------|----------|------|
 | **P0** | 任务-模型匹配（不同环节用不同规模模型） | 成本降低 40–60% | ✅ 已实现 |
 | **P0** | 反思早停机制 | 避免无效调用，延迟降低 | ✅ 已实现 |
+| **P1** | 模型池健康检查 + 自动降级 | 主模型超时/限流自动切换 | ✅ 已实现 |
+| **P1** | 成本感知路由 | 简单任务走便宜模型 | ✅ 已实现 |
 | **P1** | Reviewer + Synthesizer 合并 | 延迟降低 ~25% | ✅ 已实现 |
 | **P1** | 分层缓存 | 命中率提升 | ✅ 已实现 |
 | **P2** | 路由自适应反馈 | 长期质量提升 | ✅ 已实现 |
@@ -55,6 +57,47 @@ EVOL_STAGE_TIER_IMPROVE=routine
 3. 分数提升 < `EVOL_MIN_SCORE_IMPROVEMENT`（默认 0.5）
 
 详见 [reflection-loop.md](./reflection-loop.md)。
+
+---
+
+## P1：模型池健康检查 + 自动降级
+
+**模块**：`backend/core/provider_pool.py` → `invoke_with_pool_failover`；`backend/core/llm.py` → `call_llm`
+
+当主模型超时、限流或连续失败时，自动在 `allowed_models` 池内切换成本更低的备援模型（Hub 路由已有类似能力，此优化覆盖反思闭环主链路）。
+
+```env
+EVOL_LLM_POOL_FAILOVER=true          # 默认开启
+EVOL_LLM_FAILOVER_TIMEOUT=30       # 单模型尝试超时（秒）
+EVOL_LLM_FAILOVER_SLOW_S=10        # 慢调用视为失败
+EVOL_LLM_POOL_FAIL_THRESHOLD=2     # 连续失败次数触发熔断
+EVOL_LLM_POOL_OPEN_SEC=60          # 熔断持续时间
+```
+
+监控：`GET /monitor/llm-ops` → `ops.pool_failover`；系统指标 roadmap 项 `pool_failover`。
+
+---
+
+## P1：成本感知路由
+
+**模块**：`backend/core/cost_speed_router.py` · 配置 `backend/config/cost_speed.json`
+
+依任务复杂度（simple / medium / complex）与管线环节选择模型，并由 `route_by_complexity` 决定走单次生成或公司运行时：
+
+| 复杂度 | 路径 | 典型模型 |
+|--------|------|----------|
+| simple | 单次生成 | qwen-turbo |
+| medium | 单次生成 | qwen-plus |
+| complex | 公司运行时 | deepseek-reasoner |
+
+```env
+EVOL_COST_SPEED_ENABLED=true
+EVOL_COST_SPEED_PATH=backend/config/cost_speed.json
+```
+
+热重载：`POST /config/cost-speed/reload`（修改配置后无需重启）
+
+监控：`GET /monitor/optimization` → `cost_speed`
 
 ---
 
@@ -149,10 +192,12 @@ EVOL_OPC_EDGE_CACHE=opc_service/data/edge_cache.json
 
 **模块**：
 
-- `backend/services/trace_logger.py` — 任务级 JSONL 轨迹
+  - `backend/services/trace_logger.py` — 任务级 JSONL 轨迹；`aggregate_reflection_stats()` 彙總反思輪次/耗時/改進幅度
 - `backend/core/pipeline_trace.py` — LangGraph 节点事件
 
 节点在 `session_id` / `task_id` 存在时自动写入 trace，供监控面板与后续分析使用。
+
+监控：`GET /monitor/optimization` → `reflection_trace`（均轮次、均改进幅度、最近任务链路表）；「系统指标」分页展示。
 
 ---
 

@@ -6,7 +6,7 @@ from backend.services.optimization_monitor import collect_optimization_monitor
 def test_collect_optimization_monitor_structure():
     data = collect_optimization_monitor()
     assert "roadmap" in data
-    assert len(data["roadmap"]) == 9
+    assert len(data["roadmap"]) == 12
     assert "stage_router" in data
     assert "generate" in data["stage_router"]
     assert "reflection" in data
@@ -14,11 +14,15 @@ def test_collect_optimization_monitor_structure():
     assert "llm_cache" in data
     assert "hit_rate" in data["llm_cache"]
     assert "routing_feedback" in data
+    assert "cost_speed" in data
     assert "user_feedback" in data
     assert "edge_cache" in data
     assert "opc_edge" in data
     assert "system_stats" in data
     assert "trace" in data
+    assert "model_calls" in data
+    assert "reflection_trace" in data
+    assert "feedback_analysis" in data
 
 
 def test_roadmap_priorities():
@@ -31,7 +35,10 @@ def test_roadmap_priorities():
     assert "reflection_early_stop" in ids
     assert "user_feedback" in ids
     assert "merge_review_synth" in ids
-    assert "edge_cache" in ids
+    assert "pool_failover" in ids
+    assert "cost_speed_router" in ids
+    assert "reflection_trace" in ids
+    assert "pipeline_trace" in ids
 
 
 def test_roadmap_has_metrics():

@@ -83,6 +83,8 @@ class EvoLoopState(OPCStateFields, total=False):
     # simple: 強制單次 LLM 生成
     # company: 強制多代理人公司運行時
     execution_strategy: str
+    # cost_speed 路由推斷：simple | medium | complex
+    task_complexity: str
     company_template: str
     company_result: dict[str, Any]
     company_kanban: dict[str, Any]

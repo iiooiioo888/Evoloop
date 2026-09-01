@@ -16,6 +16,8 @@ const AgentsMonitorPanel = lazy(() => import('./AgentsMonitorPanel'));
 const TasksMonitorPanel = lazy(() => import('./TasksMonitorPanel'));
 const PipelineView = lazy(() => import('./PipelineView'));
 const SystemMetricsPanel = lazy(() => import('./SystemMetricsPanel'));
+const ModelCallPanel = lazy(() => import('./ModelCallPanel'));
+const UserFeedbackPanel = lazy(() => import('./UserFeedbackPanel'));
 const LabPanel = lazy(() => import('./LabPanel'));
 const OpsPanel = lazy(() => import('./OpsPanel'));
 const MemoryPanel = lazy(() => import('./MemoryPanel'));
@@ -119,6 +121,8 @@ export default function MonitorView({
         )}
         {tab === 'pipeline' && <PipelineView onGoTasks={() => onTabChange('tasks')} />}
         {tab === 'metrics' && <SystemMetricsPanel />}
+        {tab === 'models' && <ModelCallPanel />}
+        {tab === 'feedback' && <UserFeedbackPanel />}
         {tab === 'lab' && (
           <LabPanel activeTab={labSubTab} onTabChange={onLabSubTabChange} />
         )}

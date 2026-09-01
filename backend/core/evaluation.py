@@ -126,7 +126,7 @@ class MultiDimensionalEvaluator:
         """執行 LLM 多維度評估，失敗時降級為規則評估。"""
         try:
             prompt = MULTI_DIM_EVALUATE_PROMPT.format(query=query, answer=answer)
-            model = resolve_stage_model("evaluate")
+            model = resolve_stage_model("evaluate", query=query)
             raw = call_llm(prompt, model=model)
             data = parse_json_response(raw)
             return self._parse_evaluation(data, source="llm")
@@ -372,7 +372,7 @@ class CrossModelEvaluator:
             cross_model = os.getenv("EVOL_CROSS_EVAL_MODEL")
             if not cross_model:
                 if os.getenv("EVOL_CROSS_EVAL_AUTO", "").lower() == "true":
-                    cross_model = resolve_stage_model("cross_eval")
+                    cross_model = resolve_stage_model("cross_eval", query=query)
                 else:
                     return None  # 未配置覆核模型，跳過
 

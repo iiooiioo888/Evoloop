@@ -58,6 +58,7 @@ function buildMetricRows(data: OptimizationMonitorData | null): MetricRow[] {
   const trace = data.trace;
   const sys = data.system_stats;
   const edge = data.edge_cache ?? data.opc_edge;
+  const reflectionTrace = data.reflection_trace;
   const satisfaction = Math.round((userFb?.satisfaction_rate ?? 0) * 100);
 
   return [
@@ -133,6 +134,41 @@ function buildMetricRows(data: OptimizationMonitorData | null): MetricRow[] {
       status: 'info',
       statusLabel: `Δ${reflection.min_score_improvement ?? 0.5}`,
     },
+    {
+      name: '反思鏈路均耗時',
+      desc: 'evaluate + reflect + improve（Trace 彙總）',
+      value:
+        reflectionTrace?.avg_loop_duration_ms != null
+          ? String(Math.round(reflectionTrace.avg_loop_duration_ms))
+          : '—',
+      unit: reflectionTrace?.avg_loop_duration_ms != null ? 'ms' : '',
+      pct: null,
+      status: (reflectionTrace?.tasks_analyzed ?? 0) > 0 ? 'info' : 'idle',
+      statusLabel:
+        reflectionTrace?.tasks_analyzed != null && reflectionTrace.tasks_analyzed > 0
+          ? `${reflectionTrace.tasks_analyzed} 任務`
+          : '尚無軌跡',
+    },
+    {
+      name: '反思改進幅度',
+      desc: '首輪與末輪評分差（Trace 彙總）',
+      value:
+        reflectionTrace?.avg_score_delta != null
+          ? String(reflectionTrace.avg_score_delta)
+          : '—',
+      unit: reflectionTrace?.avg_score_delta != null ? '分' : '',
+      pct: null,
+      status:
+        (reflectionTrace?.avg_score_delta ?? 0) >= 0.5
+          ? 'good'
+          : (reflectionTrace?.tasks_analyzed ?? 0) > 0
+            ? 'warn'
+            : 'idle',
+      statusLabel:
+        reflectionTrace?.improvement_rate_pct != null
+          ? `提升率 ${reflectionTrace.improvement_rate_pct}%`
+          : '—',
+    },
   ];
 }
 
@@ -163,6 +199,7 @@ export default function SystemMetricsPanel() {
   const cache = data?.llm_cache;
   const hitPct = Math.round((cache?.hit_rate ?? 0) * 100);
   const sys = data?.system_stats;
+  const reflectionTrace = data?.reflection_trace;
   const activeCount = data?.roadmap?.filter((r) => r.status === 'active').length ?? 0;
 
   return (
@@ -198,7 +235,7 @@ export default function SystemMetricsPanel() {
         {[
           { label: '快取命中', value: `${hitPct}%` },
           { label: '任務成功率', value: `${sys?.success_rate ?? 0}%` },
-          { label: '運行中', value: String(sys?.tasks_running ?? 0) },
+          { label: '反思均輪次', value: reflectionTrace?.avg_iterations != null ? String(reflectionTrace.avg_iterations) : '—' },
           { label: 'Trace', value: String(data?.trace.trace_count ?? 0) },
         ].map((kpi) => (
           <div key={kpi.label} className="apple-card apple-card--tight !p-0 px-3 py-2.5">
@@ -252,6 +289,65 @@ export default function SystemMetricsPanel() {
 
       <div className="mt-4">
         <RoadmapTable items={data?.roadmap ?? []} />
+      </div>
+
+      <div className="mt-4 overflow-hidden rounded-lg border border-white/[0.08]">
+        <p className="border-b border-white/[0.08] bg-[#1C1C1E] px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-[#62666d]">
+          反思鏈路追蹤（輪次 · 耗時 · 改進幅度）
+        </p>
+        <table className="w-full text-left text-[12px]">
+          <thead className="bg-[#0a0a0b] text-[10px] uppercase tracking-wider text-[#62666d]">
+            <tr>
+              <th className="px-3 py-2 font-medium">任務</th>
+              <th className="px-3 py-2 font-medium">輪次</th>
+              <th className="px-3 py-2 font-medium">分數</th>
+              <th className="px-3 py-2 font-medium">Δ</th>
+              <th className="px-3 py-2 font-medium">反思耗時</th>
+              <th className="px-3 py-2 font-medium">狀態</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(reflectionTrace?.recent_cycles ?? []).length === 0 ? (
+              <tr>
+                <td colSpan={6} className="px-3 py-3 text-xs text-[#62666d]">
+                  尚無反思軌跡，完成任務後將自動彙總。
+                </td>
+              </tr>
+            ) : (
+              reflectionTrace?.recent_cycles.map((cycle) => (
+                <tr key={cycle.task_id} className="border-t border-white/[0.08]">
+                  <td className="px-3 py-1.5 font-mono text-[10px] text-[#d0d6e0]">
+                    {cycle.task_id.slice(0, 12)}
+                    {cycle.task_id.length > 12 ? '…' : ''}
+                  </td>
+                  <td className="px-3 py-1.5 tabular-nums text-[#8a8f98]">{cycle.iterations}</td>
+                  <td className="px-3 py-1.5 tabular-nums text-[#8a8f98]">
+                    {cycle.score_start != null && cycle.score_end != null
+                      ? `${cycle.score_start} → ${cycle.score_end}`
+                      : '—'}
+                  </td>
+                  <td className="px-3 py-1.5 tabular-nums text-[#64D2FF]">
+                    {cycle.score_delta != null ? `+${cycle.score_delta}` : '—'}
+                  </td>
+                  <td className="px-3 py-1.5 tabular-nums text-[#8a8f98]">
+                    {cycle.loop_duration_ms > 0 ? `${Math.round(cycle.loop_duration_ms)}ms` : '—'}
+                  </td>
+                  <td className="px-3 py-1.5">
+                    <span
+                      className={`rounded px-1.5 py-0.5 text-[10px] ${
+                        cycle.early_stop
+                          ? 'bg-amber-500/15 text-amber-300'
+                          : 'bg-[#27a644]/15 text-[#4cc38a]'
+                      }`}
+                    >
+                      {cycle.early_stop ? '早停' : '完成'}
+                    </span>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
 
       <div className="mt-4 overflow-hidden rounded-lg border border-white/[0.08]">

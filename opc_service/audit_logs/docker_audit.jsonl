@@ -72,3 +72,5 @@
 {"ts": "2026-08-27T02:00:45.397217+00:00", "operation": "restart_blocked", "service": "external_service", "reason": "不在允許列表"}
 {"ts": "2026-08-27T02:45:06.767454+00:00", "operation": "restart_success", "service": "backend", "container": "test_project-backend-1"}
 {"ts": "2026-08-27T02:45:06.795468+00:00", "operation": "restart_blocked", "service": "external_service", "reason": "不在允許列表"}
+{"ts": "2026-08-31T07:49:16.200965+00:00", "operation": "restart_success", "service": "backend", "container": "test_project-backend-1"}
+{"ts": "2026-08-31T07:49:16.215971+00:00", "operation": "restart_blocked", "service": "external_service", "reason": "不在允許列表"}

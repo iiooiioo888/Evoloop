@@ -19,14 +19,19 @@ FeedbackSignal = Literal["thumbs_up", "thumbs_down", "copy", "edit"]
 _DEFAULT_PATH = (
     Path(__file__).resolve().parent.parent / "data" / "user_feedback.json"
 )
-_FEEDBACK_PATH = Path(os.getenv("EVOL_USER_FEEDBACK_PATH", str(_DEFAULT_PATH)))
 _MAX_RECORDS = int(os.getenv("EVOL_USER_FEEDBACK_MAX", "500"))
 
 
+def _feedback_path() -> Path:
+    """延遲解析路徑，支援測試 monkeypatch 與配置熱更新。"""
+    return Path(os.getenv("EVOL_USER_FEEDBACK_PATH", str(_DEFAULT_PATH)))
+
+
 def _ensure_store() -> dict[str, Any]:
-    if _FEEDBACK_PATH.exists():
+    path = _feedback_path()
+    if path.exists():
         try:
-            with open(_FEEDBACK_PATH, encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 data = json.load(f)
             if isinstance(data, dict) and "records" in data:
                 return data
@@ -36,8 +41,9 @@ def _ensure_store() -> dict[str, Any]:
 
 
 def _save_store(data: dict[str, Any]) -> None:
-    _FEEDBACK_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(_FEEDBACK_PATH, "w", encoding="utf-8") as f:
+    path = _feedback_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
@@ -82,6 +88,67 @@ def feedback_stats() -> dict[str, Any]:
         "stats": stats,
         "satisfaction_rate": satisfaction,
         "recent": records[-5:],
+    }
+
+
+def feedback_analysis(*, top_words: int = 24) -> dict[str, Any]:
+    """反饋深度分析：信號分布、評分分布、評論詞頻（簡易詞雲資料）。"""
+    import re
+    from collections import Counter
+
+    store = _ensure_store()
+    records: list[dict[str, Any]] = store.get("records", [])
+    stats = store.get("stats", {})
+    positive = int(stats.get("thumbs_up", 0))
+    negative = int(stats.get("thumbs_down", 0))
+    total_rated = positive + negative
+    satisfaction = round(positive / total_rated, 4) if total_rated else 0.0
+
+    signal_counts = {
+        "thumbs_up": int(stats.get("thumbs_up", 0)),
+        "thumbs_down": int(stats.get("thumbs_down", 0)),
+        "copy": int(stats.get("copy", 0)),
+        "edit": int(stats.get("edit", 0)),
+    }
+
+    scores = [float(r["score"]) for r in records if isinstance(r.get("score"), (int, float))]
+    score_buckets = {"low": 0, "mid": 0, "high": 0}
+    for s in scores:
+        if s < 6:
+            score_buckets["low"] += 1
+        elif s < 8:
+            score_buckets["mid"] += 1
+        else:
+            score_buckets["high"] += 1
+
+    # 中英文詞頻（評論 + 低分任務的 query_length 標記不作詞雲）
+    token_re = re.compile(r"[\u4e00-\u9fff]{2,}|[a-zA-Z]{3,}")
+    word_counter: Counter[str] = Counter()
+    for rec in records:
+        text = str(rec.get("comment") or "")
+        if not text:
+            continue
+        for token in token_re.findall(text.lower()):
+            if len(token) >= 2:
+                word_counter[token] += 1
+
+    word_cloud = [
+        {"word": word, "count": count, "weight": round(count / max(word_counter.values()), 3)}
+        for word, count in word_counter.most_common(top_words)
+    ]
+    if word_cloud and word_counter:
+        max_c = max(word_counter.values())
+        for item in word_cloud:
+            item["weight"] = round(item["count"] / max_c, 3)
+
+    return {
+        "total": len(records),
+        "satisfaction_rate": satisfaction,
+        "signal_counts": signal_counts,
+        "score_buckets": score_buckets,
+        "avg_score": round(sum(scores) / len(scores), 2) if scores else None,
+        "word_cloud": word_cloud,
+        "recent": records[-8:],
     }
 
 

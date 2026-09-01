@@ -11,12 +11,19 @@ import os
 from typing import Any
 
 from backend.core.dynamic_threshold import resolve_pass_threshold, threshold_config
+from backend.core.cost_speed_router import cost_speed_status
 from backend.core.graph import MAX_ITERATIONS, MIN_SCORE_IMPROVEMENT, PASS_THRESHOLD
 from backend.core.llm_cache import get_llm_cache
+from backend.core.provider_pool import pool_failover_enabled, pool_failover_timeout_s, pool_health_snapshot
 from backend.core.routing_feedback import routing_stats
 from backend.core.stage_router import stage_tier, resolve_stage_model
-from backend.core.user_feedback import feedback_stats as user_feedback_stats
+from backend.core.user_feedback import feedback_stats as user_feedback_stats, feedback_analysis
 from backend.services.task_manager import task_manager
+from backend.services.trace_logger import (
+    aggregate_llm_call_stats,
+    aggregate_reflection_stats,
+    list_traces,
+)
 
 
 def _cache_hit_rate(stats: dict[str, int]) -> float:
@@ -80,8 +87,6 @@ def _layered_cache_status() -> dict[str, Any]:
 
 def _trace_summary() -> dict[str, Any]:
     try:
-        from backend.services.trace_logger import list_traces
-
         traces = list_traces(limit=200)
         return {"trace_count": len(traces), "recent": traces[:5]}
     except Exception:
@@ -123,6 +128,12 @@ def collect_optimization_monitor() -> dict[str, Any]:
         "min_score_improvement": MIN_SCORE_IMPROVEMENT,
     }
     user_fb = user_feedback_stats()
+    fb_analysis = feedback_analysis()
+    pool_health = pool_health_snapshot()
+    model_calls = aggregate_llm_call_stats()
+    reflection_trace = aggregate_reflection_stats()
+    open_models = sum(1 for h in pool_health.values() if h.get("open"))
+    cost_speed = cost_speed_status()
 
     roadmap = [
         {
@@ -178,6 +189,27 @@ def collect_optimization_monitor() -> dict[str, Any]:
             "metric": f"命中 {hit_rate * 100:.0f}% · {cache_stats.get('hits', 0)} 次",
         },
         {
+            "priority": "P1",
+            "id": "pool_failover",
+            "label": "模型池健康檢查 + 自動降級",
+            "benefit": "主模型逾時/限流自動切換備援",
+            "enabled": pool_failover_enabled(),
+            "status": "active" if pool_failover_enabled() else "disabled",
+            "metric": f"逾時 {pool_failover_timeout_s():.0f}s · 熔斷 {open_models} 個",
+        },
+        {
+            "priority": "P1",
+            "id": "cost_speed_router",
+            "label": "成本感知路由",
+            "benefit": "簡單任務走便宜模型、複雜推理走深度模型",
+            "enabled": cost_speed.get("enabled", False),
+            "status": "active" if cost_speed.get("enabled") else "disabled",
+            "metric": (
+                f"simple→{cost_speed.get('routing_preview', {}).get('simple', {}).get('generate_model', '—')} · "
+                f"complex→{cost_speed.get('routing_preview', {}).get('complex', {}).get('path', '—')}"
+            ),
+        },
+        {
             "priority": "P2",
             "id": "routing_feedback",
             "label": "路由自適應反饋",
@@ -222,6 +254,18 @@ def collect_optimization_monitor() -> dict[str, Any]:
             "status": "active",
             "metric": f"{trace_summary.get('trace_count', 0)} 筆軌跡",
         },
+        {
+            "priority": "P3",
+            "id": "reflection_trace",
+            "label": "反思鏈路追蹤",
+            "benefit": "定位慢反思與低改進幅度瓶頸",
+            "enabled": True,
+            "status": "active" if reflection_trace.get("tasks_analyzed", 0) >= 1 else "idle",
+            "metric": (
+                f"均 {reflection_trace.get('avg_iterations') or '—'} 輪 · "
+                f"Δ{reflection_trace.get('avg_score_delta') if reflection_trace.get('avg_score_delta') is not None else '—'}"
+            ),
+        },
     ]
 
     return {
@@ -236,7 +280,11 @@ def collect_optimization_monitor() -> dict[str, Any]:
             "max_size": int(os.getenv("EVOL_LLM_CACHE_SIZE", "512")),
         },
         "routing_feedback": routing,
+        "cost_speed": cost_speed,
         "user_feedback": user_fb,
+        "feedback_analysis": fb_analysis,
+        "model_calls": model_calls,
+        "reflection_trace": reflection_trace,
         "edge_cache": edge_cache,
         "opc_edge": edge_cache,  # 向後相容舊前端欄位
         "system_stats": system_stats,

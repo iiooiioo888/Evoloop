@@ -20,7 +20,7 @@ from litellm.exceptions import APIError, RateLimitError
 
 from backend.core.llm_cache import get_llm_cache
 from backend.core.llm_config import get_runtime_config
-from backend.core.provider_pool import clamp_model
+from backend.core.provider_pool import clamp_model, failover_models, invoke_with_pool_failover, pool_failover_enabled
 
 load_dotenv()
 
@@ -53,6 +53,51 @@ def _ensure_provider_prefix(model: str) -> str:
     return model if "/" in model else f"openai/{model}"
 
 
+def _completion_once(
+    prompt: str,
+    system: str | None = None,
+    model: str | None = None,
+    max_retries: int | None = None,
+    **kwargs,
+) -> str:
+    """單一模型 LLM 呼叫（含重試，不含池級 Failover）。"""
+    messages = []
+    if system:
+        messages.append({"role": "system", "content": system})
+    messages.append({"role": "user", "content": prompt})
+
+    params = _llm_params()
+    if model:
+        params["model"] = model
+    params["model"] = clamp_model(params.get("model"))
+    if params.get("api_base"):
+        params["model"] = _ensure_provider_prefix(params["model"])
+
+    retries = MAX_RETRIES if max_retries is None else max(1, int(max_retries))
+    last_error: Exception | None = None
+    for attempt in range(1, retries + 1):
+        try:
+            response = completion(
+                model=params["model"],
+                messages=messages,
+                **{k: v for k, v in params.items() if k != "model"},
+                **kwargs,
+            )
+            return response.choices[0].message.content or ""
+        except RateLimitError as exc:
+            last_error = exc
+            wait = RETRY_BACKOFF_SECONDS * attempt
+            logger.warning(
+                "LLM 速率限制，%.1f 秒後重試（%d/%d）", wait, attempt, retries
+            )
+            time.sleep(wait)
+        except APIError as exc:
+            last_error = exc
+            logger.warning("LLM 呼叫失敗：%s，重試（%d/%d）", exc, attempt, retries)
+            time.sleep(RETRY_BACKOFF_SECONDS)
+    raise RuntimeError(f"LLM 呼叫於 {retries} 次重試後仍失敗") from last_error
+
+
 def call_llm(
     prompt: str,
     system: str | None = None,
@@ -67,51 +112,49 @@ def call_llm(
 
     max_retries 預設 3（與 MAX_RETRIES 相同），以保持反思閉環行為；
     Hub 路由器切模型前應傳 max_retries=1，避免 3×3 放大延遲。
+    啟用 EVOL_LLM_POOL_FAILOVER 時，主模型逾時或限流會自動切換池內備援。
     """
-    messages = []
-    if system:
-        messages.append({"role": "system", "content": system})
-    messages.append({"role": "user", "content": prompt})
-
     params = _llm_params()
-    if model:
-        params["model"] = model
-    params["model"] = clamp_model(params.get("model"))
+    resolved_model = clamp_model(model or params.get("model"))
     if params.get("api_base"):
-        params["model"] = _ensure_provider_prefix(params["model"])
+        resolved_model = _ensure_provider_prefix(resolved_model)
 
     # ── 查詢快取 ──
     cache = get_llm_cache()
-    cached = cache.get(prompt, system, params["model"])
+    cached = cache.get(prompt, system, resolved_model)
     if cached is not None:
         return cached
 
-    retries = MAX_RETRIES if max_retries is None else max(1, int(max_retries))
-    last_error: Exception | None = None
-    for attempt in range(1, retries + 1):
-        try:
-            response = completion(
-                model=params["model"],
-                messages=messages,
-                **{k: v for k, v in params.items() if k != "model"},
+    if pool_failover_enabled():
+        chain = failover_models(resolved_model)
+        if len(chain) > 1:
+            text, used_model, hops = invoke_with_pool_failover(
+                _completion_once,
+                prompt=prompt,
+                system=system,
+                models=chain,
+                max_retries=max_retries,
                 **kwargs,
             )
-            result = response.choices[0].message.content or ""
-            # 成功回應存入快取
-            cache.put(prompt, system, params["model"], result)
-            return result
-        except RateLimitError as exc:
-            last_error = exc
-            wait = RETRY_BACKOFF_SECONDS * attempt
-            logger.warning(
-                "LLM 速率限制，%.1f 秒後重試（%d/%d）", wait, attempt, retries
-            )
-            time.sleep(wait)
-        except APIError as exc:
-            last_error = exc
-            logger.warning("LLM 呼叫失敗：%s，重試（%d/%d）", exc, attempt, retries)
-            time.sleep(RETRY_BACKOFF_SECONDS)
-    raise RuntimeError(f"LLM 呼叫於 {retries} 次重試後仍失敗") from last_error
+            if hops > 0:
+                logger.info(
+                    "模型池 Failover：%s → %s（跳過 %d 個）",
+                    resolved_model,
+                    used_model,
+                    hops,
+                )
+            cache.put(prompt, system, used_model, text)
+            return text
+
+    result = _completion_once(
+        prompt=prompt,
+        system=system,
+        model=resolved_model,
+        max_retries=max_retries,
+        **kwargs,
+    )
+    cache.put(prompt, system, resolved_model, result)
+    return result
 
 
 def call_llm_stream(

@@ -15,6 +15,7 @@ from typing import Any, Literal
 logger = logging.getLogger(__name__)
 
 RouteChoice = Literal["simple", "company"]
+QueryBucket = Literal["short", "medium", "long"]
 
 _DEFAULT_PATH = (
     Path(__file__).resolve().parent.parent / "data" / "routing_feedback.json"
@@ -22,6 +23,21 @@ _DEFAULT_PATH = (
 _FEEDBACK_PATH = Path(os.getenv("EVOL_ROUTING_FEEDBACK_PATH", str(_DEFAULT_PATH)))
 _MAX_RECORDS = int(os.getenv("EVOL_ROUTING_FEEDBACK_MAX", "200"))
 _LENGTH_BIAS = float(os.getenv("EVOL_ROUTING_LENGTH_BIAS", "0"))  # 額外字數門檻偏移
+_WEIGHT_MIN_SAMPLES = int(os.getenv("EVOL_ROUTING_WEIGHT_MIN", "5"))
+_WEIGHT_MARGIN = float(os.getenv("EVOL_ROUTING_WEIGHT_MARGIN", "0.15"))
+
+
+def query_bucket(query_length: int) -> QueryBucket:
+    """依查詢長度分桶，供加權路由統計。"""
+    if query_length < 80:
+        return "short"
+    if query_length < 200:
+        return "medium"
+    return "long"
+
+
+def weighted_routing_enabled() -> bool:
+    return os.getenv("EVOL_ROUTING_WEIGHT_ENABLED", "true").lower() not in {"0", "false", "no"}
 
 
 def _ensure_store() -> dict[str, Any]:
@@ -47,6 +63,9 @@ def record_outcome(
     query_length: int,
     score: float,
     success: bool,
+    *,
+    bucket: QueryBucket | str | None = None,
+    complexity: str | None = None,
 ) -> None:
     """記錄一次路由結果（供後續自適應調整）。"""
     store = _ensure_store()
@@ -54,6 +73,8 @@ def record_outcome(
     records.append({
         "route": route,
         "query_length": query_length,
+        "bucket": bucket or query_bucket(query_length),
+        "complexity": complexity or "",
         "score": round(score, 2),
         "success": success,
     })

@@ -76,6 +76,11 @@ KIND_LABELS: dict[str, str] = {
 CRAWL_KINDS = frozenset({"openrouter", "ollama", "generic", "openai"})
 DEFAULT_REFRESH_SEC = 300
 
+# ── 模型池呼叫健康 / Failover（P1）────────────────────────────
+POOL_FAILURE_THRESHOLD = int(os.getenv("EVOL_LLM_POOL_FAIL_THRESHOLD", "2"))
+POOL_OPEN_DURATION_S = float(os.getenv("EVOL_LLM_POOL_OPEN_SEC", "60"))
+_pool_health: dict[str, dict[str, Any]] = {}
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -401,6 +406,14 @@ def public_pool(cfg: dict[str, Any] | None = None) -> dict[str, Any]:
             "stale": stale,
             "enabled": os.getenv("EVOL_LLM_OPS_ENABLED", "true").lower() not in {"0", "false", "no"},
             "next_check_at": _next_check_at(fetched, interval),
+            "pool_failover": {
+                "enabled": pool_failover_enabled(),
+                "timeout_s": pool_failover_timeout_s(),
+                "slow_call_s": pool_failover_slow_s(),
+                "fail_threshold": POOL_FAILURE_THRESHOLD,
+                "open_duration_s": POOL_OPEN_DURATION_S,
+                "models": pool_health_snapshot(),
+            },
         },
     }
 
@@ -431,3 +444,190 @@ def set_refresh_interval(seconds: int) -> dict[str, Any]:
 
     snapshot = merge_runtime_config({"ops_refresh_interval_sec": max(60, min(3600, int(seconds)))})
     return public_pool(snapshot)
+
+
+def pool_failover_enabled() -> bool:
+    return os.getenv("EVOL_LLM_POOL_FAILOVER", "true").lower() not in {"0", "false", "no"}
+
+
+def pool_failover_timeout_s() -> float:
+    try:
+        return max(1.0, float(os.getenv("EVOL_LLM_FAILOVER_TIMEOUT", "30")))
+    except (TypeError, ValueError):
+        return 30.0
+
+
+def pool_failover_slow_s() -> float:
+    try:
+        return max(1.0, float(os.getenv("EVOL_LLM_FAILOVER_SLOW_S", "10")))
+    except (TypeError, ValueError):
+        return 10.0
+
+
+def _health_entry(model: str) -> dict[str, Any]:
+    if model not in _pool_health:
+        _pool_health[model] = {
+            "failures": 0,
+            "successes": 0,
+            "open_until": 0.0,
+            "last_error": "",
+            "last_latency_ms": 0,
+        }
+    return _pool_health[model]
+
+
+def record_pool_call(
+    model: str,
+    failed: bool,
+    duration_s: float = 0.0,
+    error: str = "",
+) -> None:
+    """記錄單次 LLM 呼叫結果，連續失敗達閾值則暫時熔斷該模型。"""
+    import time
+
+    entry = _health_entry(model)
+    now = time.monotonic()
+    entry["last_latency_ms"] = int(duration_s * 1000)
+    slow = duration_s >= pool_failover_slow_s()
+    if failed or slow:
+        entry["failures"] = int(entry.get("failures") or 0) + 1
+        if error:
+            entry["last_error"] = error[:200]
+        if entry["failures"] >= POOL_FAILURE_THRESHOLD:
+            entry["open_until"] = now + POOL_OPEN_DURATION_S
+            logger.warning(
+                "模型池熔斷 %s（連續失敗 %d 次，%.0fs 內跳過）",
+                model,
+                entry["failures"],
+                POOL_OPEN_DURATION_S,
+            )
+    else:
+        entry["successes"] = int(entry.get("successes") or 0) + 1
+        entry["failures"] = max(0, int(entry.get("failures") or 0) - 1)
+        if entry["failures"] == 0:
+            entry["open_until"] = 0.0
+            entry["last_error"] = ""
+
+
+def is_pool_model_open(model: str) -> bool:
+    import time
+
+    entry = _health_entry(model)
+    return time.monotonic() < float(entry.get("open_until") or 0.0)
+
+
+def pool_health_snapshot() -> dict[str, dict[str, Any]]:
+    import time
+
+    now = time.monotonic()
+    out: dict[str, dict[str, Any]] = {}
+    for model, entry in _pool_health.items():
+        open_until = float(entry.get("open_until") or 0.0)
+        out[model] = {
+            "failures": int(entry.get("failures") or 0),
+            "successes": int(entry.get("successes") or 0),
+            "open": now < open_until,
+            "open_for_sec": max(0.0, open_until - now) if now < open_until else 0.0,
+            "last_error": entry.get("last_error") or "",
+            "last_latency_ms": int(entry.get("last_latency_ms") or 0),
+        }
+    return out
+
+
+def reset_pool_health() -> None:
+    """測試用：清空進程內健康狀態。"""
+    _pool_health.clear()
+
+
+def _model_cost_score(model: str) -> float:
+    try:
+        from backend.company.budget import get_model_costs
+
+        costs = get_model_costs()
+        bare = _bare(model)
+        for key, prices in costs.items():
+            if key == model or _bare(key) == bare:
+                return float(prices[0]) + float(prices[1])
+    except Exception:  # noqa: BLE001
+        pass
+    return 999.0
+
+
+def failover_models(requested: str | None, cfg: dict[str, Any] | None = None) -> list[str]:
+    """依可用池與健康狀態產生 Failover 鏈：首選 → 其餘（成本由低到高）。"""
+    from backend.core.llm_config import get_runtime_config
+
+    runtime = cfg or get_runtime_config()
+    allowed = [str(x) for x in (runtime.get("allowed_models") or []) if str(x).strip()]
+    primary = clamp_model(requested or str(runtime.get("model") or ""), cfg=runtime)
+    if not allowed:
+        return [primary]
+
+    healthy_primary = primary if not is_pool_model_open(primary) else None
+    others = [m for m in allowed if m != primary and not is_pool_model_open(m)]
+    others.sort(key=_model_cost_score)
+    chain: list[str] = []
+    if healthy_primary:
+        chain.append(healthy_primary)
+    chain.extend(others)
+    if not chain:
+        return [primary, *others] if primary not in others else allowed
+    return chain
+
+
+def _should_failover(exc: BaseException) -> bool:
+    name = type(exc).__name__
+    if name in {"TimeoutError", "RateLimitError", "APIError"}:
+        return True
+    text = str(exc).lower()
+    return any(token in text for token in ("429", "503", "timeout", "rate limit", "unavailable"))
+
+
+def invoke_with_pool_failover(
+    call_fn: Any,
+    *,
+    prompt: str,
+    system: str | None = None,
+    models: list[str],
+    max_retries: int | None = None,
+    **kwargs: Any,
+) -> tuple[str, str, int]:
+    """在模型池內依序嘗試，回傳 (text, used_model, hops)。"""
+    import time
+
+    hops = 0
+    last_error: Exception | None = None
+    per_model_timeout = pool_failover_timeout_s()
+    retries = max(1, int(max_retries or 1))
+
+    for model in models:
+        if is_pool_model_open(model):
+            hops += 1
+            continue
+        t0 = time.monotonic()
+        try:
+            result = call_fn(
+                prompt=prompt,
+                system=system,
+                model=model,
+                max_retries=retries,
+                timeout=per_model_timeout,
+                **kwargs,
+            )
+            record_pool_call(model, False, time.monotonic() - t0)
+            return str(result), model, hops
+        except Exception as exc:  # noqa: BLE001 — 需嘗試下一模型
+            duration = time.monotonic() - t0
+            record_pool_call(model, True, duration, str(exc))
+            last_error = exc
+            if _should_failover(exc) or duration >= per_model_timeout:
+                hops += 1
+                logger.warning(
+                    "模型 %s 呼叫失敗（%.1fs），切換備援：%s",
+                    model,
+                    duration,
+                    exc,
+                )
+                continue
+            raise
+    raise RuntimeError("模型池全部不可用") from last_error

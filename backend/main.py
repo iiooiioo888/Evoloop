@@ -196,6 +196,14 @@ async def refresh_config_models():
         raise HTTPException(status_code=502, detail=f"刷新模型目錄失敗：{exc}") from exc
 
 
+@app.post("/config/cost-speed/reload")
+async def reload_cost_speed_config():
+    """熱重載 cost_speed 路由配置（修改 JSON 後無需重啟）。"""
+    from backend.core.cost_speed_router import reload_cost_speed
+
+    return await asyncio.to_thread(reload_cost_speed)
+
+
 @app.put("/config/ops")
 async def update_llm_ops(body: LlmOpsPrefsBody):
     """更新模型目錄定時檢查間隔（秒）。"""

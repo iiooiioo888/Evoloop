@@ -70,12 +70,38 @@ def stage_tier(stage: PipelineStage) -> BudgetTier:
     return _DEFAULT_STAGE_TIERS.get(stage, BudgetTier.ROUTINE)
 
 
-def resolve_stage_model(stage: PipelineStage) -> str:
-    """依管線環節選擇模型（含預算壓力降級）。"""
+def resolve_stage_model(
+    stage: PipelineStage,
+    *,
+    query: str | None = None,
+    complexity: str | None = None,
+) -> str:
+    """依管線環節選擇模型（含預算壓力降級與 cost_speed 成本感知）。"""
     tier = stage_tier(stage)
-    model = _get_budget_manager().resolve_model_for_tier(tier)
-    logger.debug("環節 %s → tier %s → model %s", stage, tier.value, model)
-    return model
+    fallback = _get_budget_manager().resolve_model_for_tier(tier)
+    try:
+        from backend.core.cost_speed_router import (
+            classify_task_complexity,
+            cost_speed_enabled,
+            resolve_cost_speed_model,
+        )
+
+        if cost_speed_enabled():
+            comp = complexity or (classify_task_complexity(query) if query else None)
+            if comp in {"simple", "medium", "complex"}:
+                model = resolve_cost_speed_model(comp, stage, fallback)  # type: ignore[arg-type]
+                logger.debug(
+                    "環節 %s → complexity %s → model %s（tier %s）",
+                    stage,
+                    comp,
+                    model,
+                    tier.value,
+                )
+                return model
+    except Exception as exc:  # noqa: BLE001 — 路由降級不得中斷主流程
+        logger.warning("cost_speed 路由失敗，回退 tier 模型：%s", exc)
+    logger.debug("環節 %s → tier %s → model %s", stage, tier.value, fallback)
+    return fallback
 
 
 def reset_stage_budget() -> None:

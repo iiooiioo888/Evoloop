@@ -198,3 +198,72 @@ def test_preferred_model_clamped_to_pool(monkeypatch):
     )
     runtime = resolve_runtime(created["id"])
     assert runtime["preferred_model"] == "deepseek-chat"
+
+
+def test_failover_models_prefers_healthy_cheaper_alternatives(monkeypatch):
+    from backend.core.llm_config import merge_runtime_config
+    from backend.core.provider_pool import failover_models, reset_pool_health
+
+    reset_pool_health()
+    save_runtime_config(
+        api_key="sk-ds-fail",
+        api_base="https://api.deepseek.com",
+        model="deepseek-reasoner",
+    )
+    merge_runtime_config(
+        {
+            "allowed_models": ["deepseek-reasoner", "deepseek-chat", "deepseek-coder"],
+            "provider_kind": "deepseek",
+        }
+    )
+    chain = failover_models("deepseek-reasoner")
+    assert chain[0] == "deepseek-reasoner"
+    assert set(chain) == {"deepseek-reasoner", "deepseek-chat", "deepseek-coder"}
+
+
+def test_invoke_with_pool_failover_switches_on_rate_limit(monkeypatch):
+    from backend.core.provider_pool import invoke_with_pool_failover, reset_pool_health
+
+    reset_pool_health()
+    calls: list[str] = []
+
+    def fake_call(*, prompt, system=None, model=None, **kwargs):
+        calls.append(model)
+        if model == "deepseek-reasoner":
+            raise RuntimeError("429 rate limit")
+        return f"ok:{model}"
+
+    text, used, hops = invoke_with_pool_failover(
+        fake_call,
+        prompt="hi",
+        models=["deepseek-reasoner", "deepseek-chat"],
+        max_retries=1,
+    )
+    assert text == "ok:deepseek-chat"
+    assert used == "deepseek-chat"
+    assert hops == 1
+    assert calls == ["deepseek-reasoner", "deepseek-chat"]
+
+
+def test_pool_model_opens_after_consecutive_failures(monkeypatch):
+    from backend.core.provider_pool import is_pool_model_open, record_pool_call, reset_pool_health
+
+    reset_pool_health()
+    monkeypatch.setenv("EVOL_LLM_POOL_FAIL_THRESHOLD", "2")
+    # re-read threshold - it's module level constant loaded at import
+    # use 2 failures which is default POOL_FAILURE_THRESHOLD
+    record_pool_call("deepseek-chat", True, 0.1, "timeout")
+    assert not is_pool_model_open("deepseek-chat")
+    record_pool_call("deepseek-chat", True, 0.1, "timeout")
+    assert is_pool_model_open("deepseek-chat")
+
+
+def test_public_pool_exposes_failover_ops(monkeypatch):
+    from backend.core.provider_pool import public_pool, reset_pool_health
+
+    reset_pool_health()
+    pool = public_pool()
+    failover = pool["ops"]["pool_failover"]
+    assert "enabled" in failover
+    assert "timeout_s" in failover
+    assert "models" in failover

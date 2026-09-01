@@ -77,13 +77,27 @@ def retrieve_memories(state: EvoLoopState) -> dict:
     query = state.get("query", "")
     if not query:
         return {"retrieved_memories": []}
+    complexity = ""
+    try:
+        from backend.core.cost_speed_router import classify_task_complexity
+
+        complexity = classify_task_complexity(query)
+    except Exception:
+        complexity = ""
+
     try:
         results = _memory_store.search_similar(query, k=3)
         memories = [item["text"] for item in results]
-        return {"retrieved_memories": memories}
+        payload: dict = {"retrieved_memories": memories}
+        if complexity:
+            payload["task_complexity"] = complexity
+        return payload
     except Exception as exc:  # noqa: BLE001 - 檢索失敗不阻斷主流程
         logger.warning("記憶檢索失敗（跳過）：%s", exc)
-        return {"retrieved_memories": []}
+        payload = {"retrieved_memories": []}
+        if complexity:
+            payload["task_complexity"] = complexity
+        return payload
 
 
 def generate_initial_answer(state: EvoLoopState) -> dict:
@@ -93,7 +107,11 @@ def generate_initial_answer(state: EvoLoopState) -> dict:
         history_context=truncate(_format_history(state.get("history", [])), 2000),
         memory_context=truncate(_format_memories(state.get("retrieved_memories", [])), 2000),
     )
-    model = resolve_stage_model("generate")
+    model = resolve_stage_model(
+        "generate",
+        query=state.get("query"),
+        complexity=state.get("task_complexity"),
+    )
     answer = call_llm(prompt, system=templates.GENERATE_INITIAL_ANSWER_SYSTEM, model=model)
     log_node(state, "generate_initial_answer", model=model)
     return {"initial_answer": answer, "current_answer": answer, "iteration": 0}
@@ -205,7 +223,11 @@ def reflect(state: EvoLoopState) -> dict:
             evaluation=eval_detail,
         )
 
-    model = resolve_stage_model("reflect")
+    model = resolve_stage_model(
+        "reflect",
+        query=state.get("query"),
+        complexity=state.get("task_complexity"),
+    )
     raw = call_llm(prompt, model=model)
     try:
         result = parse_json_response(raw)
@@ -227,7 +249,11 @@ def improve_answer(state: EvoLoopState) -> dict:
         critique=state.get("critique", ""),
         suggestion=state.get("suggestion", ""),
     )
-    model = resolve_stage_model("improve")
+    model = resolve_stage_model(
+        "improve",
+        query=state.get("query"),
+        complexity=state.get("task_complexity"),
+    )
     improved = call_llm(prompt, model=model)
     iteration = state.get("iteration", 0) + 1
     log_node(state, "improve_answer", model=model, iteration=iteration)

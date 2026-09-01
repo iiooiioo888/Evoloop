@@ -815,8 +815,37 @@ export interface OptimizationMonitorData {
   user_feedback?: {
     total: number;
     satisfaction_rate: number;
-    thumbs_up: number;
-    thumbs_down: number;
+    stats?: Record<string, number>;
+    thumbs_up?: number;
+    thumbs_down?: number;
+  };
+  feedback_analysis?: {
+    total: number;
+    satisfaction_rate: number;
+    signal_counts: Record<string, number>;
+    score_buckets: { low: number; mid: number; high: number };
+    avg_score: number | null;
+    word_cloud: Array<{ word: string; count: number; weight: number }>;
+    recent: Array<{
+      session_id?: string;
+      signal?: string;
+      score?: number | null;
+      comment?: string;
+    }>;
+  };
+  model_calls?: {
+    total_calls: number;
+    total_cost: number;
+    avg_duration_ms: number | null;
+    files_scanned: number;
+    by_model: Array<{
+      model: string;
+      count: number;
+      share_pct: number;
+      cost: number;
+      avg_duration_ms: number | null;
+    }>;
+    by_phase: Array<{ phase: string; count: number; share_pct: number }>;
   };
   edge_cache?: {
     source?: string;
@@ -848,6 +877,29 @@ export interface OptimizationMonitorData {
     total_iterations: number;
   };
   trace: { trace_count: number; recent: Array<{ task_id?: string; event_count?: number }> };
+  reflection_trace?: {
+    tasks_analyzed: number;
+    files_scanned: number;
+    early_stop_count: number;
+    avg_iterations: number | null;
+    avg_score_delta: number | null;
+    improvement_rate_pct: number;
+    avg_evaluate_duration_ms: number | null;
+    avg_reflection_duration_ms: number | null;
+    avg_loop_duration_ms: number | null;
+    recent_cycles: Array<{
+      task_id: string;
+      iterations: number;
+      score_start: number | null;
+      score_end: number | null;
+      score_delta: number | null;
+      evaluate_duration_ms: number;
+      reflection_duration_ms: number;
+      loop_duration_ms: number;
+      early_stop: boolean;
+      last_ts: string;
+    }>;
+  };
 }
 
 export interface LlmOpsData {

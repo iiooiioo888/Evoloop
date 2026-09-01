@@ -1,0 +1,57 @@
+{
+  "enabled": true,
+  "complexity": {
+    "simple": {
+      "max_query_length": 80,
+      "path": "simple"
+    },
+    "medium": {
+      "max_query_length": 200,
+      "path": "simple"
+    },
+    "complex": {
+      "min_query_length": 200,
+      "path": "company",
+      "keywords": [
+        "开发", "设计", "构建", "实现", "建立", "完整", "系统", "项目",
+        "架构", "重构", "迁移", "deploy", "develop", "build", "implement",
+        "design", "create", "refactor", "migrate", "project", "application"
+      ]
+    }
+  },
+  "stage_models": {
+    "simple": {
+      "generate": "qwen-turbo",
+      "evaluate": "qwen-turbo",
+      "reflect": "deepseek-chat",
+      "improve": "qwen-turbo",
+      "cross_eval": "qwen-turbo",
+      "decompose": "deepseek-chat"
+    },
+    "medium": {
+      "generate": "qwen-plus",
+      "evaluate": "qwen-turbo",
+      "reflect": "deepseek-chat",
+      "improve": "qwen-plus",
+      "cross_eval": "qwen-turbo",
+      "decompose": "deepseek-chat"
+    },
+    "complex": {
+      "generate": "deepseek-reasoner",
+      "evaluate": "qwen-turbo",
+      "reflect": "deepseek-reasoner",
+      "improve": "deepseek-chat",
+      "cross_eval": "qwen-turbo",
+      "decompose": "deepseek-reasoner"
+    }
+  },
+  "models": {
+    "qwen-turbo": { "cost_score": 1, "speed_score": 9, "label": "便宜快速" },
+    "qwen-plus": { "cost_score": 3, "speed_score": 7, "label": "均衡" },
+    "deepseek-chat": { "cost_score": 2, "speed_score": 8, "label": "日常推理" },
+    "deepseek-reasoner": { "cost_score": 6, "speed_score": 4, "label": "深度推理" },
+    "kimi-k3": { "cost_score": 5, "speed_score": 6, "label": "长上下文" },
+    "gpt-4o-mini": { "cost_score": 4, "speed_score": 8, "label": "通用轻量" },
+    "gpt-4o": { "cost_score": 8, "speed_score": 7, "label": "高质量" }
+  }
+}

@@ -122,7 +122,7 @@ def route_by_complexity(state: EvoLoopState) -> str:
     執行策略（execution_strategy）：
     - "simple": 強制單次 LLM 生成
     - "company": 強制公司運行時
-    - "auto"（預設）: 依規則自動判斷複雜度
+    - "auto"（預設）: 依 cost_speed 配置或規則自動判斷複雜度
 
     回傳值：
     - "run_company": 走公司運行時
@@ -135,8 +135,27 @@ def route_by_complexity(state: EvoLoopState) -> str:
     if strategy == "company":
         return "run_company"
 
-    # auto：規則判斷
     query = state.get("query", "")
+    complexity = state.get("task_complexity")
+
+    try:
+        from backend.core.cost_speed_router import (
+            classify_task_complexity,
+            cost_speed_enabled,
+            resolve_path_for_complexity,
+        )
+
+        if cost_speed_enabled():
+            level = complexity or classify_task_complexity(query)
+            path = resolve_path_for_complexity(level)  # type: ignore[arg-type]
+            if path == "company":
+                logger.info("cost_speed 判定為 %s，啟用公司運行時", level)
+                return "run_company"
+            return "generate_initial_answer"
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("cost_speed 路徑路由失敗，回退規則判斷：%s", exc)
+
+    # auto：規則判斷（向後相容）
     if _is_complex_task(query):
         logger.info("任務判定為複雜，啟用公司運行時")
         return "run_company"

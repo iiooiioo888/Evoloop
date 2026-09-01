@@ -17,6 +17,8 @@ export const MONITOR_PRIMARY_TABS: MonitorTabItem[] = [
 /** 收納於「更多」的次要分頁。 */
 export const MONITOR_MORE_TABS: MonitorTabItem[] = [
   { key: 'metrics', icon: '◇', label: '系統指標' },
+  { key: 'models', icon: '◉', label: '模型調用' },
+  { key: 'feedback', icon: '♥', label: '用戶反饋' },
   { key: 'lab', icon: '✦', label: '實驗室' },
   { key: 'ops', icon: '⚙', label: '運維' },
   { key: 'memory', icon: '◌', label: '記憶' },
