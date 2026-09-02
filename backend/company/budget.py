@@ -21,6 +21,14 @@ from backend.company.state import BudgetConfig, BudgetTier
 
 logger = logging.getLogger(__name__)
 
+# ── 預算預測配置 ──
+# 預設歷史窗口大小（天數）
+DEFAULT_HISTORY_WINDOW_DAYS = 7
+# 預設預測窗口大小（天數）
+DEFAULT_FORECAST_WINDOW_DAYS = 30
+# 最低數據點數量（用於可靠的預測）
+MIN_DATA_POINTS_FOR_FORECAST = 3
+
 # ── 模型每百萬 token 成本（USD） ──
 # 實際價格請以供應商為準，此處為概估
 _DEFAULT_MODEL_COST: dict[str, tuple[float, float]] = {
@@ -185,6 +193,8 @@ class BudgetManager:
         self._month: int = datetime.now(timezone.utc).month
         self._year: int = datetime.now(timezone.utc).year
         self._router = TierRouter(config)
+        # 預算預測所需數據
+        self._spending_history: list[dict[str, Any]] = []  # [{date, api_cost, cloud_cost, total}]
 
     # ── 屬性 ──
 
