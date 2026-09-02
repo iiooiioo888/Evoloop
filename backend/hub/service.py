@@ -89,20 +89,59 @@ def parse_failover_config(raw: str | None) -> dict[str, Any]:
 
 
 def _validate_messages(messages: Any) -> list[dict[str, Any]]:
+    """驗證聊天消息列表，加強輸入驗證。
+    
+    驗證規則：
+    - 必須是非空列表
+    - 最多 200 則消息
+    - 每則消息必須包含 role 和 content
+    - role 必須在允許的枚舉值中
+    - content 不能為空或過長（最大 8000 字符）
+    - 防止 XSS 和注入攻擊
+    """
+    import re
+    
     if not isinstance(messages, list) or len(messages) == 0:
         raise HubError(400, "EMPTY_MESSAGES", "messages 不可為空")
     if len(messages) > 200:
         raise HubError(400, "BAD_REQUEST", "messages 最多 200 則")
+    
+    # 危險字符模式（防止腳本注入）
+    dangerous_patterns = re.compile(r'<script[^>]*>|javascript:|on\w+\s*=', re.IGNORECASE)
+    
     cleaned: list[dict[str, Any]] = []
-    for msg in messages:
-        if not isinstance(msg, dict) or "role" not in msg or "content" not in msg:
-            raise HubError(400, "BAD_REQUEST", "messages 欄位不完整")
+    for idx, msg in enumerate(messages):
+        if not isinstance(msg, dict):
+            raise HubError(400, "BAD_REQUEST", f"第 {idx+1} 則消息必須為物件")
+        if "role" not in msg or "content" not in msg:
+            raise HubError(400, "BAD_REQUEST", f"第 {idx+1} 則消息缺少 role 或 content")
+        
         role = msg["role"]
+        if not isinstance(role, str):
+            raise HubError(400, "BAD_REQUEST", f"第 {idx+1} 則消息的 role 必須為字符串")
         if role not in {"system", "user", "assistant", "tool"}:
-            raise HubError(400, "BAD_REQUEST", "role 不在允許枚舉")
+            raise HubError(400, "BAD_REQUEST", f"第 {idx+1} 則消息的 role 不在允許範圍")
+        
         content = msg["content"]
-        if isinstance(content, str) and content.strip() == "":
-            raise HubError(400, "BLANK_CONTENT", "單則 content 不可全空白")
+        if not isinstance(content, (str, list)):
+            raise HubError(400, "BAD_REQUEST", f"第 {idx+1} 則消息的 content 格式錯誤")
+        
+        if isinstance(content, str):
+            if not content.strip():
+                raise HubError(400, "BLANK_CONTENT", f"第 {idx+1} 則消息的 content 不可全空白")
+            if len(content) > 8000:
+                raise HubError(400, "CONTENT_TOO_LONG", f"第 {idx+1} 則消息的 content 超過 8000 字符")
+            # 檢查危險內容
+            if dangerous_patterns.search(content):
+                raise HubError(400, "DANGEROUS_CONTENT", f"第 {idx+1} 則消息包含不安全的內容")
+        elif isinstance(content, list):
+            # 多模態內容驗證
+            if len(content) > 20:
+                raise HubError(400, "BAD_REQUEST", f"第 {idx+1} 則消息的多模態內容過多")
+            for item in content:
+                if not isinstance(item, dict):
+                    raise HubError(400, "BAD_REQUEST", f"第 {idx+1} 則消息的多模態項目必須為物件")
+        
         cleaned.append({"role": role, "content": content})
     return cleaned
 
@@ -546,15 +585,98 @@ def get_agent_task(user: HubUser, task_id: str) -> AgentTask:
 
 
 def authenticate(authorization: str | None) -> HubUser:
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HubError(401, "UNAUTHORIZED", "缺少或無效的 API Key")
+    """驗證 Bearer Token。
+    
+    支援兩種認證方式：
+    1. API Key: Bearer <api_key> - 從 store 中查找匹配的用戶
+    2. JWT Token: Bearer <jwt_token> - 驗證 JWT 簽名和過期時間
+    
+    增強驗證邏輯：
+    - 嚴格檢查 Authorization header 格式
+    - 防止空白或過短的 token
+    - 對 JWT token 進行完整的簽名和過期驗證
+    """
+    import time
+    import json
+    import base64
+    import hmac
+    import hashlib
+    
+    if not authorization:
+        raise HubError(401, "UNAUTHORIZED", "缺少 Authorization header")
+    
+    if not authorization.startswith("Bearer "):
+        raise HubError(401, "UNAUTHORIZED", "Authorization header 必須以 Bearer 開頭")
+    
     token = authorization[7:].strip()
+    
+    if not token or len(token) < 10:
+        raise HubError(401, "UNAUTHORIZED", "Token 長度不足")
+    
+    # 檢查是否為 JWT token (包含三個部分，以 . 分隔)
+    if token.count(".") == 2:
+        # JWT token 驗證
+        try:
+            header_b, body_b, sig_b = token.split(".")
+            
+            # 填充 base64url
+            pad = "=" * (-len(body_b) % 4)
+            header_pad = "=" * (-len(header_b) % 4)
+            
+            # 解碼 payload 獲取過期時間
+            try:
+                payload = json.loads(base64.urlsafe_b64decode(body_b + pad))
+            except Exception as exc:
+                raise HubError(401, "UNAUTHORIZED", "JWT payload 解析失敗") from exc
+            
+            # 驗證過期時間
+            now = int(time.time())
+            exp = payload.get("exp", 0)
+            iat = payload.get("iat", 0)
+            
+            if exp and exp < now:
+                raise HubError(401, "UNAUTHORIZED", "JWT token 已過期")
+            
+            if iat and (now - iat) > 86400:  # 超過 24 小時
+                raise HubError(401, "UNAUTHORIZED", "JWT token 簽發時間過久")
+            
+            # 驗證簽名
+            from backend.hub.tools import JWT_SECRET
+            expected_sig = base64.urlsafe_b64encode(
+                hmac.new(JWT_SECRET, f"{header_b}.{body_b}".encode(), hashlib.sha256).digest()
+            ).rstrip(b"=").decode("ascii")
+            
+            if not hmac.compare_digest(expected_sig, sig_b):
+                raise HubError(401, "UNAUTHORIZED", "JWT 簽名驗證失敗")
+            
+            # 從 JWT 中提取用戶 ID
+            user_id = payload.get("sub")
+            if not user_id:
+                raise HubError(401, "UNAUTHORIZED", "JWT 缺少用戶標識")
+            
+            # 創建臨時用戶對象（實際應用中應從數據庫加載）
+            from uuid import UUID
+            user = HubUser(
+                id=UUID(user_id) if isinstance(user_id, str) else user_id,
+                name=payload.get("name", "jwt-user"),
+                api_key_hash="",
+                daily_budget_limit_usd=payload.get("daily_budget", 10.0),
+            )
+            return user
+            
+        except HubError:
+            raise
+        except Exception as exc:
+            raise HubError(401, "UNAUTHORIZED", f"JWT 驗證失敗：{exc}") from exc
+    
+    # API Key 驗證（原有邏輯）
     if not (43 <= len(token) <= 128):
         # 開發金鑰較短時仍允許精確命中 store
         user = runtime.store.get_by_api_key(token)
         if user:
             return user
         raise HubError(401, "UNAUTHORIZED", "缺少或無效的 API Key")
+    
     user = runtime.store.get_by_api_key(token)
     if user is None:
         raise HubError(401, "UNAUTHORIZED", "缺少或無效的 API Key")

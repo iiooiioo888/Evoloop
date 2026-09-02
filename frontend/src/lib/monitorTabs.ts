@@ -22,6 +22,7 @@ export const MONITOR_MORE_TABS: MonitorTabItem[] = [
   { key: 'lab', icon: '✦', label: '實驗室' },
   { key: 'ops', icon: '⚙', label: '運維' },
   { key: 'memory', icon: '◌', label: '記憶' },
+  { key: 'dbpool', icon: '🗄️', label: '連接池' },
 ];
 
 /** 全部（相容舊呼叫）。 */

@@ -16,9 +16,18 @@ import time
 from typing import Any
 from uuid import uuid4
 
+import os
+
 from backend.hub.errors import HubError
 
-JWT_SECRET = b"hub-dev-jwt-secret-do-not-use-prod"
+# JWT 密鑰：從環境變數讀取，若未設定則生成隨機密鑰（開發環境）
+_jwt_secret_raw = os.getenv("JWT_SECRET", "").strip()
+if not _jwt_secret_raw:
+    # 開發環境：生成隨機密鑰並警告
+    import secrets
+    _jwt_secret_raw = secrets.token_hex(32)
+    # 在生產環境中應該明確設定 JWT_SECRET
+JWT_SECRET = _jwt_secret_raw.encode("utf-8") if isinstance(_jwt_secret_raw, str) else _jwt_secret_raw
 
 STOCKSX_QUOTES: dict[str, dict[str, Any]] = {
     "600519": {
