@@ -102,11 +102,25 @@ app = FastAPI(
     lifespan=_lifespan,
 )
 
+# CORS 配置：僅允許受信任的來源
+allowed_origins = [
+    origin.strip()
+    for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173").split(",")
+    if origin.strip()
+]
+if not allowed_origins:
+    allowed_origins = ["http://localhost:3000", "http://localhost:5173"]
+
+logger.info("CORS allowed origins: %s", allowed_origins)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-Id", "X-Routing-Strategy", "X-Failover-Config", "CF-IPCountry"],
+    expose_headers=["X-Request-Id", "X-Trace-Id", "X-Chosen-Provider", "X-Cost-Usd", "X-Latency-Ms", "X-Hub-Cache", "X-RateLimit-Remaining"],
+    max_age=600,
 )
 
 # AI Hub 旁路面：/api/v1/*（Nginx 剝除 /api 時另掛 /v1/*）
@@ -1267,6 +1281,39 @@ async def lab_archify_generate(body: ArchifyGenerateRequest):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+# ═══════════════════════════════════════════════════════════
+# 數據庫連接池管理 API（供 UI 使用）
+# ═══════════════════════════════════════════════════════════
+
+from backend.hub.db import Database
+
+class DbPoolRefreshRequest(BaseModel):
+    min_idle: int = 2
+
+@app.get("/admin/db/pool/stats")
+async def get_db_pool_stats():
+    """獲取數據庫連接池統計信息。"""
+    return Database.get_pool_stats()
+
+@app.post("/admin/db/pool/refresh")
+async def refresh_db_pool(body: DbPoolRefreshRequest):
+    """刷新連接池（關閉空閒連接）。"""
+    return Database.refresh_pool(body.min_idle)
+
+@app.delete("/admin/db/pool/connection/{connection_id}")
+async def close_db_connection(connection_id: str):
+    """關閉指定連接。"""
+    success = Database.close_connection(connection_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Connection not found")
+    return {"success": True}
+
+@app.post("/admin/db/health")
+async def run_db_health_check():
+    """執行數據庫健康檢查。"""
+    return Database.run_health_check()
 
 
 if __name__ == "__main__":

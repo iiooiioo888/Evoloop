@@ -26,7 +26,8 @@ export type MonitorTab =
   | 'feedback'
   | 'lab'
   | 'ops'
-  | 'memory';
+  | 'memory'
+  | 'dbpool';
 
 export interface AppShellProps {
   /** 当前活跃视图 */
