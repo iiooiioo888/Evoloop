@@ -75,6 +75,9 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    volumes:
+      # 日誌持久化
+      - frontend_logs:/var/log/nginx
     networks:
       - evoloop_net
     restart: unless-stopped
