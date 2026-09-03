@@ -23,33 +23,34 @@
     "simple": {
       "generate": "qwen-turbo",
       "evaluate": "qwen-turbo",
-      "reflect": "deepseek-chat",
+      "reflect": "deepseek-v4-flash",
       "improve": "qwen-turbo",
       "cross_eval": "qwen-turbo",
-      "decompose": "deepseek-chat"
+      "decompose": "deepseek-v4-flash"
     },
     "medium": {
       "generate": "qwen-plus",
       "evaluate": "qwen-turbo",
-      "reflect": "deepseek-chat",
+      "reflect": "deepseek-v4-flash",
       "improve": "qwen-plus",
       "cross_eval": "qwen-turbo",
-      "decompose": "deepseek-chat"
+      "decompose": "deepseek-v4-flash"
     },
     "complex": {
-      "generate": "deepseek-reasoner",
+      "generate": "deepseek-v4-pro",
       "evaluate": "qwen-turbo",
-      "reflect": "deepseek-reasoner",
-      "improve": "deepseek-chat",
+      "reflect": "deepseek-v4-pro",
+      "improve": "deepseek-v4-flash",
       "cross_eval": "qwen-turbo",
-      "decompose": "deepseek-reasoner"
+      "decompose": "deepseek-v4-pro"
     }
   },
   "models": {
     "qwen-turbo": { "cost_score": 1, "speed_score": 9, "label": "便宜快速" },
     "qwen-plus": { "cost_score": 3, "speed_score": 7, "label": "均衡" },
-    "deepseek-chat": { "cost_score": 2, "speed_score": 8, "label": "日常推理" },
-    "deepseek-reasoner": { "cost_score": 6, "speed_score": 4, "label": "深度推理" },
+    "deepseek-v4-flash": { "cost_score": 2, "speed_score": 8, "label": "日常推理" },
+    "deepseek-v4-pro": { "cost_score": 6, "speed_score": 4, "label": "深度推理" },
+    "deepseek-v4-flash-vision-exp": { "cost_score": 3, "speed_score": 7, "label": "多模態實驗" },
     "kimi-k3": { "cost_score": 5, "speed_score": 6, "label": "长上下文" },
     "gpt-4o-mini": { "cost_score": 4, "speed_score": 8, "label": "通用轻量" },
     "gpt-4o": { "cost_score": 8, "speed_score": 7, "label": "高质量" }

@@ -2,7 +2,7 @@
 
 > 自我反思 × 多代理人公司 × 工業閉環 — 永不停止進化的 AI 系統  
 > 單一主線版本（僅 `master`）· 倉庫：[iiooiioo888/Evoloop](https://github.com/iiooiioo888/Evoloop) · Demo：[GitHub Pages](https://iiooiioo888.github.io/Evoloop/)  
-> 文件對齊日期：2026-08-27（監控中心／模型池運維／Pages 已併入主線）
+> 文件對齊日期：2026-09-03（角色總覽跳轉／示範種子／前端 3001；監控中心／模型池／Pages 已在主線）
 
 ## 目錄
 
@@ -38,7 +38,8 @@
 | 了解系統整體架構 | [架構總覽](architecture/overview.md) |
 | 查看 API 端點 | [REST API 參考](api/reference.md) |
 | 配置 LLM／模型池鎖定 | [配置參考](config/reference.md) · 根目錄 [README](../README.md#-模型池與運維) |
-| 監控中心／自定義角色 | 根目錄 [README](../README.md#-監控中心) |
+| 監控中心／自定義角色／層級跳轉 | 根目錄 [README](../README.md#-監控中心) |
+| 記憶庫空白／寫入示範 60 條 | 根目錄 [README](../README.md#-快速開始) · `python -m backend.scripts.seed_demo_content` |
 | 本地開發調試 | [開發指南](development/guide.md) |
 | 部署到生產環境 | [部署指南](deployment/guide.md) |
 | 理解反思閉環如何工作 | [反思閉環](architecture/reflection-loop.md) |

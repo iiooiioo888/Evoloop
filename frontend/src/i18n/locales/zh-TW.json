@@ -1,8 +1,13 @@
 {
   "nav": {
     "chat": "對話",
-    "monitor": "監控",
-    "traces": "執行軌跡"
+    "console": "控制台",
+    "work": "執行",
+    "observe": "觀測",
+    "system": "系統",
+    "lab": "實驗室",
+    "monitor": "控制台",
+    "traces": "軌跡"
   },
   "monitor": {
     "live": "即時",

@@ -85,6 +85,14 @@ export function agentOpenCount(agent: Pick<RoleAgent, 'queue' | 'executing' | 'i
   return agent.queue + agent.executing + (agent.inbox.in_review ?? 0) + agent.blocked;
 }
 
+export function isLiveAgent(agent: Pick<RoleAgent, 'status'>): boolean {
+  return agent.status === 'busy' || agent.status === 'waiting';
+}
+
+export function isAlertAgent(agent: Pick<RoleAgent, 'status' | 'alerts' | 'budget_over'>): boolean {
+  return (agent.alerts?.length ?? 0) > 0 || agent.status === 'error' || !!agent.budget_over;
+}
+
 export function fmtUsd(n: number): string {
   if (!n) return '$0';
   if (n < 0.01) return `$${n.toFixed(4)}`;
@@ -102,6 +110,14 @@ export function fmtWhen(iso: string | null | undefined): string {
     minute: '2-digit',
     hour12: false,
   });
+}
+
+export const JUMP_AGENT_EVENT = 'evoloop:jump-agent';
+
+export type JumpAgentDetail = { id?: string; level?: number };
+
+export function dispatchJumpAgent(detail: JumpAgentDetail) {
+  window.dispatchEvent(new CustomEvent<JumpAgentDetail>(JUMP_AGENT_EVENT, { detail }));
 }
 
 export function pickDefaultAgentId(agents: RoleAgent[], preferred?: string | null): string {

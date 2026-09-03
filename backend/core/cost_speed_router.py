@@ -2,7 +2,7 @@
 
 依任務複雜度與管線環節，從 cost_speed 配置選擇最合適的模型：
   - 簡單問題 → 便宜快速模型（如 qwen-turbo）
-  - 複雜推理 → 深度模型（如 deepseek-reasoner）
+  - 複雜推理 → 深度模型（如 deepseek-v4-pro）
   - 複雜任務 → 公司運行時路徑
 
 配置檔：backend/config/cost_speed.json（可透過 EVOL_COST_SPEED_PATH 覆寫，支援熱重載）。
@@ -68,12 +68,12 @@ def _builtin_defaults() -> dict[str, Any]:
             "complex": {"min_query_length": 200, "path": "company", "keywords": []},
         },
         "stage_models": {
-            "simple": {"generate": "qwen-turbo", "evaluate": "qwen-turbo", "reflect": "deepseek-chat"},
-            "medium": {"generate": "qwen-plus", "evaluate": "qwen-turbo", "reflect": "deepseek-chat"},
+            "simple": {"generate": "qwen-turbo", "evaluate": "qwen-turbo", "reflect": "deepseek-v4-flash"},
+            "medium": {"generate": "qwen-plus", "evaluate": "qwen-turbo", "reflect": "deepseek-v4-flash"},
             "complex": {
-                "generate": "deepseek-reasoner",
+                "generate": "deepseek-v4-pro",
                 "evaluate": "qwen-turbo",
-                "reflect": "deepseek-reasoner",
+                "reflect": "deepseek-v4-pro",
             },
         },
         "models": {},

@@ -70,7 +70,7 @@ export default function InputBar({ disabled, onSend }: InputBarProps) {
 
   return (
     <div className="apple-input-bar shrink-0">
-      <div className="relative mx-auto w-full max-w-2xl">
+      <div className="relative mx-auto w-full max-w-3xl">
         {showAdvanced && (
           <div className="mb-2 rounded-xl border border-white/[0.06] bg-[#1C1C1E] p-3">
             <p className="mb-2 text-[10px] font-medium text-[#636366]">進階</p>

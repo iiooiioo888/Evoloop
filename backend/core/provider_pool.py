@@ -24,11 +24,9 @@ FORBIDDEN_RE = re.compile(r"(?i)claude|anthropic|opus-|sonnet-|haiku-|fable")
 
 VENDOR_STATIC: dict[str, tuple[str, ...]] = {
     "deepseek": (
-        "deepseek-chat",
-        "deepseek-reasoner",
-        "deepseek-coder",
-        "deepseek-v3",
         "deepseek-v4-flash",
+        "deepseek-v4-pro",
+        "deepseek-v4-flash-vision-exp",
     ),
     "qwen": (
         "qwen-plus",
@@ -237,7 +235,7 @@ def clamp_model(requested: str | None, *, cfg: dict[str, Any] | None = None) -> 
     if is_forbidden_model(fallback) and allowed:
         fallback = allowed[0]
     if not requested:
-        return fallback if not is_forbidden_model(fallback) else (allowed[0] if allowed else "deepseek-chat")
+        return fallback if not is_forbidden_model(fallback) else (allowed[0] if allowed else "deepseek-v4-flash")
     hit = _model_in_pool(requested, allowed or ([fallback] if fallback else []))
     if hit:
         return hit

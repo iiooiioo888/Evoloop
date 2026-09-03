@@ -29,14 +29,14 @@ def test_parse_models_skips_claude():
     rows = parse_models_payload(
         {
             "data": [
-                {"id": "deepseek/deepseek-chat", "name": "DeepSeek"},
+                {"id": "deepseek/deepseek-v4-flash", "name": "DeepSeek"},
                 {"id": "anthropic/claude-opus-5", "name": "Claude"},
                 {"id": "google/gemini-3.1-pro"},
             ]
         }
     )
     ids = {r["id"] for r in rows}
-    assert "deepseek/deepseek-chat" in ids
+    assert "deepseek/deepseek-v4-flash" in ids
     assert "google/gemini-3.1-pro" in ids
     assert not any("claude" in i.lower() for i in ids)
 
@@ -52,9 +52,9 @@ def test_clamp_locks_agents_to_deepseek(monkeypatch):
         lambda url, key, timeout=15.0: (_ for _ in ()).throw(RuntimeError("offline")),
     )
     refresh_model_catalog(reason="test")
-    assert clamp_model("gpt-4o") == "deepseek-chat"
-    assert clamp_model("gpt-5.6-sol") == "deepseek-chat"
-    assert clamp_model("deepseek-reasoner") == "deepseek-reasoner"
+    assert clamp_model("gpt-4o") == "deepseek-v4-flash"
+    assert clamp_model("gpt-5.6-sol") == "deepseek-v4-flash"
+    assert clamp_model("deepseek-v4-pro") == "deepseek-v4-pro"
 
 
 def test_openrouter_crawl_writes_catalog(monkeypatch):
@@ -69,7 +69,7 @@ def test_openrouter_crawl_writes_catalog(monkeypatch):
         assert url.endswith("/models")
         return {
             "data": [
-                {"id": "deepseek/deepseek-chat"},
+                {"id": "deepseek/deepseek-v4-flash"},
                 {"id": "qwen/qwen3.5-max"},
                 {"id": "anthropic/claude-sonnet"},
             ]
@@ -79,7 +79,7 @@ def test_openrouter_crawl_writes_catalog(monkeypatch):
     pool = refresh_model_catalog(reason="test")
     assert pool["provider_kind"] == "openrouter"
     assert pool["catalog_source"] == "crawl"
-    assert "deepseek/deepseek-chat" in pool["allowed_models"]
+    assert "deepseek/deepseek-v4-flash" in pool["allowed_models"]
     assert "qwen/qwen3.5-max" in pool["allowed_models"]
     assert not any("claude" in m.lower() for m in pool["allowed_models"])
     assert clamp_model("openai/gpt-4o") in pool["allowed_models"]
@@ -100,7 +100,7 @@ def test_config_and_monitor_llm_ops_http(monkeypatch):
     monkeypatch.setattr(task_manager, "tasks", {})
     monkeypatch.setattr(
         "backend.core.provider_pool._http_get_json",
-        lambda url, key, timeout=15.0: {"data": [{"id": "deepseek-chat"}, {"id": "deepseek-reasoner"}]},
+        lambda url, key, timeout=15.0: {"data": [{"id": "deepseek-v4-flash"}, {"id": "deepseek-v4-pro"}]},
     )
 
     with TestClient(app) as client:
@@ -115,7 +115,7 @@ def test_config_and_monitor_llm_ops_http(monkeypatch):
         assert saved.status_code == 200, saved.text
         body = saved.json()
         assert body["provider_kind"] == "deepseek"
-        assert "deepseek-chat" in body["allowed_models"]
+        assert "deepseek-v4-flash" in body["allowed_models"]
         assert body["model"] in body["allowed_models"]
 
         ops = client.get("/monitor/llm-ops")
@@ -161,7 +161,7 @@ def test_openrouter_maps_hub_models_by_vendor_prefix(monkeypatch):
     def fake_get(url, key, timeout=15.0):
         return {
             "data": [
-                {"id": "deepseek/deepseek-chat"},
+                {"id": "deepseek/deepseek-v4-flash"},
                 {"id": "openai/gpt-4o"},
                 {"id": "anthropic/claude-sonnet"},
             ]
@@ -181,7 +181,7 @@ def test_preferred_model_clamped_to_pool(monkeypatch):
     save_runtime_config(
         api_key="sk-ds-pref",
         api_base="https://api.deepseek.com",
-        model="deepseek-chat",
+        model="deepseek-v4-flash",
     )
     monkeypatch.setattr(
         "backend.core.provider_pool._http_get_json",
@@ -197,7 +197,7 @@ def test_preferred_model_clamped_to_pool(monkeypatch):
         }
     )
     runtime = resolve_runtime(created["id"])
-    assert runtime["preferred_model"] == "deepseek-chat"
+    assert runtime["preferred_model"] == "deepseek-v4-flash"
 
 
 def test_failover_models_prefers_healthy_cheaper_alternatives(monkeypatch):
@@ -208,17 +208,17 @@ def test_failover_models_prefers_healthy_cheaper_alternatives(monkeypatch):
     save_runtime_config(
         api_key="sk-ds-fail",
         api_base="https://api.deepseek.com",
-        model="deepseek-reasoner",
+        model="deepseek-v4-pro",
     )
     merge_runtime_config(
         {
-            "allowed_models": ["deepseek-reasoner", "deepseek-chat", "deepseek-coder"],
+            "allowed_models": ["deepseek-v4-pro", "deepseek-v4-flash", "deepseek-v4-flash-vision-exp"],
             "provider_kind": "deepseek",
         }
     )
-    chain = failover_models("deepseek-reasoner")
-    assert chain[0] == "deepseek-reasoner"
-    assert set(chain) == {"deepseek-reasoner", "deepseek-chat", "deepseek-coder"}
+    chain = failover_models("deepseek-v4-pro")
+    assert chain[0] == "deepseek-v4-pro"
+    assert set(chain) == {"deepseek-v4-pro", "deepseek-v4-flash", "deepseek-v4-flash-vision-exp"}
 
 
 def test_invoke_with_pool_failover_switches_on_rate_limit(monkeypatch):
@@ -229,20 +229,20 @@ def test_invoke_with_pool_failover_switches_on_rate_limit(monkeypatch):
 
     def fake_call(*, prompt, system=None, model=None, **kwargs):
         calls.append(model)
-        if model == "deepseek-reasoner":
+        if model == "deepseek-v4-pro":
             raise RuntimeError("429 rate limit")
         return f"ok:{model}"
 
     text, used, hops = invoke_with_pool_failover(
         fake_call,
         prompt="hi",
-        models=["deepseek-reasoner", "deepseek-chat"],
+        models=["deepseek-v4-pro", "deepseek-v4-flash"],
         max_retries=1,
     )
-    assert text == "ok:deepseek-chat"
-    assert used == "deepseek-chat"
+    assert text == "ok:deepseek-v4-flash"
+    assert used == "deepseek-v4-flash"
     assert hops == 1
-    assert calls == ["deepseek-reasoner", "deepseek-chat"]
+    assert calls == ["deepseek-v4-pro", "deepseek-v4-flash"]
 
 
 def test_pool_model_opens_after_consecutive_failures(monkeypatch):
@@ -252,10 +252,10 @@ def test_pool_model_opens_after_consecutive_failures(monkeypatch):
     monkeypatch.setenv("EVOL_LLM_POOL_FAIL_THRESHOLD", "2")
     # re-read threshold - it's module level constant loaded at import
     # use 2 failures which is default POOL_FAILURE_THRESHOLD
-    record_pool_call("deepseek-chat", True, 0.1, "timeout")
-    assert not is_pool_model_open("deepseek-chat")
-    record_pool_call("deepseek-chat", True, 0.1, "timeout")
-    assert is_pool_model_open("deepseek-chat")
+    record_pool_call("deepseek-v4-flash", True, 0.1, "timeout")
+    assert not is_pool_model_open("deepseek-v4-flash")
+    record_pool_call("deepseek-v4-flash", True, 0.1, "timeout")
+    assert is_pool_model_open("deepseek-v4-flash")
 
 
 def test_public_pool_exposes_failover_ops(monkeypatch):
@@ -283,13 +283,13 @@ def test_probe_pool_health_opens_primary_when_endpoint_down(monkeypatch):
     save_runtime_config(
         api_key="sk-ds-probe",
         api_base="https://api.deepseek.com",
-        model="deepseek-chat",
+        model="deepseek-v4-flash",
     )
     merge_runtime_config(
         {
-            "allowed_models": ["deepseek-chat", "deepseek-reasoner"],
+            "allowed_models": ["deepseek-v4-flash", "deepseek-v4-pro"],
             "provider_kind": "deepseek",
-            "model": "deepseek-chat",
+            "model": "deepseek-v4-flash",
         }
     )
     monkeypatch.setattr(
@@ -298,8 +298,8 @@ def test_probe_pool_health_opens_primary_when_endpoint_down(monkeypatch):
     )
     snap = probe_pool_health(reason="test")
     assert snap["ok"] is False
-    assert "deepseek-chat" in snap["opened"]
-    assert is_pool_model_open("deepseek-chat")
+    assert "deepseek-v4-flash" in snap["opened"]
+    assert is_pool_model_open("deepseek-v4-flash")
     assert snap["mode"] == "catalog"
 
 
@@ -317,32 +317,32 @@ def test_probe_pool_health_opens_missing_and_heals_probe_open(monkeypatch):
     save_runtime_config(
         api_key="sk-ds-probe2",
         api_base="https://api.deepseek.com",
-        model="deepseek-chat",
+        model="deepseek-v4-flash",
     )
     merge_runtime_config(
         {
-            "allowed_models": ["deepseek-chat", "deepseek-missing"],
+            "allowed_models": ["deepseek-v4-flash", "deepseek-missing"],
             "provider_kind": "deepseek",
-            "model": "deepseek-chat",
+            "model": "deepseek-v4-flash",
         }
     )
-    force_open_pool_model("deepseek-chat", "old probe", from_probe=True)
+    force_open_pool_model("deepseek-v4-flash", "old probe", from_probe=True)
     # 真實呼叫失敗造成的熔斷不應被 catalog 探活直接解除
-    record_pool_call("deepseek-reasoner", True, 0.1, "timeout")
-    record_pool_call("deepseek-reasoner", True, 0.1, "timeout")
-    assert is_pool_model_open("deepseek-reasoner")
+    record_pool_call("deepseek-v4-pro", True, 0.1, "timeout")
+    record_pool_call("deepseek-v4-pro", True, 0.1, "timeout")
+    assert is_pool_model_open("deepseek-v4-pro")
 
     monkeypatch.setattr(
         "backend.core.provider_pool._http_get_json",
-        lambda url, key, timeout=15.0: {"data": [{"id": "deepseek-chat"}, {"id": "deepseek-reasoner"}]},
+        lambda url, key, timeout=15.0: {"data": [{"id": "deepseek-v4-flash"}, {"id": "deepseek-v4-pro"}]},
     )
     snap = probe_pool_health(reason="test")
     assert snap["ok"] is True
     assert "deepseek-missing" in snap["opened"]
     assert is_pool_model_open("deepseek-missing")
-    assert "deepseek-chat" in snap["healed"]
-    assert not is_pool_model_open("deepseek-chat")
-    assert is_pool_model_open("deepseek-reasoner")
+    assert "deepseek-v4-flash" in snap["healed"]
+    assert not is_pool_model_open("deepseek-v4-flash")
+    assert is_pool_model_open("deepseek-v4-pro")
 
 
 def test_probe_pool_health_optional_ping(monkeypatch):
@@ -359,31 +359,31 @@ def test_probe_pool_health_optional_ping(monkeypatch):
     save_runtime_config(
         api_key="sk-ds-probe3",
         api_base="https://api.deepseek.com",
-        model="deepseek-chat",
+        model="deepseek-v4-flash",
     )
     merge_runtime_config(
         {
-            "allowed_models": ["deepseek-chat", "deepseek-reasoner"],
+            "allowed_models": ["deepseek-v4-flash", "deepseek-v4-pro"],
             "provider_kind": "deepseek",
-            "model": "deepseek-chat",
+            "model": "deepseek-v4-flash",
         }
     )
-    force_open_pool_model("deepseek-chat", "call fail", from_probe=False)
+    force_open_pool_model("deepseek-v4-flash", "call fail", from_probe=False)
     monkeypatch.setattr(
         "backend.core.provider_pool._http_get_json",
-        lambda url, key, timeout=15.0: {"data": [{"id": "deepseek-chat"}, {"id": "deepseek-reasoner"}]},
+        lambda url, key, timeout=15.0: {"data": [{"id": "deepseek-v4-flash"}, {"id": "deepseek-v4-pro"}]},
     )
 
     def fake_ping(*, prompt, system=None, model=None, **kwargs):
-        if model == "deepseek-chat":
+        if model == "deepseek-v4-flash":
             return "pong"
         raise RuntimeError("503 unavailable")
 
     snap = probe_pool_health(reason="test", ping_fn=fake_ping)
     assert snap["mode"] == "catalog+ping"
-    assert not is_pool_model_open("deepseek-chat")
-    assert is_pool_model_open("deepseek-reasoner")
-    assert "deepseek-reasoner" in snap["opened"]
+    assert not is_pool_model_open("deepseek-v4-flash")
+    assert is_pool_model_open("deepseek-v4-pro")
+    assert "deepseek-v4-pro" in snap["opened"]
 
 
 def test_run_ops_once_includes_active_probe(monkeypatch):
@@ -408,8 +408,8 @@ def test_run_ops_once_includes_active_probe(monkeypatch):
     )
     monkeypatch.setattr(
         "backend.core.provider_pool.pool_health_snapshot",
-        lambda: {"deepseek-chat": {"open": False}},
+        lambda: {"deepseek-v4-flash": {"open": False}},
     )
     pool = run_ops_once("test")
     assert pool["ops"]["pool_failover"]["active_probe"]["ok"] is True
-    assert "deepseek-chat" in pool["ops"]["pool_failover"]["models"]
+    assert "deepseek-v4-flash" in pool["ops"]["pool_failover"]["models"]

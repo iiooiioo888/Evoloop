@@ -63,7 +63,7 @@ class TestCostSpeedRouting:
         save_runtime_config(
             api_key="sk-test",
             api_base="https://api.deepseek.com",
-            model="deepseek-chat",
+            model="deepseek-v4-flash",
         )
         monkeypatch.setattr(
             "backend.core.provider_pool._http_get_json",
@@ -72,8 +72,8 @@ class TestCostSpeedRouting:
         from backend.core.provider_pool import refresh_model_catalog
 
         refresh_model_catalog(reason="test")
-        picked = resolve_cost_speed_model("simple", "generate", "deepseek-chat")
-        assert picked in {"deepseek-chat", "deepseek-reasoner", "deepseek-coder"}
+        picked = resolve_cost_speed_model("simple", "generate", "deepseek-v4-flash")
+        assert picked in {"deepseek-v4-flash", "deepseek-v4-pro", "deepseek-v4-flash-vision-exp"}
         reset_runtime_config()
 
 

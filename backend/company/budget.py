@@ -38,13 +38,14 @@ _DEFAULT_MODEL_COST: dict[str, tuple[float, float]] = {
     "gpt-4o-mini": (0.15, 0.60),
     "gpt-4-turbo": (10.00, 30.00),
     "gpt-3.5-turbo": (0.50, 1.50),
-    "deepseek-chat": (0.14, 0.28),
-    "deepseek-reasoner": (0.55, 2.19),
+    # DeepSeek V4（官方 off-peak / cache-miss 概估）
+    "deepseek-v4-flash": (0.22, 0.66),
+    "deepseek-v4-pro": (0.66, 1.98),
+    "deepseek-v4-flash-vision-exp": (0.22, 0.66),
     # AI Hub 九模型目錄（與 docs/AI_HUB_DETAILED_DESIGN.md §1.6 對齊）
     "gpt-5.6-sol": (3.00, 30.00),
     "gemini-3.1-pro": (1.25, 12.00),
     "mimo-v2.5-pro": (0.21, 0.83),
-    "deepseek-v4-flash": (0.028, 0.157),
     "qwen3.5-max": (0.30, 1.20),
     "mercury-2": (0.50, 2.00),
     "nemotron-3.5-lightning": (0.00, 0.00),

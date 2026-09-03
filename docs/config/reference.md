@@ -101,7 +101,9 @@
 {
   "gpt-4o": [2.50, 10.00],
   "gpt-4o-mini": [0.15, 0.60],
-  "deepseek-chat": [0.14, 0.28],
+  "deepseek-v4-flash": [0.22, 0.66],
+  "deepseek-v4-pro": [0.66, 1.98],
+  "deepseek-v4-flash-vision-exp": [0.22, 0.66],
   "qwen-turbo": [0.05, 0.10]
 }
 ```

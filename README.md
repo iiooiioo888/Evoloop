@@ -19,7 +19,7 @@
 **線上預覽：** [https://iiooiioo888.github.io/Evoloop/](https://iiooiioo888.github.io/Evoloop/)  
 （靜態 UI；聊天、寫入與模型刷新需本地或 Docker 啟動完整服務）
 
-> **單一主線** · 分支僅 `master` · 最近文件更新：2026-08-27
+> **單一主線** · 分支僅 `master` · 最近文件更新：2026-09-03
 
 </div>
 
@@ -55,7 +55,7 @@ EvoLoop 不是普通的 AI 助手——它是具備**自我反思閉環**的**�
 | 🔄 **反思閉環** | 4 維度獨立評分（準確／完整／清晰／相關），低於門檻自動反思改進直到達標 |
 | 🏢 **公司運行時** | 複雜任務自動觸發：Manager 分解 → 多角色並行 → Reviewer 審查 → Synthesizer 整合 |
 | 🏭 **OPC 整合** | 工業任務注入感測上下文，6 級閉環（感知→預處理→分析→診斷→決策→執行） |
-| 🖥️ **監控中心** | 單一前端：角色 Agent／總覽／控制面版／OPC／AI Hub／LLM 運維／雲控制台／記憶／檢查點 |
+| 🖥️ **監控中心** | 單一前端：角色 Agent／總覽／控制面版／OPC／AI Hub／LLM 運維／雲控制台／記憶／檢查點；側欄可跳轉層級 |
 | 🎭 **角色目錄** | **80** 個內建角色（Level 0–4）+ 自定義角色 CRUD + 執行期設定覆蓋 |
 | 🔌 **模型池鎖定** | 依已存 API 鎖定可用模型；單一廠商只准該廠商；OpenRouter 等通用端點爬取 `/models` |
 | ☁️ **雲控制台** | 費用帳單、資源監控、告警中心、Docker 實例管理 |
@@ -86,15 +86,19 @@ graph LR
 | 主題 | 你會得到什麼 |
 |------|-------------|
 | **監控中心擴充** | 9 個子分頁；80 席角色工作台；完整角色設定表單；自定義角色新增／複製／刪除；監控偏好（輪詢、分組、篩選） |
+| **角色總覽操作** | 依 L0–L4 分組；左側層級錨點跳轉；活躍／告警為篩選而非第二套計數；卡片右上角為該角色合計成本 |
+| **示範資料** | `python -m backend.scripts.seed_demo_content` 寫入 60 任務、60 推理軌跡、60 知識庫條目（Chroma 失敗則降級 JSON） |
 | **通用模型優化** | 只存 DeepSeek → 全系統只能用 DeepSeek；OpenRouter／Ollama／vLLM → 爬取 `/models` 寫入配置；定時檢查 + 手動刷新 + 健康快照 |
 | **GitHub / Pages** | 推送 `master` 跑 CI，並部署靜態 Demo → [iiooiioo888.github.io/Evoloop](https://iiooiioo888.github.io/Evoloop/) |
 
-### 最近更新（2026-08-27）
+### 最近更新（2026-09-03）
 
-- 前端與監控合拼為**唯一版本**（`AppShell` + `MonitorView`），不再維護平行舊／新介面
-- Hub、雲控制台、Docker 實例等皆併入監控中心子分頁
-- 模型池支援 DeepSeek／Qwen／Moonshot／智譜／MiMo／OpenAI／OpenRouter／Ollama 等鎖定與爬取
-- CI／Pages 僅追蹤 `master`；倉庫與 Demo 統一指向 [iiooiioo888/Evoloop](https://github.com/iiooiioo888/Evoloop)
+- 角色總覽卡片排版：標題、狀態、合計成本（API／Docker／雲）分開，不再互相擠壓
+- 左側可依層級快速跳到對應角色區塊；篩選改為「全部／活躍／告警」分段控制
+- 開發前端預設 **http://localhost:3001**（Windows 上 5173 常被占用；可用 `VITE_DEV_PORT` 覆寫）
+- 示範種子：任務寫入 `backend/data/company_runs/`，推理寫入 `backend/data/traces/`，知識庫寫入 Chroma `evo_memory` 與 `backend/data/memory_store.json`
+- 記憶庫 API `GET /memories`：Chroma 為空或失敗時改讀 JSON 記憶檔，避免監控「記憶」分頁空白
+- 前端與監控仍為**唯一版本**（`AppShell` + `MonitorView`）；CI／Pages 僅追蹤 `master`
 
 ---
 
@@ -119,7 +123,7 @@ graph LR
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │                     🖥️ 前端（單一版本 · React + Vite）              │
-│  ActivityBar │ SidePanel │ ChatView │ MonitorView │ TraceView   │
+│  ActivityBar │ SidePanel（層級跳轉）│ ChatView │ MonitorView │ TraceView │
 │  監控：Agents / 總覽 / 控制面版 / OPC / Hub / LLM / 雲 / 記憶 / CP │
 └───────────────────────────────┬──────────────────────────────────┘
                                 │ REST + WebSocket + SSE
@@ -176,12 +180,18 @@ evoloop/
 │   │   ├── cloud_console.py     #     雲控制台聚合
 │   │   ├── docker_manager.py    #     容器狀態／啟停
 │   │   └── ...
-│   ├── data/role_catalog.json   #   角色目錄資料（可覆寫路徑）
-│   └── tests/                   #   251 測試
+│   ├── data/
+│   │   ├── role_catalog.json    #     角色目錄資料
+│   │   ├── memory_store.json    #     JSON 記憶降級檔
+│   │   ├── company_runs/        #     公司任務事件（含示範種子）
+│   │   └── traces/              #     推理軌跡
+│   ├── scripts/seed_demo_content.py  # 60 任務／推理／知識庫
+│   └── tests/                   #   單元測試
 ├── opc_service/                 # OPC UA 工業微服務 + 安全護欄
 ├── frontend/                    # React + Vite + TypeScript（單一 UI）
 │   └── src/
 │       ├── lib/monitorTabs.ts   #   監控分頁單一資料源
+│       ├── lib/agentUi.ts       #   角色狀態／跳轉事件 / 成本格式
 │       └── components/
 │           ├── MonitorView.tsx
 │           ├── AgentsMonitorPanel.tsx
@@ -275,14 +285,14 @@ evoloop/
 
 | 分頁 | 說明 |
 |------|------|
-| **角色 Agent** | 每位角色獨立工作台（佇列／看板／事件）；編輯設定；新增／複製／刪除自定義角色 |
+| **角色 Agent** | 每位角色獨立工作台；總覽依層級排卡片；側欄錨點跳轉 L0–L4；活躍／告警篩選；卡片右上角為合計成本 |
 | **總覽** | 系統健康與各模組入口 |
 | **控制面版** | 任務與儀表板聚合 |
 | **OPC 監控** | 護欄、審計、即時標籤 |
 | **AI Hub** | 探針、熔斷、呼叫日誌、預算（操作台內嵌於本分頁） |
 | **LLM 運維** | 供應商鎖定、可用模型目錄、定時檢查、手動刷新、健康快照 |
 | **雲控制台** | 帳單、資源監控、告警、**Docker 實例管理** |
-| **記憶庫** | 向量記憶檢視與清理 |
+| **記憶庫** | 向量記憶檢視與清理；空庫時可跑種子腳本或等待對話寫入 |
 | **檢查點** | 運行檢查點列表與恢復入口 |
 
 ### 監控偏好（角色 Agent）
@@ -292,6 +302,7 @@ evoloop/
 | `poll_interval_ms` | 輪詢間隔 |
 | `group_by` | 依 level／category 分組 |
 | `show_disabled` / `show_idle` / `show_custom_only` | 顯示篩選 |
+| 活躍／告警分段 | 頂部「全部／活躍／告警」是篩選，不是第二套 80/80 計數 |
 | `compact_cards` | 緊湊卡片 |
 | `default_desk_tab` | 預設工作台分頁 |
 
@@ -302,6 +313,7 @@ evoloop/
 - `POST /config/models/refresh` · `PUT /config/ops`
 - `GET/PUT /config` · `POST /config/test`
 - `GET /docker/*` · `GET/POST /cloud/*` — 實例與雲控制台
+- `GET /memories` · `DELETE /memories/{id}` · `POST /memories/cleanup` — 記憶庫；Chroma 空則讀 JSON
 
 ---
 
@@ -345,10 +357,10 @@ evoloop/
 ```env
 OPENAI_API_KEY=sk-your-deepseek-key
 OPENAI_API_BASE=https://api.deepseek.com
-EVOL_MODEL=deepseek-chat
+EVOL_MODEL=deepseek-v4-flash
 ```
 
-→ 全系統 Agent 鎖定 `deepseek-*`。
+→ 全系統 Agent 鎖定 `deepseek-v4-*`。
 
 **範例 B — OpenRouter 通用 API：**
 
@@ -415,8 +427,11 @@ pytest backend/tests/ -q
 # 後端 http://localhost:8000
 python -m backend.main
 
-# 前端 http://localhost:5173
+# 前端 http://localhost:3001（可用 $env:VITE_DEV_PORT=5173 改回）
 cd frontend && npm install && npm run dev
+
+# 示範任務／推理／知識庫（不呼叫 LLM）
+python -m backend.scripts.seed_demo_content
 
 # OPC（可選）
 $env:OPC_SIM_ENABLED="true"; python -m opc_service.main
@@ -433,7 +448,7 @@ docker compose logs -f backend
 | 服務 | 端口 | 說明 |
 |------|------|------|
 | `backend` | 8000 | FastAPI + LangGraph |
-| `frontend` | 5173 / 80 | React（dev／prod） |
+| `frontend` | 3001（dev）／80（prod） | React；舊文件中的 5173 已改預設 |
 | `opc_service` | 8001 | OPC UA |
 | `redis` | 6379 | 任務持久化 |
 | `chroma` | 8100 | 向量記憶庫 |
@@ -524,7 +539,7 @@ pytest backend/tests/test_monitor.py
 pytest backend/tests/test_architecture.py
 ```
 
-目前 **251** 個案例（無需真實 API 金鑰；單元測試以 monkeypatch 隔離 LLM／Redis／OPC）。
+測試無需真實 API 金鑰；單元測試以 monkeypatch 隔離 LLM／Redis／OPC。案例數量以 `pytest backend/tests/ -q` 當次輸出為準。
 
 | 類別 | 涵蓋 |
 |------|------|
@@ -548,7 +563,7 @@ pytest backend/tests/test_architecture.py
 | 快取 | Redis | 任務／狀態 |
 | 工業協議 | OPC UA (asyncua) | 感測讀寫 |
 | 前端 | React 18 + Vite + TS | 單一 IDE 風格 UI |
-| 測試 | pytest | 251 案例 |
+| 測試 | pytest | `backend/tests/` |
 | 部署 | Docker Compose + GitHub Pages | 一鍵編排 + 靜態預覽 |
 
 ---
@@ -586,6 +601,22 @@ Windows 暫存目錄權限問題。`pyproject.toml` 已設 `--basetemp=.pytest_t
 透過 LiteLLM + 運行時配置。常見：OpenAI、DeepSeek、Qwen、Moonshot、智譜、OpenRouter、Ollama／vLLM 相容端點。
 
 **模型池規則：** 系統只依你保存的 API／端點開放可用模型。例如只存 DeepSeek → Agent 只能用 DeepSeek；OpenRouter → 爬取 `/models` 後寫入配置，Agent 只能從該目錄選用。Claude／Anthropic 不會進入可用池。
+</details>
+
+<details>
+<summary><b>Q: 角色卡片右上角的 $0 是什麼？</b></summary>
+
+該角色的**合計成本**（API + Docker + 雲／阿里雲），不是狀態徽章。沒有用量時顯示 `$0`。
+</details>
+
+<details>
+<summary><b>Q: 監控「記憶」分頁是空的？</b></summary>
+
+向量庫預設讀 Chroma `evo_memory`。尚未跑過成功對話、或 Chroma 未啟動時會是空的。可執行：
+
+`python -m backend.scripts.seed_demo_content`
+
+會寫入 60 條知識庫（Chroma + `backend/data/memory_store.json`）。`GET /memories` 在 Chroma 為空或失敗時會改讀 JSON 檔。種子後請重啟後端再刷新監控。
 </details>
 
 <details>
@@ -639,6 +670,7 @@ Pages 僅靜態前端預覽。聊天、寫入 OPC、刷新模型目錄等需連�
 | Phase 13 | 監控中心擴充（角色設定／自定義角色／80 席） | ✅ |
 | Phase 14 | 模型池鎖定 + OpenRouter 爬取 + LLM 運維 | ✅ |
 | Phase 15 | 合拼單一版本 + GitHub Pages | ✅ |
+| Phase 16 | 角色總覽操作（層級跳轉／篩選／成本列）+ 示範種子 | ✅ |
 
 ---
 

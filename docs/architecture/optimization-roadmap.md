@@ -88,7 +88,7 @@ EVOL_LLM_POOL_OPEN_SEC=60          # 熔断持续时间
 |--------|------|----------|
 | simple | 单次生成 | qwen-turbo |
 | medium | 单次生成 | qwen-plus |
-| complex | 公司运行时 | deepseek-reasoner |
+| complex | 公司运行时 | deepseek-v4-pro |
 
 ```env
 EVOL_COST_SPEED_ENABLED=true

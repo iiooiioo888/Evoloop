@@ -1,0 +1,151 @@
+/**
+ * ChatWorkStream — 對話旁的即時產出欄。
+ * 任務進行中展示階段、草稿、角色產出與思考過程。
+ */
+import { useMemo } from 'react';
+import ReactMarkdown from 'react-markdown';
+import type { KanbanItem, TaskEvent, TaskProgress } from '../types';
+import { eventBody, splitThink } from '../lib/splitThink';
+import { MonitorSection } from './ChatMonitorCards';
+import { COMPANY_PHASES, OPC_PHASES, STANDARD_PHASES, roleLabel } from './TaskPanel';
+
+interface ChatWorkStreamProps {
+  task: TaskProgress;
+  draft?: string;
+  thinking?: string;
+  onOpenTrace?: (taskId: string) => void;
+}
+
+function flattenItems(task: TaskProgress): Array<{ item: KanbanItem; status: string }> {
+  const rows: Array<{ item: KanbanItem; status: string }> = [];
+  for (const [status, items] of Object.entries(task.kanban ?? {})) {
+    for (const item of items) {
+      rows.push({ item, status });
+    }
+  }
+  return rows.sort((a, b) => (b.item.updated_at ?? '').localeCompare(a.item.updated_at ?? ''));
+}
+
+function eventText(ev: TaskEvent): string {
+  return eventBody(ev.data).trim();
+}
+
+export default function ChatWorkStream({ task, draft, thinking, onOpenTrace }: ChatWorkStreamProps) {
+  const running = task.status === 'running' || task.status === 'pending';
+  const isCompany = task.resolved_path === 'company';
+  const isOPC = task.resolved_path === 'opc';
+  const phases = isOPC ? OPC_PHASES : isCompany ? COMPANY_PHASES : STANDARD_PHASES;
+  const phaseLabel =
+    phases.find((p) => p.key === task.phase)?.label ?? (task.phase || '待命');
+  const parsedDraft = splitThink(draft || task.answer || '');
+  const liveText = parsedDraft.content;
+  const liveThink = (thinking || parsedDraft.thinking).trim();
+  const items = useMemo(() => flattenItems(task), [task]);
+  const recentEvents = [...(task.events ?? [])].slice(-12).reverse();
+  const pathLabel = isOPC ? 'OPC' : isCompany ? '公司協作' : '反思閉環';
+
+  return (
+    <aside className="apple-canvas hidden min-h-0 w-[300px] shrink-0 flex-col overflow-y-auto border-l border-white/[0.08] p-4 lg:flex xl:w-[340px]">
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <div>
+          <p className="apple-title">即時產出</p>
+          <p className="mt-1 text-[10px] text-[#636366]">
+            {pathLabel}
+            {running ? ' · 進行中' : ` · ${task.status}`}
+          </p>
+        </div>
+        {onOpenTrace && (
+          <button
+            type="button"
+            onClick={() => onOpenTrace(task.task_id)}
+            className="rounded-lg border border-white/[0.08] px-2 py-1 text-[10px] font-medium text-[#8E8E93] hover:border-[#0A84FF]/40 hover:text-[#64B5FF]"
+          >
+            軌跡
+          </button>
+        )}
+      </div>
+
+      <MonitorSection title="當前階段" hint={phaseLabel} badge={running ? 'LIVE' : undefined}>
+        <p className="text-[12px] leading-relaxed text-[#AEAEB2]">{task.query.slice(0, 120)}</p>
+      </MonitorSection>
+
+      {liveThink && (
+        <MonitorSection title="思考過程" hint={`${liveThink.length} 字`}>
+          <pre className="max-h-[220px] overflow-y-auto whitespace-pre-wrap font-sans text-[12px] leading-relaxed text-[#AEAEB2]">
+            {liveThink}
+          </pre>
+        </MonitorSection>
+      )}
+
+      <MonitorSection title="生成內容" hint={liveText ? `${liveText.length} 字` : '等待寫入'}>
+        {liveText ? (
+          <div className="markdown-body max-h-[320px] overflow-y-auto text-[12px] leading-relaxed text-[#F5F5F7]">
+            <ReactMarkdown>{liveText}</ReactMarkdown>
+          </div>
+        ) : (
+          <p className="py-6 text-center text-[11px] text-[#636366]">
+            {running ? '模型正在生成，內容會即時出現於此' : '尚無草稿'}
+          </p>
+        )}
+      </MonitorSection>
+
+      {items.length > 0 && (
+        <MonitorSection title="角色產出" hint={`${items.length} 項`}>
+          <div className="space-y-3">
+            {items.map(({ item, status }) => {
+              const parsed = splitThink(item.output ?? '');
+              const think = (item.thinking || parsed.thinking).trim();
+              const output = parsed.content || item.output || '';
+              return (
+                <div key={item.id} className="apple-inset rounded-lg px-2.5 py-2">
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <p className="truncate text-[11px] font-bold text-[#F5F5F7]">{item.title}</p>
+                    <span className="shrink-0 text-[10px] text-[#636366]">{status}</span>
+                  </div>
+                  {item.assignee && (
+                    <p className="mb-1 text-[10px] text-[#8E8E93]">{roleLabel(item.assignee)}</p>
+                  )}
+                  {think && (
+                    <details className="mb-2">
+                      <summary className="cursor-pointer text-[10px] text-[#636366]">思考過程</summary>
+                      <pre className="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap font-sans text-[11px] leading-relaxed text-[#8E8E93]">
+                        {think}
+                      </pre>
+                    </details>
+                  )}
+                  {output ? (
+                    <div className="max-h-56 overflow-y-auto whitespace-pre-wrap text-[11px] leading-relaxed text-[#AEAEB2]">
+                      {output}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-[#636366]">{running ? '此角色尚未寫入' : '無產出'}</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </MonitorSection>
+      )}
+
+      {recentEvents.length > 0 && (
+        <MonitorSection title="事件" hint="最近">
+          <div className="space-y-2">
+            {recentEvents.map((ev, i) => {
+              const body = eventText(ev);
+              return (
+                <div key={`${ev.ts}-${ev.event}-${i}`} className="border-b border-white/[0.06] pb-2 last:border-0">
+                  <p className="text-[11px] font-bold text-[#F5F5F7]">{ev.event.replace(/_/g, ' ')}</p>
+                  {body && (
+                    <p className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap text-[11px] leading-relaxed text-[#AEAEB2]">
+                      {body}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </MonitorSection>
+      )}
+    </aside>
+  );
+}

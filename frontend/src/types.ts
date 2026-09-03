@@ -33,6 +33,8 @@ export interface KanbanItem {
   feedback?: Record<string, unknown>[];
   /** 產出物預覽 */
   output?: string;
+  /** 角色思考過程 */
+  thinking?: string;
   updated_at?: string;
 }
 
@@ -166,6 +168,10 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
+  /** 模型思考／反思過程 */
+  thinking?: string;
+  /** 串流原始緩衝（含 think 標籤，僅生成中使用） */
+  streamRaw?: string;
   /** 是否正在生成中 */
   streaming?: boolean;
   /** SSE 串流當前階段（標準模式打字機效果） */

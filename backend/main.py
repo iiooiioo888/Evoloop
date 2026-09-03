@@ -22,7 +22,7 @@ from pydantic import BaseModel
 
 from backend.core.graph import MAX_ITERATIONS, PASS_THRESHOLD, evoloop_graph
 from backend.core import nodes
-from backend.core.llm import call_llm, call_llm_stream
+from backend.core.llm import call_llm, call_llm_stream, split_thinking
 from backend.core.llm_config import get_runtime_config, masked_key, save_runtime_config
 from backend.core.provider_pool import public_pool, refresh_model_catalog, set_refresh_interval
 from backend.services.llm_ops import collect_llm_ops, llm_ops_loop, run_ops_once
@@ -105,11 +105,20 @@ app = FastAPI(
 # CORS 配置：僅允許受信任的來源
 allowed_origins = [
     origin.strip()
-    for origin in os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173").split(",")
+    for origin in os.getenv(
+        "ALLOWED_ORIGINS",
+        "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,http://localhost:5173",
+    ).split(",")
     if origin.strip()
 ]
 if not allowed_origins:
-    allowed_origins = ["http://localhost:3000", "http://localhost:5173"]
+    allowed_origins = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+        "http://localhost:5173",
+    ]
 
 logger.info("CORS allowed origins: %s", allowed_origins)
 
@@ -515,7 +524,13 @@ async def chat_stream(req: ChatRequest):
                 answer_parts.append(token)
                 yield f"event: token\ndata: {json_mod.dumps({'token': token}, ensure_ascii=False)}\n\n"
             answer = "".join(answer_parts)
-            state.update({"initial_answer": answer, "current_answer": answer, "iteration": 0})
+            gen_thinking, visible = split_thinking(answer)
+            state.update({
+                "initial_answer": visible or answer,
+                "current_answer": visible or answer,
+                "iteration": 0,
+                "thinking": gen_thinking,
+            })
 
             # 階段 3：多維度評估（優化 #1 + #4）
             yield f"event: phase\ndata: {json_mod.dumps({'phase': 'evaluate'})}\n\n"
@@ -544,9 +559,33 @@ async def chat_stream(req: ChatRequest):
 
                 yield f"event: phase\ndata: {json_mod.dumps({'phase': 'reflect', 'iteration': state.get('iteration', 0), 'score': current_score})}\n\n"
                 state.update(await asyncio.to_thread(nodes.reflect, state))
+                critique = str(state.get("critique") or "")
+                suggestion = str(state.get("suggestion") or "")
+                reflect_text = "\n".join(
+                    p for p in (
+                        f"反思：{critique}" if critique else "",
+                        f"改進建議：{suggestion}" if suggestion else "",
+                    ) if p
+                )
+                if reflect_text:
+                    think_token = f"<think>\n{reflect_text}\n</think>\n"
+                    yield f"event: token\ndata: {json_mod.dumps({'token': think_token}, ensure_ascii=False)}\n\n"
+                    state["thinking"] = "\n\n".join(
+                        x for x in (str(state.get("thinking") or ""), reflect_text) if x
+                    )
 
                 yield f"event: phase\ndata: {json_mod.dumps({'phase': 'improve', 'iteration': state.get('iteration', 0)})}\n\n"
                 state.update(await asyncio.to_thread(nodes.improve_answer, state))
+                improved = str(state.get("current_answer") or "")
+                imp_think, imp_vis = split_thinking(improved)
+                if imp_think:
+                    state["thinking"] = "\n\n".join(
+                        x for x in (str(state.get("thinking") or ""), imp_think) if x
+                    )
+                    state["current_answer"] = imp_vis or improved
+                if improved:
+                    body = imp_vis or improved
+                    yield f"event: answer\ndata: {json_mod.dumps({'answer': body}, ensure_ascii=False)}\n\n"
 
                 yield f"event: phase\ndata: {json_mod.dumps({'phase': 'evaluate'})}\n\n"
                 state.update(await asyncio.to_thread(nodes.evaluate_answer, state))
@@ -562,7 +601,7 @@ async def chat_stream(req: ChatRequest):
             state["final_answer"] = final_answer
             await asyncio.to_thread(nodes.save_memory, state)
 
-            yield f"event: done\ndata: {json_mod.dumps({'answer': final_answer, 'score': state.get('score'), 'iteration': state.get('iteration', 0)}, ensure_ascii=False)}\n\n"
+            yield f"event: done\ndata: {json_mod.dumps({'answer': final_answer, 'thinking': state.get('thinking', ''), 'score': state.get('score'), 'iteration': state.get('iteration', 0)}, ensure_ascii=False)}\n\n"
         except Exception as exc:  # noqa: BLE001
             logger.error("串流聊天失敗：%s", exc)
             yield f"event: error\ndata: {json_mod.dumps({'error': str(exc)}, ensure_ascii=False)}\n\n"
@@ -658,7 +697,7 @@ async def get_task_checkpoint(task_id: str):
 
 
 @app.get("/traces")
-async def get_traces(limit: int = 50):
+async def get_traces(limit: int = 80):
     """列出所有思考過程軌跡檔案摘要。"""
     traces = await asyncio.to_thread(list_traces, limit)
     return {"traces": traces}
@@ -748,21 +787,47 @@ from backend.memory.vector_store import VectorMemoryStore
 _memory_store_api = VectorMemoryStore()
 
 
+def _json_memories() -> list[dict]:
+    from backend.memory.json_store import JsonMemoryStore
+
+    rows: list[dict] = []
+    for item in JsonMemoryStore().all():
+        meta = item.get("metadata") or {}
+        rec_id = str(item.get("id") or meta.get("_id") or "")
+        if not rec_id:
+            rec_id = str(abs(hash(item.get("text") or "")))
+        rows.append(
+            {
+                "id": rec_id,
+                "text": item.get("text") or "",
+                "metadata": meta,
+            }
+        )
+    return rows
+
+
 @app.get("/memories")
-async def list_memories(limit: int = 50, offset: int = 0):
+async def list_memories(limit: int = 100, offset: int = 0):
     """列出記憶庫中的記憶（分頁，按建立時間降序）。"""
+    chroma_error = ""
     try:
         all_memories = await asyncio.to_thread(_memory_store_api.all)
-        total = len(all_memories)
-        all_memories.sort(
-            key=lambda m: (m.get("metadata") or {}).get("created_at", ""),
-            reverse=True,
-        )
-        page = all_memories[offset : offset + limit]
-        return {"total": total, "offset": offset, "limit": limit, "memories": page}
     except Exception as exc:  # noqa: BLE001
         logger.warning("記憶庫讀取失敗：%s", exc)
-        return {"total": 0, "offset": offset, "limit": limit, "memories": [], "error": str(exc)}
+        chroma_error = str(exc)
+        all_memories = []
+    if not all_memories:
+        all_memories = await asyncio.to_thread(_json_memories)
+    total = len(all_memories)
+    all_memories.sort(
+        key=lambda m: (m.get("metadata") or {}).get("created_at", ""),
+        reverse=True,
+    )
+    page = all_memories[offset : offset + limit]
+    payload: dict = {"total": total, "offset": offset, "limit": limit, "memories": page}
+    if chroma_error and not page:
+        payload["error"] = chroma_error
+    return payload
 
 
 @app.delete("/memories/{memory_id}")

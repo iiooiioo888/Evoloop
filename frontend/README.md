@@ -15,7 +15,7 @@ npm install
 npm run dev
 ```
 
-預設 `http://localhost:5173`，API 代理至後端 `http://localhost:8000`。
+預設 `http://localhost:3001`（避開 Windows 上 5173 占用），API 代理至後端 `http://localhost:8000`。可用環境變數 `VITE_DEV_PORT` 覆寫。
 
 ## GitHub Pages
 

@@ -36,8 +36,9 @@ export interface ChatResult {
 export interface StreamCallbacks {
   onPhase?: (phase: string) => void;
   onToken?: (token: string) => void;
+  onAnswer?: (answer: string) => void;
   onEvaluation?: (score: number | null, iteration: number, multiDim?: import('../types').MultiDimEvaluation) => void;
-  onDone?: (answer: string, score: number | null, iteration: number) => void;
+  onDone?: (answer: string, score: number | null, iteration: number, thinking?: string) => void;
   onError?: (error: string) => void;
 }
 
@@ -102,6 +103,9 @@ export function sendChatStream(
             case 'token':
               callbacks.onToken?.(String(data.token ?? ''));
               break;
+            case 'answer':
+              callbacks.onAnswer?.(String(data.answer ?? ''));
+              break;
             case 'evaluation':
               callbacks.onEvaluation?.(
                 (data.score as number) ?? null,
@@ -114,6 +118,7 @@ export function sendChatStream(
                 String(data.answer ?? ''),
                 (data.score as number) ?? null,
                 (data.iteration as number) ?? 0,
+                String(data.thinking ?? ''),
               );
               break;
             case 'error':
@@ -318,7 +323,7 @@ export async function fetchTaskCheckpoint(taskId: string): Promise<{
 }
 
 /** 列出所有思考過程軌跡檔案摘要。 */
-export async function fetchTraces(limit: number = 50): Promise<{ traces: TraceSummary[] }> {
+export async function fetchTraces(limit: number = 80): Promise<{ traces: TraceSummary[] }> {
   const resp = await fetch(apiUrl(`/traces?limit=${limit}`));
   if (!resp.ok) throw new Error(`讀取軌跡列表失敗（HTTP ${resp.status}）`);
   return resp.json();
@@ -549,7 +554,7 @@ export interface MemoryItem {
 }
 
 /** 列出記憶庫中的記憶（分頁）。 */
-export async function fetchMemories(limit: number = 50, offset: number = 0): Promise<{
+export async function fetchMemories(limit: number = 100, offset: number = 0): Promise<{
   total: number;
   offset: number;
   limit: number;
@@ -946,9 +951,9 @@ export async function hubGetAgentTask(
   return resp.json();
 }
 
-# ═══════════════════════════════════════════════════════════
-# 實驗室整合 — Firecrawl / Prompt Optimizer / Ponytail / Archify
-# ═══════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════
+// 實驗室整合 — Firecrawl / Prompt Optimizer / Ponytail / Archify
+// ═══════════════════════════════════════════════════════════
 
 export interface FirecrawlScrapeResult {
   url: string;

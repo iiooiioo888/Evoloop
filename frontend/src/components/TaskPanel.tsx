@@ -268,7 +268,7 @@ export default function TaskPanel({ task, onOpenFull, onCancel, onResume, onOpen
   const toolPending = lastToolCall && (!lastToolResult || lastToolResult.ts < lastToolCall.ts);
 
   return (
-    <div className="mb-2 w-full min-w-[240px] rounded-xl border border-white/8 bg-gradient-to-b from-gray-900/90 to-gray-900/60 p-3 text-xs shadow-lg shadow-black/20">
+    <div className="evo-task-card mb-2 w-full min-w-[240px] p-3 text-xs">
       {/* ── 標題列 ── */}
       <div className="flex items-center gap-2">
         {running && (
@@ -417,14 +417,29 @@ export default function TaskPanel({ task, onOpenFull, onCancel, onResume, onOpen
               {g.entries.map(({ status, item }) => {
                 const meta = ITEM_STATUS_META[status] ?? { label: status, cls: 'bg-gray-700/60 text-gray-300', bar: 'bg-gray-500' };
                 return (
-                  <div key={item.id} className="mb-1 flex items-start gap-1.5 text-[11px] last:mb-0">
-                    <span className={`mt-1 h-3 w-0.5 shrink-0 rounded-full ${meta.bar}`} />
-                    <span className={`mt-0.5 shrink-0 rounded px-1 py-px text-[10px] ${meta.cls}`}>
-                      {meta.label}
-                    </span>
-                    <span className="min-w-0 flex-1 text-gray-300" title={item.description}>
-                      {item.title}
-                    </span>
+                  <div key={item.id} className="mb-1.5 last:mb-0">
+                    <div className="flex items-start gap-1.5 text-[11px]">
+                      <span className={`mt-1 h-3 w-0.5 shrink-0 rounded-full ${meta.bar}`} />
+                      <span className={`mt-0.5 shrink-0 rounded px-1 py-px text-[10px] ${meta.cls}`}>
+                        {meta.label}
+                      </span>
+                      <span className="min-w-0 flex-1 text-[#AEAEB2]" title={item.description}>
+                        {item.title}
+                      </span>
+                    </div>
+                    {item.thinking?.trim() && (
+                      <details className="mt-1 ml-3">
+                        <summary className="cursor-pointer text-[10px] text-[#636366]">思考過程</summary>
+                        <pre className="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap font-sans text-[11px] leading-relaxed text-[#8E8E93]">
+                          {item.thinking}
+                        </pre>
+                      </details>
+                    )}
+                    {item.output?.trim() && (
+                      <p className="mt-1 ml-3 max-h-48 overflow-y-auto whitespace-pre-wrap text-[11px] leading-relaxed text-[#8E8E93]">
+                        {item.output}
+                      </p>
+                    )}
                   </div>
                 );
               })}

@@ -200,6 +200,7 @@ export default function RoleSettingsPanel({
 
   useEffect(() => {
     setDraft(draftFromAgent(agent));
+    setSection('identity');
   }, [agent]);
 
   const categories = catalog?.categories ?? Object.entries(CATEGORY_LABEL).map(([id, label]) => ({ id, label }));
@@ -415,7 +416,7 @@ export default function RoleSettingsPanel({
             <input
               className={inputCls}
               list="role-allowed-models"
-              placeholder={catalog?.allowed_models?.[0] || 'deepseek-chat'}
+              placeholder={catalog?.allowed_models?.[0] || 'deepseek-v4-flash'}
               value={draft.preferred_model}
               onChange={(e) => setDraft({ ...draft, preferred_model: e.target.value })}
             />

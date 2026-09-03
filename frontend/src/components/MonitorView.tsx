@@ -132,6 +132,7 @@ export default function MonitorView({
             <MemoryPanel />
           </div>
         )}
+        {tab === 'dbpool' && <OpsPanel />}
       </Suspense>
     </div>
   );

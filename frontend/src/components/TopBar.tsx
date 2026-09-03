@@ -3,7 +3,7 @@
  */
 import { useTranslation } from 'react-i18next';
 import { setLocale } from '../i18n';
-import { monitorTabLabel } from '../lib/monitorTabs';
+import { monitorTabLabel, resolveActivity } from '../lib/monitorTabs';
 import { labSubTabLabel, type LabSubTab } from '../lib/labTabs';
 import type { MonitorTab, ViewKey } from './AppShell';
 
@@ -31,16 +31,17 @@ export default function TopBar({
   onToggleSidebar,
 }: TopBarProps) {
   const { t, i18n } = useTranslation();
+  const activity = resolveActivity(activeView, monitorTab);
   const viewLabel =
-    activeView === 'chat'
+    activity === 'chat'
       ? t('nav.chat')
-      : activeView === 'monitor'
-        ? monitorTab === 'lab'
-          ? `${t('nav.monitor')} · ${monitorTabLabel(monitorTab)} · ${labSubTabLabel(labSubTab)}`
-          : `${t('nav.monitor')} · ${monitorTabLabel(monitorTab)}`
-        : traceTaskId
-          ? `${t('nav.traces')} · ${traceTaskId.slice(0, 8)}…`
-          : t('nav.traces');
+      : activeView === 'traces'
+        ? traceTaskId
+          ? `${t('nav.console')} · ${t('nav.traces')} · ${traceTaskId.slice(0, 8)}…`
+          : `${t('nav.console')} · ${t('nav.traces')}`
+        : activity === 'lab'
+          ? `${t('nav.lab')} · ${labSubTabLabel(labSubTab)}`
+          : `${t('nav.console')} · ${monitorTabLabel(monitorTab)}`;
 
   return (
     <header className="flex h-10 shrink-0 items-center gap-2 border-b border-white/[0.06] apple-chrome px-3">

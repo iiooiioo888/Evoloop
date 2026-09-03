@@ -1,7 +1,12 @@
 {
   "nav": {
     "chat": "Chat",
-    "monitor": "Monitor",
+    "console": "Console",
+    "work": "Execute",
+    "observe": "Observe",
+    "system": "System",
+    "lab": "Lab",
+    "monitor": "Console",
     "traces": "Traces"
   },
   "monitor": {

@@ -1,10 +1,10 @@
 {
   "api_key": "sk-ds-probe3",
   "api_base": "https://api.deepseek.com",
-  "model": "deepseek-chat",
+  "model": "deepseek-v4-flash",
   "allowed_models": [
-    "deepseek-chat",
-    "deepseek-reasoner"
+    "deepseek-v4-flash",
+    "deepseek-v4-pro"
   ],
   "provider_kind": "deepseek"
 }

@@ -15,8 +15,8 @@ const PROVIDERS = [
     value: 'deepseek',
     label: 'DeepSeek',
     apiBase: 'https://api.deepseek.com',
-    defaultModel: 'deepseek-chat',
-    hint: '只存 DeepSeek API 時，所有 Agent 只能用 DeepSeek 模型',
+    defaultModel: 'deepseek-v4-flash',
+    hint: '只存 DeepSeek API 時，所有 Agent 只能用 DeepSeek 模型（v4-flash / v4-pro / vision-exp）',
   },
   {
     value: 'openrouter',
@@ -80,7 +80,7 @@ export default function SettingsModal({ open, onClose, onSaved }: SettingsModalP
   const [provider, setProvider] = useState<ProviderValue>('deepseek');
   const [apiKey, setApiKey] = useState('');
   const [apiBase, setApiBase] = useState('');
-  const [model, setModel] = useState('deepseek-chat');
+  const [model, setModel] = useState('deepseek-v4-flash');
   const [showKey, setShowKey] = useState(false);
   const [currentMasked, setCurrentMasked] = useState('');
   const [pool, setPool] = useState<LlmConfig | null>(null);

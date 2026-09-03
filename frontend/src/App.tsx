@@ -23,6 +23,7 @@ import {
   saveActiveSessionId,
   saveSessions,
 } from './lib/storage';
+import { splitThink } from './lib/splitThink';
 import AppShell from './components/AppShell';
 import type { MonitorTab, ViewKey } from './components/AppShell';
 import type { LabSubTab } from './lib/labTabs';
@@ -282,9 +283,28 @@ export default function App() {
             updateSession(sessionId, (s) => ({
               ...s,
               updatedAt: Date.now(),
-              messages: s.messages.map((m) =>
-                m.id === assistantId ? { ...m, content: m.content + token } : m,
-              ),
+              messages: s.messages.map((m) => {
+                if (m.id !== assistantId) return m;
+                const raw = `${m.streamRaw ?? m.content}${token}`;
+                const { thinking, content } = splitThink(raw);
+                return { ...m, streamRaw: raw, content, thinking };
+              }),
+            }));
+          },
+          onAnswer: (answer) => {
+            updateSession(sessionId, (s) => ({
+              ...s,
+              updatedAt: Date.now(),
+              messages: s.messages.map((m) => {
+                if (m.id !== assistantId) return m;
+                const { thinking, content } = splitThink(answer);
+                return {
+                  ...m,
+                  content: content || answer,
+                  thinking: thinking || m.thinking,
+                  streamRaw: undefined,
+                };
+              }),
             }));
           },
           onEvaluation: (score, iteration, multiDim) => {
@@ -297,7 +317,7 @@ export default function App() {
               ),
             }));
           },
-          onDone: (answer, score, iteration) => {
+          onDone: (answer, score, iteration, thinking) => {
             updateSession(sessionId, (s) => ({
               ...s,
               updatedAt: Date.now(),
@@ -305,7 +325,9 @@ export default function App() {
                 m.id === assistantId
                   ? {
                       ...m,
-                      content: answer || m.content,
+                      content: splitThink(answer || m.content).content || answer || m.content,
+                      thinking: thinking || splitThink(answer || '').thinking || m.thinking,
+                      streamRaw: undefined,
                       streaming: false,
                       meta: { score, iteration },
                     }
@@ -351,11 +373,29 @@ export default function App() {
 
         const applyProgress = (progress: TaskProgress) => {
           lastProgress = progress;
+          const liveDraft = progress.answer?.trim() ?? '';
+          const roleThink = Object.values(progress.kanban ?? {})
+            .flat()
+            .map((it) => String(it.thinking ?? '').trim())
+            .filter(Boolean)
+            .join('\n\n');
+          const eventThink = (progress.events ?? [])
+            .map((e) => String(e.data.thinking ?? '').trim())
+            .filter(Boolean)
+            .join('\n\n');
           updateSession(sessionId, (s) => ({
             ...s,
             updatedAt: Date.now(),
             messages: s.messages.map((m) =>
-              m.id === assistantId ? { ...m, taskState: progress } : m,
+              m.id === assistantId
+                ? {
+                    ...m,
+                    taskState: progress,
+                    content: liveDraft || m.content,
+                    thinking: roleThink || eventThink || m.thinking,
+                    streaming: progress.status === 'running' || progress.status === 'pending',
+                  }
+                : m,
             ),
           }));
 

@@ -40,8 +40,9 @@ LEGACY_RUNTIME_MODELS: frozenset[str] = frozenset(
         "gpt-4o-mini",
         "gpt-4-turbo",
         "gpt-3.5-turbo",
-        "deepseek-chat",
-        "deepseek-reasoner",
+        "deepseek-v4-flash",
+        "deepseek-v4-pro",
+        "deepseek-v4-flash-vision-exp",
         "qwen-turbo",
         "qwen-plus",
         "qwen-max",
@@ -73,7 +74,7 @@ class TestHubCatalogExcludesClaude:
         assert CostTracker.estimate_cost("gemini-3.1-pro", 1_000_000, 1_000_000) == 13.25
         assert CostTracker.estimate_cost(
             "deepseek-v4-flash", 1_000_000, 1_000_000
-        ) == pytest.approx(0.185)
+        ) == pytest.approx(0.88)
         assert CostTracker.estimate_cost("nemotron-3.5-lightning", 1_000_000, 1_000_000) == 0.0
 
     def test_design_openapi_enum_matches_catalog(self) -> None:

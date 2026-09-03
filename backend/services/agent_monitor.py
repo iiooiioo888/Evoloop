@@ -32,8 +32,8 @@ from backend.services.task_manager import TaskRecord, task_manager
 logger = logging.getLogger(__name__)
 
 MAX_RUN_FILES = 40
-MAX_ITEMS_PER_ROLE = 48
-MAX_EVENTS_PER_ROLE = 32
+MAX_ITEMS_PER_ROLE = 80
+MAX_EVENTS_PER_ROLE = 60
 
 OPEN_STATUSES = frozenset(
     {

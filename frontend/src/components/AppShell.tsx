@@ -8,6 +8,11 @@ import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { ChatSession } from '../types';
 import type { LabSubTab } from '../lib/labTabs';
+import {
+  ACTIVITY_DEFAULT_TAB,
+  resolveActivity,
+  type ActivityKey,
+} from '../lib/monitorTabs';
 import ActivityBar from './ActivityBar';
 import RightPanel from './RightPanel';
 import SidePanel from './SidePanel';
@@ -104,23 +109,32 @@ export default function AppShell({
 }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  // 切到「角色」「任務」或「軌跡」時，確保左側外圍側欄開啟
+  // 切主視圖時展開側欄（功能清單／名冊）
   useEffect(() => {
-    if (
-      activeView === 'traces' ||
-      (activeView === 'monitor' &&
-        (monitorTab === 'agents' || monitorTab === 'tasks' || monitorTab === 'lab'))
-    ) {
-      setSidebarOpen(true);
-    }
-  }, [activeView, monitorTab]);
+    setSidebarOpen(true);
+  }, [activeView]);
 
-  const handleViewChange = useCallback(
-    (view: ViewKey) => {
-      onViewChange(view);
+  const activity = resolveActivity(activeView, monitorTab);
+
+  const handleActivityChange = useCallback(
+    (next: ActivityKey) => {
       setSidebarOpen(true);
+      if (next === activity) return;
+      if (next === 'chat') {
+        onViewChange('chat');
+        return;
+      }
+      if (next === 'lab') {
+        onMonitorTabChange('lab');
+        return;
+      }
+      if (monitorTab !== 'lab') {
+        onViewChange('monitor');
+        return;
+      }
+      onMonitorTabChange(ACTIVITY_DEFAULT_TAB.console as MonitorTab);
     },
-    [onViewChange],
+    [activity, activeView, monitorTab, onMonitorTabChange, onViewChange],
   );
 
   return (
@@ -143,7 +157,7 @@ export default function AppShell({
       {/* ══ 中间区域：ActivityBar + SidePanel + Main + RightPanel ══ */}
       <div className="flex min-h-0 flex-1">
         {/* 活动栏 */}
-        <ActivityBar activeView={activeView} onViewChange={handleViewChange} />
+        <ActivityBar activity={activity} onActivityChange={handleActivityChange} />
 
         {/* 侧面板（移动端覆盖层） */}
         <SidePanel

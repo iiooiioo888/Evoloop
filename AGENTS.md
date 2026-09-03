@@ -46,6 +46,12 @@ docker compose up -d redis chroma
 # 启动后端 API（FastAPI + LangGraph）
 python -m backend.main
 
+# 前端开发（默认 http://localhost:3001）
+cd frontend; npm run dev
+
+# 示范 60 任务 / 60 推理 / 60 知识库
+python -m backend.scripts.seed_demo_content
+
 # 启动 OPC 微服务（含模拟服务器）
 $env:OPC_SIM_ENABLED="true"; python -m opc_service.main
 

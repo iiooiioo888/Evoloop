@@ -171,7 +171,7 @@ Nginx **維持原樣**，只服務 SPA 與舊產品 API。兩邊路徑集合不�
 | 智能 / Agent 雙旗艦 | `gpt-5.6-sol` | `openai` | 3.00 | 30.00 | 52 | 依供應商契約 | `intelligence,agent`；Agent 指數 80 |
 | 多模態旗艦 | `gemini-3.1-pro` | `google` | 1.25 | 12.00 | — | 2,097,152 | `vision,video,audio,pdf` |
 | 性價比中國主力 | `mimo-v2.5-pro` | `mimo` | 0.21 | 0.83 | — | — | `agent`（Agent 能力第 3） |
-| 長文本中國主力 | `deepseek-v4-flash` | `deepseek` | 0.028 | 0.157 | — | 1,310,720 | `longctx,moe-284b` |
+| 長文本中國主力 | `deepseek-v4-flash` | `deepseek` | 0.22 | 0.66 | — | 1,310,720 | `longctx,moe-284b` |
 | 開源衍生中國主力 | `qwen3.5-max` | `qwen` | 0.30 | 1.20 | — | 151,000+ | `cn,open-derivative` |
 | 極速 | `mercury-2` | `inception` | 0.50 | 2.00 | 938 | — | `speed` |
 | 極速免費 | `nemotron-3.5-lightning` | `nvidia` | 0.00 | 0.00 | ~670 | — | `speed,free` |
@@ -1647,7 +1647,7 @@ Agent 任務：建立時用 `expected_output_tokens=4096` 且再乘工具次數�
 ## 6.4 成本優化落地（非空泛）
 
 - 語義快取 HIT 時 `cost_usd=0`，仍寫 `call_logs.status=success`、`provider=cache`、`model_name=semantic-cache`，便於命中率對帳。
-- `cost_first` 在非 CN 預設偏向 `deepseek-v4-flash`（$0.157/M 輸出）而非旗艦。
+- `cost_first` 在非 CN 預設偏向 `deepseek-v4-flash`（$0.66/M 輸出 off-peak）而非旗艦。
 - 探針使用 `nemotron-3.5-lightning`（$0）做延遲基準時，**不得** 把其 Score 用於 quality_first 主選（智能分過低），僅更新 `provider:metrics` 的跨廠比較需要時另計。
 
 ---

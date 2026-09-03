@@ -230,6 +230,7 @@ class WorkItemManager:
         for item in self._items.values():
             # 產出物預覽：截斷避免回應過大
             output = str(item.artifacts.get("output", "")) if item.artifacts else ""
+            thinking = str(item.artifacts.get("thinking", "")) if item.artifacts else ""
             board[item.status].append({
                 "id": item.id,
                 "title": item.title,
@@ -239,7 +240,8 @@ class WorkItemManager:
                 "tier": item.tier.value,
                 "actual_cost": round(item.actual_cost, 4),
                 "feedback": [fb for fb in item.feedback[-3:]],
-                "output": output[:1500],
+                "output": output[:20000],
+                "thinking": thinking[:12000],
                 "created_at": item.created_at,
                 "updated_at": item.updated_at,
             })

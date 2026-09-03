@@ -12,8 +12,8 @@ def test_aggregate_llm_call_stats_from_traces(tmp_path, monkeypatch):
     trace_dir.mkdir()
     trace_file = trace_dir / "trace_task1.jsonl"
     events = [
-        {"event": "llm_call", "model": "deepseek-chat", "phase": "generate", "duration_ms": 1200, "cost": 0.001},
-        {"event": "llm_call", "model": "deepseek-chat", "phase": "evaluate", "duration_ms": 800},
+        {"event": "llm_call", "model": "deepseek-v4-flash", "phase": "generate", "duration_ms": 1200, "cost": 0.001},
+        {"event": "llm_call", "model": "deepseek-v4-flash", "phase": "evaluate", "duration_ms": 800},
         {"event": "llm_call", "model": "qwen-turbo", "phase": "reflect", "duration_ms": 600},
         {"event": "phase_change", "phase": "evaluate"},
     ]
@@ -27,7 +27,7 @@ def test_aggregate_llm_call_stats_from_traces(tmp_path, monkeypatch):
     assert stats["total_calls"] == 3
     assert stats["files_scanned"] == 1
     assert len(stats["by_model"]) == 2
-    assert stats["by_model"][0]["model"] == "deepseek-chat"
+    assert stats["by_model"][0]["model"] == "deepseek-v4-flash"
     assert stats["by_model"][0]["count"] == 2
     assert stats["avg_duration_ms"] == 866.7
     phases = {row["phase"]: row["count"] for row in stats["by_phase"]}

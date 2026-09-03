@@ -49,7 +49,7 @@ from backend.company.state import (
     WorkItemStatus,
 )
 from backend.company.work_item import WorkItemManager
-from backend.core.llm import call_llm, parse_json_response
+from backend.core.llm import call_llm, parse_json_response, split_thinking
 from backend.services.docker_manager import DockerManager, get_docker_manager
 
 logger = logging.getLogger(__name__)
@@ -716,14 +716,22 @@ class CompanyOrchestrator:
                 self.budget.record_cost(cost)
                 item.actual_cost += cost
 
-                item.artifacts["output"] = raw
+                thinking, visible = split_thinking(raw)
+                item.artifacts["output"] = visible or raw
+                if thinking:
+                    item.artifacts["thinking"] = thinking
                 self.work_items.request_review(item.id)
 
                 self._log("execute_done", {
                     "item_id": item.id, "title": item.title, "cost": round(cost, 4),
                 })
                 self.events.emit(CompanyEvent.WORK_ITEM_DONE, {
-                    "item_id": item.id, "title": item.title, "cost": round(cost, 4),
+                    "item_id": item.id,
+                    "title": item.title,
+                    "cost": round(cost, 4),
+                    "role": role_type.value,
+                    "output": (visible or raw)[:8000],
+                    "thinking": thinking[:4000],
                 })
 
                 # ── 角色記憶保存：將執行經驗存入角色記憶 ──
@@ -921,7 +929,10 @@ class CompanyOrchestrator:
                 self.budget.record_cost(cost)
                 item.actual_cost += cost
 
-                item.artifacts["output"] = raw
+                thinking, visible = split_thinking(raw)
+                item.artifacts["output"] = visible or raw
+                if thinking:
+                    item.artifacts["thinking"] = thinking
                 self.work_items.request_review(item.id)
 
                 self._log("rework_done", {

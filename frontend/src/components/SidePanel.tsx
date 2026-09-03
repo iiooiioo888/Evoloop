@@ -2,17 +2,23 @@
  * SidePanel — 左側上下文面板。
  * Chat → 會話；Monitor → 精簡分頁 + 虛擬滾動名冊。
  */
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { Virtuoso } from 'react-virtuoso';
-import { AGENT_STATUS_META, agentOpenCount } from '../lib/agentUi';
+import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
+import { AGENT_STATUS_META, agentOpenCount, dispatchJumpAgent, isAlertAgent, isLiveAgent } from '../lib/agentUi';
 import { AGENT_FALLBACK_ROSTER } from '../lib/monitorFallbacks';
 import {
-  isMonitorMoreTab,
-  MONITOR_MORE_TABS,
-  MONITOR_PRIMARY_TABS,
+  LAB_NAV_GROUPS,
+  type LabSubTab,
+} from '../lib/labTabs';
+import {
+  MONITOR_NAV_GROUPS,
+  activityTitle,
+  navGroupForTab,
+  resolveActivity,
+  type ConsoleNavItem,
+  type ConsoleNavKey,
 } from '../lib/monitorTabs';
-import { LAB_TABS, type LabSubTab } from '../lib/labTabs';
 import { useMonitorStore } from '../stores/monitorStore';
 import type { ChatSession, RoleAgent, TaskSummary } from '../types';
 import type { MonitorTab, ViewKey } from './AppShell';
@@ -72,6 +78,7 @@ function SessionList({
   return (
     <>
       <div className="border-b border-white/[0.06] p-2.5">
+        <p className="mb-2 px-0.5 text-[10px] font-bold uppercase tracking-wider text-[#636366]">對話</p>
         <button
           onClick={onNewSession}
           className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[12px] font-medium text-[#F5F5F7] transition-colors hover:bg-white/[0.06]"
@@ -132,6 +139,14 @@ type RosterRow =
   | { kind: 'header'; key: string; label: string; count: number }
   | { kind: 'agent'; key: string; agent: RoleAgent };
 
+const ROSTER_LEVELS = [
+  { level: 0, short: 'L0', label: '決策層' },
+  { level: 1, short: 'L1', label: '技術領導' },
+  { level: 2, short: 'L2', label: '領域領導' },
+  { level: 3, short: 'L3', label: '執行層' },
+  { level: 4, short: 'L4', label: '支援' },
+] as const;
+
 function AgentRoster({
   focusAgentId,
   onPick,
@@ -142,29 +157,36 @@ function AgentRoster({
   const storeAgents = useMonitorStore((s) => s.agents?.agents);
   const agents = storeAgents?.length ? storeAgents : AGENT_FALLBACK_ROSTER;
   const [query, setQuery] = useState('');
+  const [scope, setScope] = useState<'all' | 'live' | 'alert'>('all');
+  const listRef = useRef<VirtuosoHandle>(null);
+
+  const liveCount = useMemo(() => agents.filter(isLiveAgent).length, [agents]);
+  const alertCount = useMemo(() => agents.filter(isAlertAgent).length, [agents]);
+  const enabledCount = useMemo(
+    () => agents.filter((a) => a.enabled !== false).length,
+    [agents],
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return agents;
-    return agents.filter((a) => {
-      const hay = `${a.name} ${a.description ?? ''} ${(a.responsibilities ?? []).join(' ')}`.toLowerCase();
-      return hay.includes(q);
-    });
-  }, [agents, query]);
+    const rank: Record<string, number> = { busy: 0, error: 1, waiting: 2, idle: 3, disabled: 4 };
+    return agents
+      .filter((a) => {
+        if (scope === 'live' && !isLiveAgent(a)) return false;
+        if (scope === 'alert' && !isAlertAgent(a)) return false;
+        if (!q) return true;
+        const hay = `${a.name} ${a.id} ${a.description ?? ''} ${(a.responsibilities ?? []).join(' ')}`.toLowerCase();
+        return hay.includes(q);
+      })
+      .sort((a, b) => (rank[a.status] ?? 9) - (rank[b.status] ?? 9));
+  }, [agents, query, scope]);
 
   const rows: RosterRow[] = useMemo(() => {
-    const levels = [
-      { level: 0, label: '決策層' },
-      { level: 1, label: '技術領導' },
-      { level: 2, label: '領域領導' },
-      { level: 3, label: '執行層' },
-      { level: 4, label: '支援' },
-    ];
     const out: RosterRow[] = [];
-    for (const lv of levels) {
+    for (const lv of ROSTER_LEVELS) {
       const list = filtered.filter((a) => a.level === lv.level);
       if (!list.length) continue;
-      out.push({ kind: 'header', key: `h-${lv.level}`, label: `L${lv.level} ${lv.label}`, count: list.length });
+      out.push({ kind: 'header', key: `h-${lv.level}`, label: `${lv.short} ${lv.label}`, count: list.length });
       for (const agent of list) {
         out.push({ kind: 'agent', key: agent.id, agent });
       }
@@ -172,22 +194,127 @@ function AgentRoster({
     return out;
   }, [filtered]);
 
-  const busyCount = agents.filter((a) => a.status === 'busy' || a.status === 'waiting').length;
+  const jumpToLevel = (level: number) => {
+    const idx = rows.findIndex((r) => r.kind === 'header' && r.key === `h-${level}`);
+    if (idx >= 0) {
+      listRef.current?.scrollToIndex({ index: idx, align: 'start', behavior: 'smooth' });
+    }
+    dispatchJumpAgent({ level });
+  };
+
+  const searching = query.trim().length > 0;
+
+  const clearFilters = () => {
+    setScope('all');
+    setQuery('');
+  };
+
+  const pickScope = (key: 'all' | 'live' | 'alert') => {
+    setScope(key);
+  };
+
+  const filterTabs = [
+    { key: 'all' as const, label: '全部', count: agents.length, title: '顯示全部角色' },
+    { key: 'live' as const, label: '活躍', count: liveCount, title: '只看執行中或等待中' },
+    { key: 'alert' as const, label: '告警', count: alertCount, title: '只看告警、錯誤或超預算' },
+  ];
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="shrink-0 space-y-2 border-b border-white/[0.06] px-3 pb-3 pt-2">
-        <p className="text-[10px] font-bold uppercase tracking-wider text-[#636366]">
-          {agents.length} 位 · {busyCount} 活躍
-        </p>
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="搜尋角色／職責"
-          className="w-full rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-[11px] text-[#F5F5F7] placeholder:text-[#636366] outline-none focus:border-[#007AFF]/50"
-        />
+        <div className="flex items-baseline justify-between gap-2">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-[#636366]">左側跳轉</p>
+          <p className="text-[10px] text-[#8E8E93]" title="啟用席次／名冊總數">
+            {enabledCount}/{agents.length}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-1" aria-label="依層級跳轉">
+          {ROSTER_LEVELS.map((lv) => {
+            const count = filtered.filter((a) => a.level === lv.level).length;
+            return (
+              <button
+                key={lv.level}
+                type="button"
+                disabled={count === 0}
+                title={count ? `跳到 ${lv.short} ${lv.label}` : `${lv.short} 目前沒有符合的角色`}
+                onClick={() => jumpToLevel(lv.level)}
+                className={`rounded-md px-1.5 py-0.5 text-[10px] leading-none ${
+                  count === 0
+                    ? 'cursor-not-allowed text-[#48484A]'
+                    : 'bg-white/[0.05] text-[#AEAEB2] hover:bg-white/[0.1] hover:text-[#F5F5F7]'
+                }`}
+              >
+                {lv.short}
+                <span className="ml-0.5 font-mono text-[#636366]">{count}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex rounded-xl bg-white/[0.04] p-0.5" role="tablist" aria-label="角色篩選">
+          {filterTabs.map((tab) => {
+            const active = scope === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                title={tab.title}
+                onClick={() => pickScope(tab.key)}
+                className={`flex min-w-0 flex-1 items-center justify-center gap-1 rounded-lg px-1 py-1.5 text-[11px] leading-none transition-colors ${
+                  active
+                    ? tab.key === 'alert'
+                      ? 'bg-[#FF453A]/15 font-medium text-[#FF453A] shadow-sm'
+                      : tab.key === 'live'
+                        ? 'bg-[#30D158]/15 font-medium text-[#30D158] shadow-sm'
+                        : 'bg-white/[0.1] font-medium text-[#F5F5F7] shadow-sm'
+                    : 'text-[#8E8E93] hover:text-[#AEAEB2]'
+                }`}
+              >
+                {tab.label}
+                <span className="apple-data text-[10px]">{tab.count}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="flex items-center gap-1.5">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="搜尋名稱、職責…"
+            className="min-w-0 flex-1 rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-1.5 text-[11px] text-[#F5F5F7] placeholder:text-[#636366] outline-none focus:border-[#007AFF]/50"
+          />
+          {(searching || scope !== 'all') && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="shrink-0 rounded-lg px-1.5 py-1 text-[10px] text-[#64D2FF] hover:bg-white/[0.06]"
+              title="清除篩選與搜尋"
+            >
+              清除
+              <span className="ml-1 font-mono text-[#8E8E93]">{filtered.length}</span>
+            </button>
+          )}
+        </div>
       </div>
+      {rows.length === 0 ? (
+        <div className="px-4 py-8 text-center">
+          <p className="text-[12px] text-[#AEAEB2]">
+            {searching ? '沒有符合搜尋的角色' : scope === 'alert' ? '目前沒有告警' : scope === 'live' ? '目前沒有活躍角色' : '尚無名冊'}
+          </p>
+          {(scope !== 'all' || searching) && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="mt-2 text-[11px] text-[#64D2FF] hover:underline"
+            >
+              顯示全部角色
+            </button>
+          )}
+        </div>
+      ) : (
       <Virtuoso
+        ref={listRef}
         className="min-h-0 flex-1"
         data={rows}
         itemContent={(_i, row) => {
@@ -206,7 +333,10 @@ function AgentRoster({
           return (
             <button
               type="button"
-              onClick={() => onPick(agent.id)}
+              onClick={() => {
+                dispatchJumpAgent({ id: agent.id, level: agent.level });
+                onPick(agent.id);
+              }}
               className={`mx-2 mb-0.5 flex w-[calc(100%-16px)] items-center gap-2 rounded-lg px-2.5 py-1.5 text-left transition-colors ${
                 active
                   ? 'bg-white/[0.06] text-[#F5F5F7]'
@@ -226,14 +356,21 @@ function AgentRoster({
                 }
               />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[12px] font-medium text-[#F5F5F7]">{agent.name}</span>
-                <span className={`block truncate text-[10px] ${meta.text}`}>{meta.label}</span>
+                <span className="block truncate text-[12px] font-medium text-[#F5F5F7]">
+                  {agent.name}
+                  {agent.enabled === false ? <span className="ml-1 text-[9px] text-[#FF3B30]">停</span> : null}
+                </span>
+                <span className={`block truncate text-[10px] ${meta.text}`}>
+                  {meta.label}
+                  {count > 0 ? ` · ${count} 項` : ''}
+                </span>
               </span>
               {count > 0 && <span className="apple-data text-[10px] text-[#8E8E93]">{count}</span>}
             </button>
           );
         }}
       />
+      )}
     </div>
   );
 }
@@ -334,7 +471,7 @@ function TabBtn({
   active,
   onClick,
 }: {
-  item: { key: string; icon: string; label: string };
+  item: ConsoleNavItem | { key: string; icon: string; label: string; hint?: string };
   active: boolean;
   onClick: () => void;
 }) {
@@ -342,14 +479,19 @@ function TabBtn({
     <button
       type="button"
       onClick={onClick}
-      className={`relative flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[12px] transition-colors ${
+      className={`relative flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left transition-colors ${
         active
-          ? 'bg-white/[0.06] font-medium text-[#F5F5F7]'
+          ? 'bg-white/[0.06] text-[#F5F5F7]'
           : 'text-[#98989D] hover:bg-white/[0.03] hover:text-[#F5F5F7]'
       }`}
     >
       <span className="w-4 shrink-0 text-center text-[12px] leading-none opacity-70">{item.icon}</span>
-      <span className="min-w-0 flex-1 truncate">{item.label}</span>
+      <span className="min-w-0 flex-1">
+        <span className={`block truncate text-[12px] ${active ? 'font-medium' : ''}`}>{item.label}</span>
+        {item.hint && (
+          <span className="block truncate text-[10px] text-[#636366]">{item.hint}</span>
+        )}
+      </span>
     </button>
   );
 }
@@ -361,38 +503,71 @@ function LabSidebar({
   labSubTab: LabSubTab;
   onLabSubTabChange: (tab: LabSubTab) => void;
 }) {
+  const activeGroup = LAB_NAV_GROUPS.find((g) => g.items.some((i) => i.key === labSubTab))?.id ?? 'integrate';
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => ({
+    integrate: true,
+    experiment: activeGroup === 'experiment',
+  }));
+
+  useEffect(() => {
+    setOpenGroups((prev) => (prev[activeGroup] ? prev : { ...prev, [activeGroup]: true }));
+  }, [activeGroup]);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="shrink-0 border-b border-white/[0.06] px-3 pb-3 pt-2">
-        <p className="text-[10px] font-bold uppercase tracking-wider text-[#636366]">整合工具</p>
-        <p className="mt-1 text-[10px] leading-relaxed text-[#48484A]">
-          Firecrawl · Prompt Optimizer · Archify · Ponytail
-        </p>
-      </div>
-      <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2" aria-label="實驗室工具">
-        {LAB_TABS.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            onClick={() => onLabSubTabChange(item.key)}
-            className={`flex w-full flex-col rounded-lg px-2.5 py-2 text-left transition-colors ${
-              labSubTab === item.key
-                ? 'bg-white/[0.06] text-[#F5F5F7]'
-                : 'text-[#98989D] hover:bg-white/[0.03] hover:text-[#F5F5F7]'
-            }`}
-          >
-            <span className="text-[12px] font-medium">{item.label}</span>
-            {item.upstream && (
-              <span className="mt-0.5 truncate text-[10px] text-[#636366]">{item.upstream.name}</span>
-            )}
-          </button>
-        ))}
+      <nav className="min-h-0 flex-1 overflow-y-auto pb-3" aria-label="實驗室">
+        {LAB_NAV_GROUPS.map((group) => {
+          const open = openGroups[group.id] ?? group.id === 'integrate';
+          return (
+            <div key={group.id}>
+              <GroupToggle
+                label={group.label}
+                open={open}
+                onToggle={() => setOpenGroups((prev) => ({ ...prev, [group.id]: !open }))}
+              />
+              {open && (
+                <div className="space-y-0.5 px-2 pb-1">
+                  {group.items.map((item) => (
+                    <TabBtn
+                      key={item.key}
+                      item={item}
+                      active={labSubTab === item.key}
+                      onClick={() => onLabSubTabChange(item.key)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </nav>
     </div>
   );
 }
 
+function GroupToggle({
+  label,
+  open,
+  onToggle,
+}: {
+  label: string;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="flex w-full items-center gap-1.5 px-3 pb-1 pt-2.5 text-[10px] font-bold uppercase tracking-wider text-[#636366] hover:text-[#AEAEB2]"
+    >
+      <span className="inline-block w-2 font-mono text-[#48484A]">{open ? '▾' : '▸'}</span>
+      <span>{label}</span>
+    </button>
+  );
+}
+
 function MonitorSidebar({
+  activeView,
   monitorTab,
   onClose,
   focusAgentId,
@@ -402,7 +577,10 @@ function MonitorSidebar({
   onMonitorTabChange,
   labSubTab,
   onLabSubTabChange,
+  traceTaskId,
+  onTraceTaskChange,
 }: {
+  activeView: ViewKey;
   monitorTab: MonitorTab;
   onClose: () => void;
   focusAgentId: string | null;
@@ -412,57 +590,74 @@ function MonitorSidebar({
   onMonitorTabChange: (tab: MonitorTab) => void;
   labSubTab: LabSubTab;
   onLabSubTabChange: (tab: LabSubTab) => void;
+  traceTaskId: string | null;
+  onTraceTaskChange: (id: string | null) => void;
 }) {
-  const onAgentsTab = monitorTab === 'agents';
-  const onTasksTab = monitorTab === 'tasks';
-  const onLabTab = monitorTab === 'lab';
-  const [moreOpen, setMoreOpen] = useState(() => isMonitorMoreTab(monitorTab));
+  const activity = resolveActivity(activeView, monitorTab);
+  const onLab = activity === 'lab';
+  const onAgentsTab = activeView === 'monitor' && monitorTab === 'agents';
+  const onTasksTab = activeView === 'monitor' && monitorTab === 'tasks';
+  const onTraces = activeView === 'traces';
+  const currentKey: ConsoleNavKey = onTraces ? 'traces' : monitorTab;
+  const activeGroup = navGroupForTab(currentKey);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => ({
+    execute: true,
+    observe: activeGroup === 'observe',
+    system: activeGroup === 'system',
+  }));
 
   useEffect(() => {
-    if (isMonitorMoreTab(monitorTab)) setMoreOpen(true);
-  }, [monitorTab]);
+    if (!activeGroup) return;
+    setOpenGroups((prev) => (prev[activeGroup] ? prev : { ...prev, [activeGroup]: true }));
+  }, [activeGroup]);
 
-  const pick = (key: MonitorTab) => {
+  const pick = (key: ConsoleNavKey) => {
+    if (key === 'traces') {
+      onTraceTaskChange(traceTaskId);
+      return;
+    }
     onMonitorTabChange(key);
     if (key !== 'agents' && focusAgentId) onFocusAgent(null);
     if (key !== 'tasks' && focusTaskId) onFocusTask(null);
-    if (key !== 'agents' && key !== 'tasks' && key !== 'lab') onClose();
+    if (key !== 'agents' && key !== 'tasks') onClose();
   };
+
+  if (onLab) {
+    return <LabSidebar labSubTab={labSubTab} onLabSubTabChange={onLabSubTabChange} />;
+  }
+
+  const showRoster = onAgentsTab || onTasksTab || onTraces;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="shrink-0 px-3 py-2.5">
-        <p className="text-[11px] font-medium text-[#636366]">監控</p>
-      </div>
-
-      <nav className="shrink-0 space-y-0.5 border-b border-white/[0.06] p-2" aria-label="監控分頁">
-        {MONITOR_PRIMARY_TABS.map((item) => (
-          <TabBtn
-            key={item.key}
-            item={item}
-            active={monitorTab === item.key}
-            onClick={() => pick(item.key)}
-          />
-        ))}
-
-        <button
-          type="button"
-          onClick={() => setMoreOpen((v) => !v)}
-          className="flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-left text-[11px] font-bold uppercase tracking-wider text-[#636366] hover:bg-white/[0.04]"
-        >
-          <span>更多</span>
-          <span className="font-mono text-[10px]">{moreOpen ? '−' : '+'}</span>
-        </button>
-
-        {moreOpen &&
-          MONITOR_MORE_TABS.map((item) => (
-            <TabBtn
-              key={item.key}
-              item={item}
-              active={monitorTab === item.key}
-              onClick={() => pick(item.key)}
-            />
-          ))}
+      <nav
+        className={`shrink-0 overflow-y-auto ${showRoster ? 'max-h-[42%] border-b border-white/[0.06]' : 'min-h-0 flex-1'}`}
+        aria-label={activityTitle(activity)}
+      >
+        {MONITOR_NAV_GROUPS.map((group) => {
+          const open = openGroups[group.id] ?? group.id === 'execute';
+          return (
+            <div key={group.id}>
+              <GroupToggle
+                label={group.label}
+                open={open}
+                onToggle={() => setOpenGroups((prev) => ({ ...prev, [group.id]: !open }))}
+              />
+              {open && (
+                <div className="space-y-0.5 px-2 pb-1">
+                  {group.items.map((item) => (
+                    <TabBtn
+                      key={item.key}
+                      item={item}
+                      active={currentKey === item.key}
+                      onClick={() => pick(item.key)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </nav>
 
       {onAgentsTab ? (
@@ -471,7 +666,6 @@ function MonitorSidebar({
           onPick={(id) => {
             onFocusAgent(id);
             onMonitorTabChange('agents');
-            onClose();
           }}
         />
       ) : onTasksTab ? (
@@ -482,11 +676,15 @@ function MonitorSidebar({
             onMonitorTabChange('tasks');
           }}
         />
-      ) : onLabTab ? (
-        <LabSidebar labSubTab={labSubTab} onLabSubTabChange={onLabSubTabChange} />
-      ) : (
-        <div className="flex-1" />
-      )}
+      ) : onTraces ? (
+        <TraceRoster
+          selectedTaskId={traceTaskId}
+          onPick={(id) => {
+            onTraceTaskChange(id);
+            onClose();
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -518,7 +716,7 @@ export default function SidePanel({
       )}
 
       <aside
-        className={`fixed inset-y-10 left-11 z-30 flex w-52 flex-col overflow-hidden border-r border-white/[0.06] apple-chrome transition-transform md:static md:translate-x-0 ${
+        className={`fixed inset-y-10 left-11 z-30 flex w-56 flex-col overflow-hidden border-r border-white/[0.06] apple-chrome transition-transform md:static md:translate-x-0 ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -538,8 +736,9 @@ export default function SidePanel({
             onDeleteSession={onDeleteSession}
           />
         )}
-        {activeView === 'monitor' && (
+        {(activeView === 'monitor' || activeView === 'traces') && (
           <MonitorSidebar
+            activeView={activeView}
             monitorTab={monitorTab}
             onMonitorTabChange={onMonitorTabChange}
             onClose={onClose}
@@ -549,22 +748,9 @@ export default function SidePanel({
             onFocusTask={onFocusTask}
             labSubTab={labSubTab}
             onLabSubTabChange={onLabSubTabChange}
+            traceTaskId={traceTaskId}
+            onTraceTaskChange={onTraceTaskChange}
           />
-        )}
-
-        {activeView === 'traces' && (
-          <div className="flex min-h-0 flex-1 flex-col">
-            <div className="shrink-0 px-3 py-2.5">
-              <p className="text-[11px] font-medium text-[#636366]">執行軌跡</p>
-            </div>
-            <TraceRoster
-              selectedTaskId={traceTaskId}
-              onPick={(id) => {
-                onTraceTaskChange(id);
-                onClose();
-              }}
-            />
-          </div>
         )}
       </aside>
     </>

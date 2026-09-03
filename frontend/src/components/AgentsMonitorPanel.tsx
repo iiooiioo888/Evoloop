@@ -4,7 +4,7 @@
  * 預設進入選中角色的完整介面：任務列表 + 看板 + 事件 + 組織監控。
  * 樓層總覽改為次要視圖。
  */
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   createCustomAgent,
   deleteCustomAgent,
@@ -22,7 +22,11 @@ import {
   blankMetrics,
   fmtUsd,
   fmtWhen,
+  JUMP_AGENT_EVENT,
+  isAlertAgent,
+  isLiveAgent,
   pickDefaultAgentId,
+  type JumpAgentDetail,
 } from '../lib/agentUi';
 import { AGENT_FALLBACK_ROSTER } from '../lib/monitorFallbacks';
 import type { AgentEvent, AgentMonitorData, AgentWorkItem, RoleAgent } from '../types';
@@ -97,10 +101,10 @@ function Kpi({
                 ? 'text-[#FF3B30]'
                 : 'text-[#F5F5F7]';
   return (
-    <div className="apple-card apple-card--tight apple-card--pad">
-      <p className="apple-title">{label}</p>
-      <p className={`apple-data mt-2 text-[18px] ${valueCls}`}>{value}</p>
-      {hint && <p className="mt-1.5 text-[11px] font-normal text-[#8E8E93]">{hint}</p>}
+    <div className="min-w-0 apple-card apple-card--tight apple-card--pad">
+      <p className="apple-title truncate">{label}</p>
+      <p className={`apple-data mt-2 truncate text-[18px] ${valueCls}`}>{value}</p>
+      {hint && <p className="mt-1.5 truncate text-[11px] font-normal text-[#8E8E93]">{hint}</p>}
     </div>
   );
 }
@@ -500,103 +504,113 @@ function AgentDeskCard({
   onOpen,
   showPrompt,
   showCost,
+  compact,
+  highlighted,
 }: {
   agent: RoleAgent;
   onOpen: () => void;
   showPrompt?: boolean;
   showCost?: boolean;
+  compact?: boolean;
+  highlighted?: boolean;
 }) {
   const meta = AGENT_STATUS_META[agent.status] ?? AGENT_STATUS_META.idle;
   const open = agentOpenCount(agent);
   const now = currentItem(agent);
-  const preview = agent.work_items.slice(0, 4);
+  const previewLimit = compact ? 2 : 3;
+  const preview = agent.work_items.slice(0, previewLimit);
 
   return (
     <button
       type="button"
+      id={`role-card-${agent.id}`}
       onClick={onOpen}
-      className={`flex h-full min-h-[220px] flex-col apple-card p-4 text-left transition-colors hover:border-white/15 ${
-        agent.status === 'busy'
-          ? 'border-[#4cc38a]/30'
-          : agent.status === 'error'
-            ? 'border-red-500/30'
-            : 'border-white/[0.08]'
+      className={`flex h-full w-full min-h-0 min-w-0 flex-col apple-card px-3 py-3 text-left transition-colors hover:border-white/15 ${
+        compact ? 'gap-2' : 'gap-2.5'
+      } ${
+        highlighted
+          ? 'border-[#007AFF]/60 ring-1 ring-[#007AFF]/40'
+          : agent.status === 'busy'
+            ? 'border-[#4cc38a]/30'
+            : agent.status === 'error'
+              ? 'border-red-500/30'
+              : 'border-white/[0.08]'
       }`}
     >
-      <div className="mb-2 flex items-start justify-between gap-2">
+      <div className="flex min-w-0 items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[#141516] text-[11px] font-medium text-[#d0d6e0]">
             {agent.name.slice(0, 1)}
             <span className={`absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full ${meta.dot}`} />
           </span>
           <span className="min-w-0">
-            <span className="block truncate text-[13px] text-[#f7f8f8]">{agent.name} Agent</span>
-            <span className={`block text-[10px] ${meta.text}`}>
+            <span className="block truncate text-[13px] text-[#f7f8f8]">{agent.name}</span>
+            <span className={`block truncate text-[10px] ${meta.text}`}>
               {meta.label}
-              {agent.is_custom ? ' · 自定' : ''}
+              {open > 0 ? ` · ${open} 開放` : ' · 待命'}
               {agent.on_call ? ' · 值班' : ''}
-              {agent.require_human_approval ? ' · 需核准' : ''}
-              {open > 0 ? ` · ${open} 項開放` : ''}
             </span>
           </span>
         </div>
-        {showCost !== false && (
-          <div className="shrink-0 text-right">
-            <p className="font-mono text-[11px] text-amber-300/90">{fmtUsd(agent.cost_usd)}</p>
-            <p className="text-[9px] text-[#62666d]">
-              API {fmtUsd(agent.api_cost_usd ?? 0)} · 雲 {fmtUsd(agent.cloud_cost_usd ?? 0)}
-            </p>
-          </div>
+        {(agent.cost_usd ?? 0) > 0 && showCost !== false && (
+          <p
+            className="shrink-0 whitespace-nowrap font-mono text-[10px] text-amber-300/90"
+            title="此角色合計花費（API＋Docker＋阿里雲）"
+          >
+            {fmtUsd(agent.cost_usd)}
+          </p>
         )}
       </div>
 
-      {showCost !== false && (
-        <div className="mb-2 grid grid-cols-3 gap-1">
-          <div className="rounded bg-[#141516] px-1.5 py-1 text-center">
-            <p className="font-mono text-[10px] text-[#64D2FF]">{fmtUsd(agent.api_cost_usd ?? 0)}</p>
-            <p className="text-[8px] text-[#62666d]">API</p>
-          </div>
-          <div className="rounded bg-[#141516] px-1.5 py-1 text-center">
-            <p className="font-mono text-[10px] text-sky-300">{fmtUsd(agent.docker_cost_usd ?? 0)}</p>
-            <p className="text-[8px] text-[#62666d]">Docker</p>
-          </div>
-          <div className="rounded bg-[#141516] px-1.5 py-1 text-center">
-            <p className="font-mono text-[10px] text-orange-300">{fmtUsd(agent.aliyun_cost_usd ?? 0)}</p>
-            <p className="text-[8px] text-[#62666d]">阿里雲</p>
-          </div>
-        </div>
-      )}
-
-      {showPrompt && (agent.description || agent.system_prompt) && (
-        <p className="mb-2 line-clamp-2 text-[10px] leading-relaxed text-[#8a8f98]">
+      {showPrompt && (agent.description || agent.system_prompt) && !compact && (
+        <p className="line-clamp-2 min-h-[2.5em] text-[10px] leading-relaxed text-[#8a8f98]">
           {agent.description || agent.system_prompt}
         </p>
       )}
 
       {now && (
-        <p className="mb-2 truncate rounded bg-[#141516] px-2 py-1 text-[11px] text-[#d0d6e0]">
-          正在處理 · {now.title}
+        <p className="truncate rounded bg-[#141516] px-2 py-1 text-[11px] text-[#d0d6e0]">
+          進行中 · {now.title}
         </p>
       )}
 
-      <div className="mb-2 grid grid-cols-4 gap-1 text-center">
+      <div className="grid grid-cols-4 gap-1 text-center">
         {[
           ['佇列', agent.queue],
           ['執行', agent.executing],
           ['審查', agent.inbox.in_review ?? 0],
           ['完成', agent.done],
         ].map(([label, value]) => (
-          <div key={String(label)} className="rounded bg-[#141516] px-1 py-1">
+          <div key={String(label)} className="min-w-0 rounded bg-[#141516] px-1 py-1">
             <p className="font-mono text-[12px] text-[#f7f8f8]">{value}</p>
-            <p className="text-[9px] text-[#62666d]">{label}</p>
+            <p className="truncate text-[9px] text-[#62666d]">{label}</p>
           </div>
         ))}
       </div>
 
-      <div className="min-h-0 flex-1 space-y-1">
+      {showCost !== false &&
+        !compact &&
+        ((agent.api_cost_usd ?? 0) > 0 || (agent.docker_cost_usd ?? 0) > 0 || (agent.aliyun_cost_usd ?? 0) > 0) && (
+        <div className="grid grid-cols-3 gap-1">
+          <div className="min-w-0 rounded bg-[#141516] px-1.5 py-1 text-center">
+            <p className="truncate font-mono text-[10px] text-[#64D2FF]">{fmtUsd(agent.api_cost_usd ?? 0)}</p>
+            <p className="text-[8px] text-[#62666d]">API</p>
+          </div>
+          <div className="min-w-0 rounded bg-[#141516] px-1.5 py-1 text-center">
+            <p className="truncate font-mono text-[10px] text-sky-300">{fmtUsd(agent.docker_cost_usd ?? 0)}</p>
+            <p className="text-[8px] text-[#62666d]">Docker</p>
+          </div>
+          <div className="min-w-0 rounded bg-[#141516] px-1.5 py-1 text-center">
+            <p className="truncate font-mono text-[10px] text-orange-300">{fmtUsd(agent.aliyun_cost_usd ?? 0)}</p>
+            <p className="text-[8px] text-[#62666d]">阿里雲</p>
+          </div>
+        </div>
+      )}
+
+      <div className="mt-auto flex flex-col justify-start gap-1">
         {preview.length === 0 ? (
-          <p className="rounded border border-dashed border-white/[0.08] px-2 py-4 text-center text-[11px] text-[#62666d]">
-            待命 · 尚無工作項
+          <p className="rounded border border-dashed border-white/[0.08] px-2 py-2 text-center text-[11px] text-[#62666d]">
+            尚無工作項
           </p>
         ) : (
           preview.map((item) => {
@@ -604,7 +618,7 @@ function AgentDeskCard({
             return (
               <div
                 key={`${item.task_id}-${item.id}-${item.kind}`}
-                className="flex items-center justify-between gap-2 rounded bg-[#141516] px-2 py-1"
+                className="flex min-w-0 items-center justify-between gap-2 rounded bg-[#141516] px-2 py-1"
               >
                 <span className="min-w-0 truncate text-[11px] text-[#d0d6e0]">{item.title}</span>
                 <span className={`shrink-0 rounded px-1 py-0.5 text-[9px] ${st.cls}`}>{st.label}</span>
@@ -612,8 +626,8 @@ function AgentDeskCard({
             );
           })
         )}
-        {agent.work_items.length > 4 && (
-          <p className="text-[10px] text-[#62666d]">還有 {agent.work_items.length - 4} 項…</p>
+        {agent.work_items.length > previewLimit && (
+          <p className="text-[10px] text-[#62666d]">還有 {agent.work_items.length - previewLimit} 項…</p>
         )}
       </div>
     </button>
@@ -631,7 +645,8 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
   const [selectedId, setSelectedId] = useState<string>(focusAgentId || 'manager');
   /** 預設工作台：85 位名冊統一在左側外圍 SidePanel，主區不重複當目錄 */
   const [layout, setLayout] = useState<'desk' | 'floor' | 'catalog'>('desk');
-  const [filter, setFilter] = useState<'all' | 'active'>('all');
+  const [overviewMode, setOverviewMode] = useState<'list' | 'cards'>('list');
+  const [filter, setFilter] = useState<'all' | 'live' | 'alert'>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [itemFilter, setItemFilter] = useState<string>('open');
   const [boardMode, setBoardMode] = useState<'list' | 'kanban'>('list');
@@ -646,6 +661,18 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
   const [didAutoOpen, setDidAutoOpen] = useState(false);
   const [appliedDefaultTab, setAppliedDefaultTab] = useState(false);
   const [appliedDefaultLayout, setAppliedDefaultLayout] = useState(false);
+  const overviewScrollRef = useRef<HTMLDivElement | null>(null);
+
+  const scrollToRoleTarget = useCallback((id?: string, level?: number) => {
+    const run = () => {
+      const el =
+        (id ? document.getElementById(`role-card-${id}`) : null) ??
+        (typeof level === 'number' ? document.getElementById(`role-level-${level}`) : null);
+      el?.scrollIntoView({ behavior: 'smooth', block: id ? 'center' : 'start' });
+    };
+    requestAnimationFrame(run);
+    window.setTimeout(run, 160);
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -667,11 +694,23 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
   }, [refresh, pollMs]);
 
   useEffect(() => {
-    if (focusAgentId) {
-      setSelectedId(focusAgentId);
-      setLayout('desk');
-    }
+    if (focusAgentId) setSelectedId(focusAgentId);
   }, [focusAgentId]);
+
+  useEffect(() => {
+    const onJump = (event: Event) => {
+      const { id, level } = (event as CustomEvent<JumpAgentDetail>).detail ?? {};
+      if (id) setSelectedId(id);
+      const jumpingLevel = typeof level === 'number' && !id;
+      if (jumpingLevel) {
+        setLayout((cur) => (cur === 'desk' ? (overviewMode === 'cards' ? 'floor' : 'catalog') : cur));
+      }
+      if (layout === 'desk' && !jumpingLevel) return;
+      scrollToRoleTarget(id, level);
+    };
+    window.addEventListener(JUMP_AGENT_EVENT, onJump);
+    return () => window.removeEventListener(JUMP_AGENT_EVENT, onJump);
+  }, [layout, overviewMode, scrollToRoleTarget]);
 
   useEffect(() => {
     if (didAutoOpen || !data?.monitor_prefs?.auto_open_busy || focusAgentId) return;
@@ -697,6 +736,8 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
     const next = data?.monitor_prefs?.default_layout;
     if (next === 'catalog' || next === 'desk' || next === 'floor') {
       setLayout(next);
+      if (next === 'floor') setOverviewMode('cards');
+      if (next === 'catalog') setOverviewMode('list');
       setAppliedDefaultLayout(true);
     }
   }, [appliedDefaultLayout, data?.monitor_prefs?.default_layout, focusAgentId]);
@@ -704,10 +745,21 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
   const agents = data?.agents?.length ? data.agents : AGENT_FALLBACK_ROSTER;
   const summary = data?.summary;
   const selected = agents.find((a) => a.id === selectedId) ?? agents[0] ?? null;
+  const liveCount = useMemo(() => agents.filter(isLiveAgent).length, [agents]);
+  const alertCount = useMemo(() => agents.filter(isAlertAgent).length, [agents]);
+  const enabledCount = useMemo(
+    () => agents.filter((a) => a.enabled !== false).length,
+    [agents],
+  );
+
+  const pickRosterFilter = (key: 'all' | 'live' | 'alert') => {
+    setFilter(key);
+  };
 
   const grouped = useMemo(() => {
     const matches = (a: RoleAgent) => {
-      if (filter === 'active' && a.status === 'idle' && a.work_items.length === 0) return false;
+      if (filter === 'live' && !isLiveAgent(a)) return false;
+      if (filter === 'alert' && !isAlertAgent(a)) return false;
       if (categoryFilter !== 'all' && a.category !== categoryFilter) return false;
       if (rosterFilter === 'custom' && !a.is_custom) return false;
       if (rosterFilter === 'disabled' && a.enabled !== false) return false;
@@ -776,12 +828,21 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
       .filter((g) => g.agents.length > 0);
   }, [agents, categoryFilter, data?.catalog_meta, data?.levels, data?.monitor_prefs, filter, query, rosterFilter]);
 
-  const openDesk = (id: string) => {
+  const visibleCount = useMemo(
+    () => grouped.reduce((n, g) => n + g.agents.length, 0),
+    [grouped],
+  );
+
+  const openDesk = (id: string, tab?: 'tasks' | 'monitor' | 'settings' | 'org') => {
     setSelectedId(id);
     onFocusAgent?.(id);
     setExpandedId(null);
     setLayout('desk');
+    if (tab) setDeskTab(tab);
   };
+
+  const browseLayout = layout !== 'desk';
+  const statusMeta = selected ? AGENT_STATUS_META[selected.status] ?? AGENT_STATUS_META.idle : null;
 
   const visibleItems = useMemo(() => {
     if (!selected) return [];
@@ -803,32 +864,19 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden apple-canvas text-[#f7f8f8]">
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-white/[0.08] px-4 py-3">
-        <div>
-          <h2 className="text-sm font-semibold">
-            {layout === 'desk' && selected
-              ? `${selected.name}`
-              : layout === 'catalog'
-                ? `目錄 · ${agents.length}`
-                : '樓層'}
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-white/[0.08] px-4 py-2.5">
+        <div className="min-w-0">
+          <h2 className="truncate text-sm font-semibold">
+            {layout === 'desk' && selected ? selected.name : `角色總覽 · ${agents.length}`}
           </h2>
-          {layout === 'desk' && selected && (
-            <p className="mt-0.5 text-[11px] text-[#8E8E93]">
-              L{selected.level} {selected.level_label}
-            </p>
-          )}
+          <p className="mt-0.5 text-[11px] text-[#8E8E93]">
+            {layout === 'desk' && selected
+              ? `左側名冊切換角色 · ${statusMeta?.label ?? ''} · L${selected.level}`
+              : '點角色進入工作台；左側可持續切換'}
+          </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex rounded-xl border border-white/[0.08] bg-[#1C1C1E] p-0.5">
-            <button
-              type="button"
-              onClick={() => setLayout('catalog')}
-              className={`rounded px-2 py-1 text-[11px] ${
-                layout === 'catalog' ? 'bg-[#007AFF]/20 text-[#64D2FF]' : 'text-[#8a8f98]'
-              }`}
-            >
-              目錄
-            </button>
             <button
               type="button"
               onClick={() => setLayout('desk')}
@@ -840,33 +888,50 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
             </button>
             <button
               type="button"
-              onClick={() => setLayout('floor')}
+              onClick={() => {
+                setLayout(overviewMode === 'cards' ? 'floor' : 'catalog');
+              }}
               className={`rounded px-2 py-1 text-[11px] ${
-                layout === 'floor' ? 'bg-[#007AFF]/20 text-[#64D2FF]' : 'text-[#8a8f98]'
+                browseLayout ? 'bg-[#007AFF]/20 text-[#64D2FF]' : 'text-[#8a8f98]'
               }`}
             >
-              樓層
+              總覽
             </button>
           </div>
-          {layout !== 'desk' && (
+          {browseLayout && (
             <>
+              <div className="flex rounded-xl border border-white/[0.08] bg-[#1C1C1E] p-0.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOverviewMode('list');
+                    setLayout('catalog');
+                  }}
+                  className={`rounded px-2 py-1 text-[11px] ${
+                    overviewMode === 'list' ? 'bg-white/[0.08] text-[#F5F5F7]' : 'text-[#8a8f98]'
+                  }`}
+                >
+                  列表
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOverviewMode('cards');
+                    setLayout('floor');
+                  }}
+                  className={`rounded px-2 py-1 text-[11px] ${
+                    overviewMode === 'cards' ? 'bg-white/[0.08] text-[#F5F5F7]' : 'text-[#8a8f98]'
+                  }`}
+                >
+                  卡片
+                </button>
+              </div>
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="搜尋角色／職責／提示詞"
                 className="w-40 rounded-xl border border-white/[0.08] bg-[#1C1C1E] px-2 py-1 text-[11px] text-[#f7f8f8]"
               />
-              <button
-                type="button"
-                onClick={() => setFilter((v) => (v === 'all' ? 'active' : 'all'))}
-                className={`rounded-md border px-2 py-1 text-[11px] ${
-                  filter === 'active'
-                    ? 'border-[#007AFF]/40 bg-[#007AFF]/15 text-[#64D2FF]'
-                    : 'border-white/[0.08] bg-[#1C1C1E] text-[#8a8f98]'
-                }`}
-              >
-                {filter === 'active' ? '僅顯示有工作' : '顯示全部角色'}
-              </button>
             </>
           )}
           <button
@@ -895,48 +960,108 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
         </div>
       )}
 
-      <div className="shrink-0 space-y-2 px-4 py-3">
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
-          <Kpi label="角色" value={String(summary?.roles_total ?? agents.length)} hint={`啟用 ${summary?.roles_enabled ?? agents.length}`} />
-          <Kpi label="執行中" value={String(summary?.roles_busy ?? 0)} hint="busy Agent" />
-          <Kpi label="等待" value={String(summary?.roles_waiting ?? 0)} hint="佇列 / 審查" />
-          <Kpi label="自定義" value={String(summary?.roles_custom ?? 0)} hint={`停用 ${summary?.roles_disabled ?? 0}`} />
-          <Kpi label="值班" value={String(summary?.roles_on_call ?? 0)} hint={`需核准 ${summary?.roles_need_approval ?? 0}`} />
-          <Kpi label="告警" value={String(summary?.alerts_open ?? 0)} hint="角色告警數" />
-          <Kpi label="開放工作項" value={String(summary?.work_items_open ?? 0)} hint="未完成" />
-          <Kpi label="完成" value={String(summary?.work_items_done ?? 0)} hint={`公司任務 ${summary?.company_tasks ?? 0}`} />
-        </div>
-        <CardSection title="全站預算組成" hint="Agent 預算 = API＋Docker＋阿里雲">
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-            <Kpi label="合計花費" value={fmtUsd(summary?.total_cost_usd ?? 0)} hint="API＋雲資源" accent="amber" />
-            <Kpi label="API 用量" value={fmtUsd(summary?.total_api_cost_usd ?? 0)} hint="LLM token" accent="violet" />
-            <Kpi label="Docker" value={fmtUsd(summary?.total_docker_cost_usd ?? 0)} hint="本地容器" accent="blue" />
-            <Kpi label="阿里雲" value={fmtUsd(summary?.total_aliyun_cost_usd ?? 0)} hint="BSS 帳目" accent="orange" />
-            <Kpi
-              label="雲資源小計"
-              value={fmtUsd(summary?.total_cloud_cost_usd ?? 0)}
-              hint="Docker＋阿里雲"
-              accent="green"
-            />
+      {browseLayout && (
+        <div className="shrink-0 border-b border-white/[0.06] px-4 py-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex rounded-xl bg-white/[0.04] p-0.5" role="tablist" aria-label="角色狀態篩選">
+                {(
+                  [
+                    {
+                      key: 'all' as const,
+                      label: '全部',
+                      count: agents.length,
+                      title: '顯示全部角色',
+                      disabled: false,
+                    },
+                    {
+                      key: 'live' as const,
+                      label: '活躍',
+                      count: liveCount,
+                      title: '只看執行中或等待中的角色',
+                      disabled: false,
+                    },
+                    {
+                      key: 'alert' as const,
+                      label: '告警',
+                      count: alertCount,
+                      title: '只看告警、錯誤或超預算',
+                      disabled: false,
+                    },
+                  ] as const
+                ).map((tab) => {
+                  const active = filter === tab.key;
+                  return (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      aria-disabled={tab.disabled}
+                      title={tab.title}
+                      disabled={tab.disabled}
+                      onClick={() => pickRosterFilter(tab.key)}
+                      className={`flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] leading-none ${
+                        active
+                          ? tab.key === 'alert'
+                            ? 'bg-[#FF453A]/15 font-medium text-[#FF453A] shadow-sm'
+                            : tab.key === 'live'
+                              ? 'bg-[#30D158]/15 font-medium text-[#30D158] shadow-sm'
+                              : 'bg-white/[0.1] font-medium text-[#F5F5F7] shadow-sm'
+                          : tab.disabled
+                            ? 'cursor-not-allowed text-[#48484A]'
+                            : 'text-[#8E8E93] hover:text-[#F5F5F7]'
+                      }`}
+                    >
+                      {tab.label}
+                      <span className={`apple-data text-[10px] ${tab.disabled ? 'opacity-40' : ''}`}>{tab.count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {(filter !== 'all' || query.trim()) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilter('all');
+                    setQuery('');
+                  }}
+                  className="rounded-lg px-2 py-1 text-[11px] text-[#64D2FF] hover:bg-white/[0.06]"
+                >
+                  清除篩選
+                </button>
+              )}
+            </div>
+            <p className="text-[11px] text-[#8E8E93]">
+              左側點層級或角色即可跳到此處
+            </p>
           </div>
-        </CardSection>
-      </div>
+          <p className="mt-2 text-[11px] text-[#8E8E93]" aria-live="polite">
+            {filter === 'live'
+              ? `目前顯示 ${visibleCount} 席活躍角色（執行中或等待中）`
+              : filter === 'alert'
+                ? `目前顯示 ${visibleCount} 席告警角色`
+                : `目前顯示 ${visibleCount} 席`}
+            {query.trim() ? ` · 搜尋「${query.trim()}」` : ''}
+          </p>
+        </div>
+      )}
 
       {layout === 'floor' && (
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
-          <div className="mb-3 rounded-lg border border-[#007AFF]/25 bg-[#007AFF]/8 px-3 py-2 text-[11px] text-[#a8b0ff]">
-            樓層卡片為輔助視圖 · 名冊入口與左側「◈ 角色」分頁同層。
-          </div>
+        <div ref={overviewScrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
+          <div className="mb-3 text-[11px] text-[#8E8E93]">左側跳轉定位卡片；點卡片進入工作台。</div>
           {grouped.map((group) => (
-            <section key={group.level} className="mb-5">
+            <section key={group.level} id={`role-level-${group.level}`} className="mb-5 scroll-mt-3">
               <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[#62666d]">
                 {data?.monitor_prefs?.group_by === 'category' ? group.label : `L${group.level} ${group.label}`}
               </p>
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+              <div className="grid justify-start gap-3 [grid-template-columns:repeat(auto-fill,minmax(16.5rem,16.5rem))]">
                 {group.agents.map((agent) => (
                   <AgentDeskCard
                     key={agent.id}
                     agent={agent}
+                    highlighted={agent.id === selectedId}
+                    compact={data?.monitor_prefs?.compact_cards === true}
                     showPrompt={data?.monitor_prefs?.show_prompt_preview !== false}
                     showCost={data?.monitor_prefs?.show_cost_in_cards !== false}
                     onOpen={() => openDesk(agent.id)}
@@ -949,9 +1074,9 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
       )}
 
       {layout === 'catalog' && (
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
-          <div className="mb-3 rounded-lg border border-[#007AFF]/25 bg-[#007AFF]/8 px-3 py-2 text-[11px] text-[#a8b0ff]">
-            完整 {agents.length} 位角色名冊已統一在左側外圍「◈ 角色 Agent」。此處為輔助目錄；日常切換請用左側列表。
+        <div ref={overviewScrollRef} className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
+          <div className="mb-3 text-[11px] text-[#8E8E93]">
+            左側點角色會跳到此列表；點名稱進入工作台。
           </div>
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <select
@@ -991,7 +1116,7 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
             </select>
           </div>
           {grouped.map((group) => (
-            <section key={`${group.level}-${group.label}`} className="mb-4">
+            <section key={`${group.level}-${group.label}`} id={`role-level-${group.level}`} className="mb-4 scroll-mt-3">
               <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-[#62666d]">
                 {data?.monitor_prefs?.group_by === 'category' ? group.label : `L${group.level} ${group.label}`}
                 <span className="ml-2 font-mono">{group.agents.length}</span>
@@ -1003,13 +1128,16 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                   return (
                     <div
                       key={agent.id}
-                      className={`flex flex-wrap items-start gap-3 border-b border-white/[0.08] px-3 py-2 last:border-0 ${
-                        data?.monitor_prefs?.highlight_alerts !== false && (agent.alerts?.length ?? 0) > 0
-                          ? 'bg-amber-500/5'
-                          : 'bg-[#1C1C1E]'
+                      id={`role-card-${agent.id}`}
+                      className={`grid grid-cols-1 items-center gap-2 border-b border-white/[0.08] px-3 py-2 last:border-0 lg:grid-cols-[minmax(0,1fr)_7rem_8.5rem_auto] ${
+                        agent.id === selectedId
+                          ? 'bg-[#007AFF]/10'
+                          : data?.monitor_prefs?.highlight_alerts !== false && (agent.alerts?.length ?? 0) > 0
+                            ? 'bg-amber-500/5'
+                            : 'bg-[#1C1C1E]'
                       }`}
                     >
-                      <button type="button" className="min-w-[180px] flex-1 text-left" onClick={() => openDesk(agent.id)}>
+                      <button type="button" className="min-w-0 text-left" onClick={() => openDesk(agent.id)}>
                         <p className="flex items-center gap-2 text-[13px] text-[#f7f8f8]">
                           <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
                           {agent.name}
@@ -1028,11 +1156,17 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                         <p className="font-mono">{agent.preferred_model || (TIER_LABEL[agent.default_tier] ?? agent.default_tier)}</p>
                       </div>
                       <div className="w-36 shrink-0 text-right">
-                        <p className="font-mono text-[11px] text-amber-300/90">{fmtUsd(agent.cost_usd)}</p>
-                        <p className="text-[9px] text-[#62666d]">
-                          API {fmtUsd(agent.api_cost_usd ?? 0)} · D {fmtUsd(agent.docker_cost_usd ?? 0)} · 阿里{' '}
-                          {fmtUsd(agent.aliyun_cost_usd ?? 0)}
-                        </p>
+                        {(agent.cost_usd ?? 0) > 0 ? (
+                          <>
+                            <p className="font-mono text-[11px] text-amber-300/90">{fmtUsd(agent.cost_usd)}</p>
+                            <p className="text-[9px] text-[#62666d]">
+                              API {fmtUsd(agent.api_cost_usd ?? 0)} · D {fmtUsd(agent.docker_cost_usd ?? 0)} · 阿里{' '}
+                              {fmtUsd(agent.aliyun_cost_usd ?? 0)}
+                            </p>
+                          </>
+                        ) : (
+                          <p className="text-[10px] text-[#62666d]">尚無花費</p>
+                        )}
                         <p className="mt-0.5 text-[10px] text-[#8a8f98]">{open} 開放</p>
                       </div>
                       <div className="flex shrink-0 gap-1">
@@ -1091,18 +1225,19 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
           {/* 角色名冊統一在左側 SidePanel；此處僅保留工作台內容 */}
           <section className="flex min-w-0 flex-1 flex-col overflow-hidden">
             <div className="shrink-0 border-b border-white/[0.08] px-4 py-3">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-base font-semibold">{selected.name} Agent</h3>
+                    <span className={`h-2 w-2 rounded-full ${(AGENT_STATUS_META[selected.status] ?? AGENT_STATUS_META.idle).dot}`} />
+                    <h3 className="text-base font-semibold">{selected.name}</h3>
                     <span className={`text-[11px] ${(AGENT_STATUS_META[selected.status] ?? AGENT_STATUS_META.idle).text}`}>
                       {(AGENT_STATUS_META[selected.status] ?? AGENT_STATUS_META.idle).label}
                     </span>
                     <select
                       value={selected.id}
                       onChange={(e) => openDesk(e.target.value)}
-                      className="rounded border border-white/[0.08] bg-[#1C1C1E] px-2 py-0.5 text-[11px] text-[#d0d6e0]"
-                      title="快速切換角色（完整名冊在左側外圍）"
+                      className="max-w-[180px] rounded-lg border border-white/[0.08] bg-[#1C1C1E] px-2 py-0.5 text-[11px] text-[#d0d6e0]"
+                      title="快速切換（完整名冊在左側）"
                     >
                       {agents.map((a) => (
                         <option key={a.id} value={a.id}>
@@ -1111,76 +1246,58 @@ export default function AgentsMonitorPanel({ focusAgentId, onFocusAgent }: Agent
                       ))}
                     </select>
                   </div>
-                  <p className="mt-1 text-[11px] text-[#8a8f98]">
+                  <p className="mt-1 truncate text-[11px] text-[#8a8f98]">
                     L{selected.level} {selected.level_label}
                     {selected.is_custom ? ' · 自定義' : ' · 內建'}
                     {selected.enabled === false ? ' · 停用' : ''}
                     {selected.on_call ? ' · 值班' : ''}
-                    {selected.require_human_approval ? ' · 需核准' : ''}
-                    {selected.mainland_only ? ' · 僅國內模型' : ''}
-                    {selected.reporting_to ? ` · 匯報 ${roleLabel(selected.reporting_to)}` : ' · 無上級'}
-                    {reports.length > 0 ? ` · 直屬 ${reports.length}` : ''}
-                    {' · '}並行 {selected.capacity_used ?? selected.executing}/{selected.max_parallel_work}
+                    {selected.reporting_to ? ` · 匯報 ${roleLabel(selected.reporting_to)}` : ''}
+                    {' · '}佇列 {selected.queue} · 執行 {selected.executing} · 審查 {inboxReview}
                     {' · '}
                     {selected.preferred_model || (TIER_LABEL[selected.default_tier] ?? selected.default_tier)}
                   </p>
-                  {selected.templates.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {selected.templates.map((tpl) => (
-                        <span
-                          key={tpl}
-                          className="rounded border border-white/[0.08] px-1.5 py-0.5 text-[10px] text-[#8a8f98]"
-                        >
-                          {tpl}
-                        </span>
-                      ))}
-                      {(selected.tags ?? []).map((tag) => (
-                        <span key={tag} className="rounded border border-[#007AFF]/30 px-1.5 py-0.5 text-[10px] text-[#64D2FF]">
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
                 </div>
-                <p className="font-mono text-[11px] text-[#62666d]">
-                  最近活動 {fmtWhen(selected.last_activity_at)}
-                </p>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    className="rounded-lg border border-white/[0.08] px-2 py-1 text-[11px] text-[#8a8f98] hover:text-[#F5F5F7]"
+                    onClick={() => void updateAgentSettings(selected.id, { enabled: selected.enabled === false }).then(() => refresh())}
+                  >
+                    {selected.enabled === false ? '啟用' : '停用'}
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-lg border border-white/[0.08] px-2 py-1 text-[11px] text-[#8a8f98] hover:text-[#F5F5F7]"
+                    onClick={() => {
+                      setCloneFrom(selected);
+                      setCreating(true);
+                    }}
+                  >
+                    複製
+                  </button>
+                  <p className="font-mono text-[11px] text-[#62666d]">最近 {fmtWhen(selected.last_activity_at)}</p>
+                </div>
               </div>
 
-              <div className="mt-3 space-y-2">
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-                  <Kpi label="佇列" value={String(selected.queue)} hint="planning + ready" />
-                  <Kpi label="執行中" value={String(selected.executing)} />
-                  <Kpi label="審查中" value={String(inboxReview)} />
-                  <Kpi label="完成" value={String(selected.done)} />
-                  <Kpi
-                    label="成功率"
-                    value={`${selected.metrics?.success_rate ?? 0}%`}
-                    hint={`容量 ${selected.capacity_used ?? selected.executing}/${selected.max_parallel_work}`}
-                    accent="green"
-                  />
-                  <Kpi
-                    label="狀態"
-                    value={(AGENT_STATUS_META[selected.status] ?? AGENT_STATUS_META.idle).label}
-                    hint={selected.enabled === false ? '已停用' : '已啟用'}
-                  />
+              {(selected.alerts?.length ?? 0) > 0 && (
+                <div className="mt-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 text-[11px] text-amber-100">
+                  {selected.alerts![0].level} · {selected.alerts![0].message}
+                  {(selected.alerts!.length ?? 0) > 1 ? ` · 另 ${selected.alerts!.length - 1} 則` : ''}
                 </div>
-                <CardSection title="本角色預算" hint="含 API＋雲資源（Docker／阿里雲）">
-                  <BudgetCostCards agent={selected} />
-                </CardSection>
-              </div>
+              )}
+
               <div className="mt-3 flex gap-1">
                 {([
-                  ['tasks', '任務'],
+                  ['tasks', `任務 ${agentOpenCount(selected)}`],
                   ['monitor', '監控'],
-                  ['settings', '角色設定'],
+                  ['settings', '設定'],
                   ['org', '組織'],
                 ] as const).map(([key, label]) => (
                   <button
                     key={key}
                     type="button"
                     onClick={() => setDeskTab(key)}
-                    className={`rounded px-2 py-1 text-[11px] ${
+                    className={`rounded-lg px-2.5 py-1 text-[12px] ${
                       deskTab === key ? 'bg-[#007AFF]/20 text-[#64D2FF]' : 'text-[#8a8f98] hover:text-[#d0d6e0]'
                     }`}
                   >

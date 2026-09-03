@@ -26,7 +26,7 @@ export default function MemoryPanel({ onClose }: MemoryPanelProps) {
     setLoading(true);
     setError(null);
     try {
-      const data = await fetchMemories(50, 0);
+      const data = await fetchMemories(100, 0);
       setMemories(data.memories);
       setTotal(data.total);
       if (data.error) setError(data.error);

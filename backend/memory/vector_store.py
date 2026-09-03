@@ -242,12 +242,13 @@ class VectorMemoryStore:
 
     def all(self) -> list[dict]:
         """回傳全部記憶（含 metadata）。"""
-        data = self._get_collection().get(include=["metadatas"])
+        data = self._get_collection().get(include=["documents", "metadatas"])
+        ids = data.get("ids") or []
+        documents = data.get("documents") or [""] * len(ids)
+        metadatas = data.get("metadatas") or [{}] * len(ids)
         return [
-            {"id": record_id, "text": text, "metadata": meta}
-            for record_id, text, meta in zip(
-                data["ids"], data["documents"], data["metadatas"]
-            )
+            {"id": record_id, "text": text or "", "metadata": meta or {}}
+            for record_id, text, meta in zip(ids, documents, metadatas)
         ]
 
     def count(self) -> int:

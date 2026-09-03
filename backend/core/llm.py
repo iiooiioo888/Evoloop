@@ -53,6 +53,48 @@ def _ensure_provider_prefix(model: str) -> str:
     return model if "/" in model else f"openai/{model}"
 
 
+_THINK_RE = re.compile(r"<think>(.*?)</think>", re.DOTALL | re.IGNORECASE)
+
+
+def split_thinking(text: str | None) -> tuple[str, str]:
+    """拆出思考過程與可見回答。"""
+    raw = text or ""
+    thoughts = [m.strip() for m in _THINK_RE.findall(raw) if m.strip()]
+    rest = _THINK_RE.sub("", raw)
+    open_m = re.search(r"<think>([\s\S]*)$", rest, re.IGNORECASE)
+    if open_m:
+        extra = open_m.group(1).strip()
+        if extra:
+            thoughts.append(extra)
+        rest = rest[: open_m.start()]
+    return "\n\n".join(thoughts).strip(), rest.strip()
+
+
+def _delta_reasoning(delta: object | None) -> str:
+    if delta is None:
+        return ""
+    return str(
+        getattr(delta, "reasoning_content", None)
+        or getattr(delta, "reasoning", None)
+        or ""
+    )
+
+
+def _message_visible_text(message: object | None) -> str:
+    """合併 reasoning_content 與 content，思考包在 <think> 內供前端拆分。"""
+    if message is None:
+        return ""
+    content = getattr(message, "content", None) or ""
+    reasoning = (
+        getattr(message, "reasoning_content", None)
+        or getattr(message, "reasoning", None)
+        or ""
+    )
+    if reasoning and "<think>" not in str(content):
+        return f"<think>{reasoning}</think>\n{content}"
+    return str(content)
+
+
 def _completion_once(
     prompt: str,
     system: str | None = None,
@@ -83,7 +125,7 @@ def _completion_once(
                 **{k: v for k, v in params.items() if k != "model"},
                 **kwargs,
             )
-            return response.choices[0].message.content or ""
+            return _message_visible_text(response.choices[0].message)
         except RateLimitError as exc:
             last_error = exc
             wait = RETRY_BACKOFF_SECONDS * attempt
@@ -191,10 +233,23 @@ def call_llm_stream(
                 **{k: v for k, v in params.items() if k != "model"},
                 **kwargs,
             )
+            in_think = False
             for chunk in response:
                 delta = chunk.choices[0].delta if chunk.choices else None
-                if delta and delta.content:
-                    yield delta.content
+                reasoning = _delta_reasoning(delta)
+                content = getattr(delta, "content", None) if delta else None
+                if reasoning:
+                    if not in_think:
+                        yield "<think>"
+                        in_think = True
+                    yield reasoning
+                if content:
+                    if in_think:
+                        yield "</think>"
+                        in_think = False
+                    yield content
+            if in_think:
+                yield "</think>"
             return
         except RateLimitError as exc:
             last_error = exc
@@ -216,7 +271,7 @@ def parse_json_response(text: str) -> dict:
     依序嘗試：直接解析 → 去除 markdown 程式碼圍欄 →
     擷取最外層 {...} 區塊。
     """
-    text = text.strip()
+    text = split_thinking(text)[1] or (text or "").strip()
     fence = re.search(r"```(?:json)?\s*(.*?)```", text, re.DOTALL)
     if fence:
         text = fence.group(1).strip()

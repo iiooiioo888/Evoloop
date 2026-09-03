@@ -49,7 +49,7 @@ PRICE_PER_1M: dict[str, tuple[float, float]] = {
     "gpt-5.6-sol": (3.00, 30.00),
     "gemini-3.1-pro": (1.25, 12.00),
     "mimo-v2.5-pro": (0.21, 0.83),
-    "deepseek-v4-flash": (0.028, 0.157),
+    "deepseek-v4-flash": (0.22, 0.66),
     "qwen3.5-max": (0.30, 1.20),
     "mercury-2": (0.50, 2.00),
     "nemotron-3.5-lightning": (0.00, 0.00),
