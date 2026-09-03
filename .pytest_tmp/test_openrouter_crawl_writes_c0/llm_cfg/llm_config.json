@@ -1,0 +1,31 @@
+{
+  "api_key": "sk-or-test",
+  "api_base": "https://openrouter.ai/api/v1",
+  "model": "deepseek/deepseek-chat",
+  "provider_kind": "openrouter",
+  "allowed_models": [
+    "deepseek/deepseek-chat",
+    "qwen/qwen3.5-max"
+  ],
+  "catalog_models": [
+    {
+      "id": "deepseek/deepseek-chat",
+      "name": "deepseek/deepseek-chat",
+      "owned_by": ""
+    },
+    {
+      "id": "qwen/qwen3.5-max",
+      "name": "qwen/qwen3.5-max",
+      "owned_by": ""
+    }
+  ],
+  "catalog_source": "crawl",
+  "catalog_fetched_at": "2026-09-03T02:08:43.571180+00:00",
+  "catalog_error": "",
+  "catalog_url": "https://openrouter.ai/api/v1/models",
+  "ops_last_reason": "test",
+  "ops_last_ok_at": "2026-09-03T02:08:43.571180+00:00",
+  "ops_last_error": "",
+  "ops_last_latency_ms": 0,
+  "ops_consecutive_fail": 0
+}

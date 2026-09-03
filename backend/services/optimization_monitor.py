@@ -14,7 +14,12 @@ from backend.core.dynamic_threshold import resolve_pass_threshold, threshold_con
 from backend.core.cost_speed_router import cost_speed_status
 from backend.core.graph import MAX_ITERATIONS, MIN_SCORE_IMPROVEMENT, PASS_THRESHOLD
 from backend.core.llm_cache import get_llm_cache
-from backend.core.provider_pool import pool_failover_enabled, pool_failover_timeout_s, pool_health_snapshot
+from backend.core.provider_pool import (
+    pool_failover_enabled,
+    pool_failover_timeout_s,
+    pool_health_snapshot,
+    pool_probe_snapshot,
+)
 from backend.core.routing_feedback import routing_stats
 from backend.core.stage_router import stage_tier, resolve_stage_model
 from backend.core.user_feedback import feedback_stats as user_feedback_stats, feedback_analysis
@@ -130,6 +135,7 @@ def collect_optimization_monitor() -> dict[str, Any]:
     user_fb = user_feedback_stats()
     fb_analysis = feedback_analysis()
     pool_health = pool_health_snapshot()
+    probe = pool_probe_snapshot()
     model_calls = aggregate_llm_call_stats()
     reflection_trace = aggregate_reflection_stats()
     open_models = sum(1 for h in pool_health.values() if h.get("open"))
@@ -192,10 +198,14 @@ def collect_optimization_monitor() -> dict[str, Any]:
             "priority": "P1",
             "id": "pool_failover",
             "label": "模型池健康檢查 + 自動降級",
-            "benefit": "主模型逾時/限流自動切換備援",
+            "benefit": "主模型逾時/限流自動切換備援；定時主動探活預判切換",
             "enabled": pool_failover_enabled(),
             "status": "active" if pool_failover_enabled() else "disabled",
-            "metric": f"逾時 {pool_failover_timeout_s():.0f}s · 熔斷 {open_models} 個",
+            "metric": (
+                f"逾時 {pool_failover_timeout_s():.0f}s · 熔斷 {open_models} 個 · "
+                f"探活{'開' if probe.get('enabled') else '關'}"
+                + (f"/{probe.get('mode')}" if probe.get("at") else "")
+            ),
         },
         {
             "priority": "P1",

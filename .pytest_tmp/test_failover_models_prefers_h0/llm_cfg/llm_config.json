@@ -1,0 +1,11 @@
+{
+  "api_key": "sk-ds-fail",
+  "api_base": "https://api.deepseek.com",
+  "model": "deepseek-reasoner",
+  "allowed_models": [
+    "deepseek-reasoner",
+    "deepseek-chat",
+    "deepseek-coder"
+  ],
+  "provider_kind": "deepseek"
+}

@@ -267,3 +267,149 @@ def test_public_pool_exposes_failover_ops(monkeypatch):
     assert "enabled" in failover
     assert "timeout_s" in failover
     assert "models" in failover
+    assert "active_probe" in failover
+    assert "enabled" in failover["active_probe"]
+
+
+def test_probe_pool_health_opens_primary_when_endpoint_down(monkeypatch):
+    from backend.core.llm_config import merge_runtime_config
+    from backend.core.provider_pool import (
+        is_pool_model_open,
+        probe_pool_health,
+        reset_pool_health,
+    )
+
+    reset_pool_health()
+    save_runtime_config(
+        api_key="sk-ds-probe",
+        api_base="https://api.deepseek.com",
+        model="deepseek-chat",
+    )
+    merge_runtime_config(
+        {
+            "allowed_models": ["deepseek-chat", "deepseek-reasoner"],
+            "provider_kind": "deepseek",
+            "model": "deepseek-chat",
+        }
+    )
+    monkeypatch.setattr(
+        "backend.core.provider_pool._http_get_json",
+        lambda url, key, timeout=15.0: (_ for _ in ()).throw(RuntimeError("connection refused")),
+    )
+    snap = probe_pool_health(reason="test")
+    assert snap["ok"] is False
+    assert "deepseek-chat" in snap["opened"]
+    assert is_pool_model_open("deepseek-chat")
+    assert snap["mode"] == "catalog"
+
+
+def test_probe_pool_health_opens_missing_and_heals_probe_open(monkeypatch):
+    from backend.core.llm_config import merge_runtime_config
+    from backend.core.provider_pool import (
+        force_open_pool_model,
+        is_pool_model_open,
+        probe_pool_health,
+        record_pool_call,
+        reset_pool_health,
+    )
+
+    reset_pool_health()
+    save_runtime_config(
+        api_key="sk-ds-probe2",
+        api_base="https://api.deepseek.com",
+        model="deepseek-chat",
+    )
+    merge_runtime_config(
+        {
+            "allowed_models": ["deepseek-chat", "deepseek-missing"],
+            "provider_kind": "deepseek",
+            "model": "deepseek-chat",
+        }
+    )
+    force_open_pool_model("deepseek-chat", "old probe", from_probe=True)
+    # 真實呼叫失敗造成的熔斷不應被 catalog 探活直接解除
+    record_pool_call("deepseek-reasoner", True, 0.1, "timeout")
+    record_pool_call("deepseek-reasoner", True, 0.1, "timeout")
+    assert is_pool_model_open("deepseek-reasoner")
+
+    monkeypatch.setattr(
+        "backend.core.provider_pool._http_get_json",
+        lambda url, key, timeout=15.0: {"data": [{"id": "deepseek-chat"}, {"id": "deepseek-reasoner"}]},
+    )
+    snap = probe_pool_health(reason="test")
+    assert snap["ok"] is True
+    assert "deepseek-missing" in snap["opened"]
+    assert is_pool_model_open("deepseek-missing")
+    assert "deepseek-chat" in snap["healed"]
+    assert not is_pool_model_open("deepseek-chat")
+    assert is_pool_model_open("deepseek-reasoner")
+
+
+def test_probe_pool_health_optional_ping(monkeypatch):
+    from backend.core.llm_config import merge_runtime_config
+    from backend.core.provider_pool import (
+        force_open_pool_model,
+        is_pool_model_open,
+        probe_pool_health,
+        reset_pool_health,
+    )
+
+    reset_pool_health()
+    monkeypatch.setenv("EVOL_LLM_POOL_PROBE_PING", "true")
+    save_runtime_config(
+        api_key="sk-ds-probe3",
+        api_base="https://api.deepseek.com",
+        model="deepseek-chat",
+    )
+    merge_runtime_config(
+        {
+            "allowed_models": ["deepseek-chat", "deepseek-reasoner"],
+            "provider_kind": "deepseek",
+            "model": "deepseek-chat",
+        }
+    )
+    force_open_pool_model("deepseek-chat", "call fail", from_probe=False)
+    monkeypatch.setattr(
+        "backend.core.provider_pool._http_get_json",
+        lambda url, key, timeout=15.0: {"data": [{"id": "deepseek-chat"}, {"id": "deepseek-reasoner"}]},
+    )
+
+    def fake_ping(*, prompt, system=None, model=None, **kwargs):
+        if model == "deepseek-chat":
+            return "pong"
+        raise RuntimeError("503 unavailable")
+
+    snap = probe_pool_health(reason="test", ping_fn=fake_ping)
+    assert snap["mode"] == "catalog+ping"
+    assert not is_pool_model_open("deepseek-chat")
+    assert is_pool_model_open("deepseek-reasoner")
+    assert "deepseek-reasoner" in snap["opened"]
+
+
+def test_run_ops_once_includes_active_probe(monkeypatch):
+    from backend.services.llm_ops import run_ops_once
+
+    monkeypatch.setattr(
+        "backend.services.llm_ops.refresh_model_catalog",
+        lambda reason="manual": {
+            "ops": {"pool_failover": {"models": {}}},
+            "provider_kind": "deepseek",
+        },
+    )
+    monkeypatch.setattr(
+        "backend.services.llm_ops.probe_pool_health",
+        lambda reason="schedule", ping_fn=None: {
+            "enabled": True,
+            "ok": True,
+            "mode": "catalog",
+            "opened": [],
+            "healed": [],
+        },
+    )
+    monkeypatch.setattr(
+        "backend.core.provider_pool.pool_health_snapshot",
+        lambda: {"deepseek-chat": {"open": False}},
+    )
+    pool = run_ops_once("test")
+    assert pool["ops"]["pool_failover"]["active_probe"]["ok"] is True
+    assert "deepseek-chat" in pool["ops"]["pool_failover"]["models"]
